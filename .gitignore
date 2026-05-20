@@ -1,0 +1,8 @@
+# Local scratchpad / authoring area — not part of the published plugin.
+notes/
+
+# OS / editor noise
+.DS_Store
+*.swp
+
+CLAUDE.md
