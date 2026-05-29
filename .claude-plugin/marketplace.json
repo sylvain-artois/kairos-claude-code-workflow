@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "kairos",
+  "description": "Kairos — a story-driven agile workflow for Claude Code.",
+  "owner": {
+    "name": "sylvain-artois"
+  },
+  "plugins": [
+    {
+      "name": "kairos-claude-code-workflow",
+      "source": "/home/sartois/Documents/Sources/kairos-claude-code-workflow",
+      "description": "A story-driven agile workflow: /init, /create-prd, /create-story, /implement-story, /close-story, /qa, /release."
+    }
+  ]
+}
