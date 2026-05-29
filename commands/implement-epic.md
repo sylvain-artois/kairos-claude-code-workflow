@@ -235,10 +235,17 @@ Aggregate **all** stories of the run into the Closes list and Summary. Per `git_
 ### 4.3 — Worktree teardown
 After the user confirms push (and the PR/MR is created or skipped):
 ```bash
+# If any service ran an isolated worktree test (worktree_test_command), prune what it
+# left behind so it doesn't accumulate across epics. {worktree_id} = epic-{EPIC_SLUG}.
+# (1) containers/networks/volumes of the isolated compose project:
+docker compose -p {worktree_id} down --volumes --remove-orphans 2>/dev/null || true
+# (2) the locally built test images — they are named ${CONTAINER_ENV_PREFIX}<image>, i.e.
+#     prefixed with "{worktree_id}-", so we match on that. NEVER touch unprefixed (prod) images.
+docker images --format '{{.Repository}}:{{.Tag}}' | grep "^{worktree_id}-" | xargs -r docker image rm 2>/dev/null || true
 git worktree remove {WORK}
 git branch -d {BRANCH}
 ```
-If `worktree remove` fails on uncommitted changes, **show the error and ask before `--force`** — never force on your own. Remove the memory symlink created in Phase 1 if present.
+If `worktree remove` fails on uncommitted changes, **show the error and ask before `--force`** — never force on your own. Remove the memory symlink created in Phase 1 if present. The two `docker` lines are best-effort (`|| true`): they no-op silently if the project doesn't use Docker/Compose, and the image prune only ever matches the `{worktree_id}-` prefix, so prod images are untouched.
 
 ---
 

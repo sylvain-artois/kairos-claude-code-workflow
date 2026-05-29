@@ -48,3 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/close-story` test gate now prefers `worktree_test_command` over
   `test_command` when running in `epic_shared` mode, both in the sequential path
   and in the per-service subagent prompt.
+- `/close-story` **fixed-container guard**: in `epic_shared` mode, if a service's
+  `test_command` attaches to a fixed container (`docker exec` / `docker compose
+  exec`) and no `worktree_test_command` is declared, the gate now **stops** instead
+  of silently running it against prod (it tested the prod checkout, not the
+  worktree — a meaningless "pass").
+- `/implement-epic` teardown (Phase 4.3) now prunes the isolated worktree test
+  project (`docker compose -p {worktree_id} down --volumes --remove-orphans`) and
+  removes images matching the `{worktree_id}-` prefix, so built test images don't
+  accumulate across epics. Prod (unprefixed) images are never touched.
