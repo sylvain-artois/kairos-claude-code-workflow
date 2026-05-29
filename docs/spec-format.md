@@ -204,7 +204,7 @@ Every per-service spec opens with:
 **Last updated**: STORY-{NNN} ({YYYY-MM-DD})
 ```
 
-`/close-story` updates the `Last updated` line automatically when it modifies the spec.
+`/close-story` updates the `Last updated` line automatically when it modifies the spec. Because those per-story appends accumulate, run **`/spec {service}`** occasionally to compact a spec back under its line budget — or to backfill one from the service's code when it's still empty. `/spec` sets `Last updated: /spec {backfill|compact} ({YYYY-MM-DD})`.
 
 ---
 

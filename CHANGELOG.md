@@ -37,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `/implement-epic` (Phase 1): a service that declares `worktree_test_command`
   whose Compose isn't prefixed makes the command **stop and ask** rather than
   create a worktree — it points the user at `/setup-worktree-isolation`.
+- **`/spec {service}` command** — maintains a service's `spec.md`: **backfill** it
+  from the service's code when it's missing/thin, or **compact** it back under a
+  line budget (default 180) when `/close-story` appends have inflated it.
+  Code-grounded (never invents; unconfirmed items become `<TODO>`), lossless
+  compaction, audit mode (`/spec` with no arg lists all spec sizes), and it shows
+  a diff and hands the commit to the user. Never runs or builds anything.
 - **Marketplace manifest** (`.claude-plugin/marketplace.json`) registering the
   Kairos plugin.
 
