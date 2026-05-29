@@ -10,15 +10,19 @@ The workspace's `spec.md` is the single source of truth for paths, services, bra
 
 ```
 /implement-story STORY-{NNN}
-/implement-story                  # Auto-select highest-priority backlog story
+/implement-story                                  # Auto-select highest-priority backlog story
+/implement-story STORY-{NNN} worktree_mode:on     # Override spec's worktree_mode for this run
 ```
 
-The user may pass a story identifier: `$ARGUMENTS`. If provided, use it. Otherwise auto-select per Phase 0.
+The user may pass a story identifier and/or a `worktree_mode:` override in `$ARGUMENTS`.
+
+- **Story id** — if provided, use it; otherwise auto-select per Phase 0.
+- **`worktree_mode:` override** — optional token that overrides the spec's `worktree_mode` for this single invocation only (the `spec.md` file is **never edited**). Accepted values: `epic_shared`, `in_place`, `off`, and the alias `on` (≡ `epic_shared`). Any other value → stop and ask. When present it wins over the spec value; you announce it in Phase 2.
 
 ## Cardinal rules (do not break)
 
 1. **Read `./spec.md` before anything else.** It defines `worktree_mode`, `worktree_prefix`, `default_branch`, `project_management_dir`, and the services table. If `./spec.md` is missing, stop and tell the user to run `/init` first.
-2. **Branch on `spec.worktree_mode`** (`epic_shared` | `in_place` | `off`) for working-tree setup — Phase 2. Never assume one mode.
+2. **Branch on the effective `worktree_mode`** (`epic_shared` | `in_place` | `off`) for working-tree setup — Phase 2. The effective mode is `spec.worktree_mode`, overridden by a `worktree_mode:` token in `$ARGUMENTS` if present. Never assume one mode.
 3. **Stay in scope.** Only touch code under services listed in the story's `Impacted Services` table. About to edit a service that is not listed → **stop and ask** (scope creep is a hard gate).
 4. **No commits, no push, no test runs.** All changes stay as working copy. The developer runs tests when they choose; `/close-story` commits and pushes. The only exception is the story `Status` edit (Phase 2.5).
 5. **Stop and ask over silently working around.** Wrong assumption, missing dependency, ambiguous story selection, scope creep, broken story precondition → stop, explain, ask.
@@ -149,9 +153,18 @@ Will NOT touch: {out of scope items + any service not in the table}
 
 ---
 
-### Phase 2 — Working-tree setup (branch on `worktree_mode`)
+### Phase 2 — Working-tree setup (branch on the effective `worktree_mode`)
 
-Act on `{spec.worktree_mode}`. Run exactly one of the three branches below.
+First resolve the **effective mode**:
+
+1. Start from `{spec.worktree_mode}` (dynamic context above; default `off`).
+2. If `$ARGUMENTS` carries a `worktree_mode:<value>` token, it **overrides** the spec for this run only — never edit `spec.md`. Map the alias `on` → `epic_shared`; accept `epic_shared` | `in_place` | `off` verbatim; reject anything else (stop and ask).
+3. If the effective mode differs from the spec value, announce it:
+   ```
+   ⚙ worktree_mode overridden: spec says {spec value}, this run uses {effective} (CLI override).
+   ```
+
+Then act on the **effective** mode and run exactly one of the three branches below.
 
 #### Mode `off` — current tree, current branch
 
@@ -229,6 +242,14 @@ if [ -d "$CLAUDE_PROJECTS/-$MAIN_PROJECT" ]; then
 else
   echo "⚠ No Claude Code memory found for main project (fine for first run)"
 fi
+```
+
+##### 2d-bis. Seed gitignored runtime files
+A worktree carries only committed content, so gitignored files like `.env` are absent. For each impacted service whose spec declares `worktree_seed_files`, copy each listed path from the main checkout (`$REPO_ROOT`) into the worktree, so containers and the later `worktree_test_command` (run by `/close-story`) have what they need:
+```bash
+# for each {seed} in this story's impacted services' worktree_seed_files:
+[ -f "$REPO_ROOT/{seed}" ] && mkdir -p "$WORKTREE_DIR/$(dirname "{seed}")" && cp "$REPO_ROOT/{seed}" "$WORKTREE_DIR/{seed}" \
+  && echo "✓ seeded {seed}" || echo "⚠ {seed} not found in main checkout (skipped)"
 ```
 
 ##### 2e. Print readiness
@@ -364,7 +385,7 @@ Always prefer **stopping and asking** over silently working around issues. Never
 
 ## QA self-check (run before declaring success)
 
-- [ ] `./spec.md` was read; behavior matched `{spec.worktree_mode}`.
+- [ ] `./spec.md` was read; behavior matched the **effective** `worktree_mode` (spec value, or the `worktree_mode:` CLI override if one was passed). If overridden, the notice was printed and `spec.md` was left untouched.
 - [ ] No commit, no push, no test-suite run was performed.
 - [ ] No file under a service outside `Impacted Services` was created or modified.
 - [ ] Story `Status` is `in_progress` (staged in epic_shared mode; unstaged in in_place/off).

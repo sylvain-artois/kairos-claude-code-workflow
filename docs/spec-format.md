@@ -42,6 +42,8 @@ Kairos commands reference spec fields with a `{spec.<path>}` placeholder syntax.
 | `{spec.services[*].path}` | List of all service paths (iteration context) |
 | `{spec.services[?(@.name=='api')].path}` | Path of the service whose `name` is `api` |
 | `{spec.services[api].test_command}` | Shorthand: `test_command` from the `api` service spec |
+| `{worktree}` | Absolute path of the epic worktree (only inside `epic_shared` runs) |
+| `{worktree_id}` | Isolation slug for that worktree — `epic-{slug}`. Use it to namespace containers, images, and compose projects so a worktree test run never collides with long-running prod containers |
 
 **Resolution order** for per-service fields:
 1. Look up the service entry in the root spec by name to get its `path`.
@@ -159,6 +161,14 @@ These are the fields Kairos commands actively read. All except `name` and `path`
 | `review_command` | optional | string | Code-review command or skill name. Default: Opus read-only review |
 | `suggest_test_plan` | optional | bool | Default `false`. When `true`, `/close-story` prompts to create a test plan if this service is impacted and has no `qa/TEST_PLAN_*.md` |
 | `security_review` | optional | bool | Default `false`. When `true`, `/close-story` runs the Anthropic `security-review` skill against this service's diff (after the code-review gate, before commit). A **Critical or High** finding blocks the commit; Medium/Low are listed for acknowledgement. Reserve for sensitive services (auth, payments, PII) — the review is slow |
+| `worktree_seed_files` | optional | list | Gitignored runtime files (e.g. `.env`) that a fresh worktree does **not** carry — `git worktree add` only materializes committed content. Listed paths are copied from the main checkout into the worktree at creation. Paths relative to workspace root. Used only when `worktree_mode != off` |
+| `worktree_test_command` | optional | string | Replaces `test_command` when the gate runs **inside an `epic_shared` worktree**. The plain `test_command` often attaches to a long-running prod container (e.g. `docker exec api …`), which tests the *original* checkout, not the worktree. This command must instead run against the worktree's files in an **isolated** container that never clobbers prod images/containers and never clashes on ports. Tokens: `{worktree}`, `{worktree_id}`. Defaults to `test_command` |
+
+> **Worktree testing (`epic_shared`).** A worktree is a separate directory. Two things break naive test commands there: (1) gitignored files like `.env` are absent — declare them in `worktree_seed_files`; (2) a containerized `test_command` that does `docker exec <fixed-container>` runs against whatever checkout the container was started from (usually prod), **not** the worktree. The fix is an isolated ephemeral container — declare it in `worktree_test_command`. Example for a Compose service whose `image`/`container_name` are prefixed by an env var:
+> ```
+> worktree_test_command: cd {worktree}/api && CONTAINER_ENV_PREFIX={worktree_id}- docker compose -p {worktree_id} run --rm --build api pytest tests/ -v
+> ```
+> `run --rm` publishes no ports (no clash with the live service); `CONTAINER_ENV_PREFIX={worktree_id}-` passed **on the shell** (not via the compose `env_file`, which does not feed `${...}` interpolation) gives the image/container a distinct name so the prod image is never overwritten.
 
 ### 4.2 Observable-behavior sections
 
