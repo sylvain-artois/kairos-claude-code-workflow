@@ -27,6 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   epic through a single shared worktree, delegating each story to a fresh
   subagent (implement + intermediate-close), then handling push / PR / teardown
   once at the end. Runs autonomously; stops on any safety gate.
+- **`/setup-worktree-isolation` command** — idempotent, opt-in rewrite of
+  Compose files so worktree test runs never collide with prod: built `image:`
+  and `container_name:` are prefixed with `${CONTAINER_ENV_PREFIX}` (empty in
+  prod, so safe by construction). Pulled-only images are left untouched. Runs on
+  the main branch, shows the diff, and hands the commit to the user. `/init`
+  suggests it when Compose is detected (it never edits Compose itself).
+- **Worktree-isolation precondition gate** in `/implement-story` (Phase 2a-bis)
+  and `/implement-epic` (Phase 1): a service that declares `worktree_test_command`
+  whose Compose isn't prefixed makes the command **stop and ask** rather than
+  create a worktree — it points the user at `/setup-worktree-isolation`.
 - **Marketplace manifest** (`.claude-plugin/marketplace.json`) registering the
   Kairos plugin.
 

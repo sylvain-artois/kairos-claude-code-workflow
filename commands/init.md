@@ -253,6 +253,10 @@ Then a "What's next" hint:
 
 > Run `/create-prd` to capture your next initiative, or `/create-story` to start one directly. To configure per-service review commands, edit `review_command` in each `{service}/spec.md`.
 
+If any Compose file was detected, also suggest (do **not** run it — `/init` never edits Compose, per Cardinal rule 1):
+
+> If you plan to use `worktree_mode: epic_shared` and run containerized tests, run `/setup-worktree-isolation` once on this branch first — it prefixes built images/container names with `${CONTAINER_ENV_PREFIX}` (empty in prod, so safe) so worktree test runs don't collide with your live containers.
+
 End the run. Do not run any other Kairos command for the user.
 
 ---

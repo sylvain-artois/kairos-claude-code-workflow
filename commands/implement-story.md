@@ -203,6 +203,17 @@ WORKTREE_DIR="${REPO_ROOT}/../{spec.worktree_prefix}-epic-{EPIC_SLUG}"
 BRANCH_NAME="feature/epic-{EPIC_SLUG}"
 ```
 
+##### 2a-bis. Worktree-isolation precondition (Compose prefix)
+A worktree inherits only **committed** content. For each impacted service that declares `worktree_test_command`, its Compose file must already namespace the built `image:`/`container_name:` with `${CONTAINER_ENV_PREFIX}` — otherwise the worktree's isolated test container (run later by `/close-story`) would collide with or overwrite the prod one. Check the **main checkout** (what the worktree will inherit):
+```bash
+# {compose} = the service's compose_file (from its spec)
+grep -q '${CONTAINER_ENV_PREFIX}' "$REPO_ROOT/{compose}" || echo "NOT PREFIXED: {compose}"
+```
+If any such service's Compose file is not prefixed → **stop and ask**. Do NOT create the worktree, and do NOT auto-edit the Compose file here (an uncommitted infra change inside the worktree is scope creep and the prefix would be missing from prod anyway):
+> ⛔ `{service}`'s Compose (`{compose}`) isn't prefixed for worktree isolation — worktree tests would collide with prod containers. Run `/setup-worktree-isolation` on `{spec.default_branch}` and commit it, then re-run this command. (Aborting — no worktree created.)
+
+Services without `worktree_test_command` skip this check.
+
 ##### 2b. Detect existing worktree / branch
 ```bash
 EXISTING_WT=$(git worktree list --porcelain | awk -v p="$WORKTREE_DIR" '$1=="worktree" && $2==p {print $2}')

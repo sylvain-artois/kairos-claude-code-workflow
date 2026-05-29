@@ -119,6 +119,16 @@ If gate 1 trips, do not run Phase 0 or create the worktree.
 
 Do this once, in the orchestrator, so every subagent merely **joins** an existing worktree.
 
+**First, the worktree-isolation precondition (Compose prefix).** A worktree inherits only **committed** content. For every service impacted by a story in this run that declares `worktree_test_command`, its Compose file must already namespace the built `image:`/`container_name:` with `${CONTAINER_ENV_PREFIX}` — otherwise the isolated test container that intermediate-close runs would collide with or overwrite the prod one. Check the main checkout before creating anything:
+```bash
+# {compose} = the service's compose_file (from its spec)
+grep -q '${CONTAINER_ENV_PREFIX}' "$(git rev-parse --show-toplevel)/{compose}" || echo "NOT PREFIXED: {compose}"
+```
+If any such Compose file is not prefixed → **stop the run and ask**. Do not create the worktree and do not auto-edit the Compose (an uncommitted infra change in the worktree is scope creep and the prefix would still be missing from prod):
+> ⛔ `{service}`'s Compose (`{compose}`) isn't prefixed for worktree isolation — worktree tests would collide with prod containers. Run `/setup-worktree-isolation` on `{default_branch}` and commit it, then re-run `/implement-epic`. (Aborting — no worktree created.)
+
+Services without `worktree_test_command` skip this check. Then create the worktree:
+
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
 WORK="${REPO_ROOT}/../{worktree_prefix}-epic-{EPIC_SLUG}"
