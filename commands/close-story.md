@@ -54,7 +54,16 @@ If a story ID is passed, use it. Otherwise infer the story from the conversation
 1. Read `./spec.md`. Resolve and hold:
    - `git_host`, `default_branch`, `push_mode`, `project_management_dir` (`{pm}`), `worktree_mode`, `worktree_prefix`
    - The `## Services` table → `name → path` (and `compose_file` in mono-repo mode).
-2. Resolve the story file at `{pm}/stories/STORY-{NNN}.md`. If it is already under `{pm}/done/`, tell the user it is already closed and stop.
+2. **Resolve the story file robustly** — the filename may be bare (`STORY-{NNN}.md`) or slugged (`STORY-{NNN}-{slug}.md`); never assume one form. Glob both and hold the result as `STORY_FILE`:
+   ```bash
+   # Run from {WORK} once it is resolved (0.1); ls matches across both possible name forms.
+   matches=$(ls {pm}/stories/STORY-{NNN}.md {pm}/stories/STORY-{NNN}-*.md 2>/dev/null)
+   n=$(printf '%s\n' "$matches" | grep -c .)
+   ```
+   - `n == 0` and a `{pm}/done/STORY-{NNN}*.md` exists → **already closed**: tell the user and stop (idempotent — never re-move or error).
+   - `n == 0` and nothing in `done/` either → the story doesn't exist: stop and ask.
+   - `n > 1` → ambiguous (duplicate IDs): stop and ask which to close — never guess.
+   - `n == 1` → `STORY_FILE` is that path. Continue.
 3. Read the story. Extract: title, `Size`, `Source PRD`, `Epic`, and the `Impacted Services` list.
 
 ### 0.1 — Resolve the working directory (`WORK`) by `worktree_mode`
@@ -224,16 +233,17 @@ Write the returned specs to disk.
 
 ## Phase 5 — Archive story + PRD, update ROADMAP
 
-1. Flip the story's `Status` to `done`, then move it:
+1. Flip the story's `Status` to `done`, then move it using the `STORY_FILE` resolved in Phase 0.2 (never a bare `STORY-{NNN}-*.md` glob — it misses the un-slugged `STORY-{NNN}.md` form). Ensure the target dir exists first; the move is idempotent (skip if already under `done/`):
    ```bash
-   git -C {WORK} mv {pm}/stories/STORY-{NNN}-*.md {pm}/done/
+   mkdir -p {WORK}/{pm}/done
+   git -C {WORK} mv "$STORY_FILE" {pm}/done/
    ```
-2. **PRD archival:** if the story has a `Source PRD`, check whether any *other* open story still references it:
+2. **PRD archival:** if the story has a `Source PRD`, check whether any *other* open story still references it. Anchor the status match on the frontmatter line (`^Status:`) so prose containing the word "Status" never counts; exclude the just-moved story by scanning only `stories/`:
    ```bash
-   grep -l "Source PRD.*{prd-basename}" {pm}/stories/*.md 2>/dev/null \
-     | xargs grep -l "Status.*\(backlog\|in_progress\)" 2>/dev/null
+   grep -lE "^Source PRD:.*{prd-basename}" {WORK}/{pm}/stories/*.md 2>/dev/null \
+     | xargs -r grep -lE "^Status:[[:space:]]*(backlog|in_progress)" 2>/dev/null
    ```
-   - No other open story → `git -C {WORK} mv {prd_path} {pm}/done/`.
+   - No other open story → `mkdir -p {WORK}/{pm}/done && git -C {WORK} mv {prd_path} {pm}/done/` (skip if already in `done/`).
    - Others remain → leave it, note `"PRD kept — referenced by N open stories."`
 3. **ROADMAP:** in `{pm}/ROADMAP.md`, remove the story row from `In Progress` (or wherever it is found) and add it to `Done`: `| STORY-{NNN} | {Title} | {Size} | {YYYY-MM-DD} |`.
 

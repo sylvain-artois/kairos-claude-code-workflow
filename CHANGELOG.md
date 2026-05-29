@@ -57,3 +57,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   project (`docker compose -p {worktree_id} down --volumes --remove-orphans`) and
   removes images matching the `{worktree_id}-` prefix, so built test images don't
   accumulate across epics. Prod (unprefixed) images are never touched.
+
+### Fixed
+
+- `/close-story` archival (Phase 5) no longer fails to move a story whose file is
+  un-slugged (`STORY-007.md`): the old `STORY-{NNN}-*.md` glob required a `-`
+  suffix and silently broke. The story file is now resolved robustly in Phase 0
+  (both name forms, single-match assertion, idempotent if already in `done/`),
+  `{pm}/done/` is created before the move, and the PRD's "still referenced"
+  check anchors its status match on the `^Status:` frontmatter line.
