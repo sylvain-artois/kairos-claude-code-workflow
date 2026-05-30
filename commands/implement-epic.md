@@ -179,8 +179,8 @@ For each story in order, spawn **one** subagent (not `isolation: worktree`) with
 >
 > You implement and close exactly one story, **non-interactively**, inside an existing shared epic worktree. Operate only on this worktree: `WORK={WORK}`, branch `{BRANCH}`. Run every git command as `git -C {WORK} …`. Do **not** create a new worktree or branch; the worktree already exists — join it.
 >
-> 1. **Implement.** Follow `.claude/commands/kairos-claude-code-workflow/commands/implement-story.md` for **STORY-{NNN}** as if invoked `worktree_mode:epic_shared`. Since you cannot ask the user: **auto-approve the plan** (`Proceed? → Y`) and proceed. Honour every other rule of that command — especially scope (touch only the story's `Impacted Services`) and the dependency check.
-> 2. **Intermediate-close.** Then follow `.claude/commands/kairos-claude-code-workflow/commands/close-story.md` for **STORY-{NNN}**, with two overrides:
+> 1. **Implement.** Follow `.claude/commands/kairos/commands/implement-story.md` for **STORY-{NNN}** as if invoked `worktree_mode:epic_shared`. Since you cannot ask the user: **auto-approve the plan** (`Proceed? → Y`) and proceed. Honour every other rule of that command — especially scope (touch only the story's `Impacted Services`) and the dependency check.
+> 2. **Intermediate-close.** Then follow `.claude/commands/kairos/commands/close-story.md` for **STORY-{NNN}**, with two overrides:
 >    - Run **Phases 0–6 only** (gates → commit source → update specs → archive + ROADMAP → commit docs). **Do NOT run Phase 7/8** (push, PR/MR, worktree cleanup) even if this is the last open story — the orchestrator handles those. Treat this as an intermediate close.
 >    - For the bundled-vs-split commit choice (multi-service), **default to one bundled commit**.
 > 3. **Gates are sacred.** If any gate is blocking — a failing test, a Critical/High code-review or security finding, scope creep (a changed file outside the declared services), an unmet dependency, or an ambiguous selection — **stop immediately, do not commit, leave the story `in_progress`**, and return `BLOCKED`. Never work around a red gate.

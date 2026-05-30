@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING — command namespace shortened to `kairos`.** The plugin is now
+  named `kairos` (was `kairos-claude-code-workflow`), so commands are invoked as
+  `/kairos:implement-story` instead of the verbose
+  `/kairos-claude-code-workflow:implement-story`. Install is now
+  `/plugin install kairos`. Anyone who installed the old name must reinstall;
+  the old `/kairos-claude-code-workflow:*` commands no longer exist.
+- Marketplace `source` switched from a local absolute path to the GitHub repo
+  (`github:sylvain-artois/kairos-claude-code-workflow`) so the marketplace is
+  installable off-machine.
+
 ### Added
 
 - **Worktree-isolated testing** for the `epic_shared` mode. Two per-service spec
