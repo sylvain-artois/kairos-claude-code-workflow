@@ -19,8 +19,9 @@ Most spec-driven tools assume a greenfield. Kairos assumes the opposite: you hav
 ## Quickstart (5 minutes)
 
 ```bash
-# 1. Install the plugin (from the Claude Code marketplace, or a local clone)
-/plugin install kairos
+# 1. Add the marketplace, then install the plugin
+/plugin marketplace add sylvain-artois/kairos-claude-code-workflow
+/plugin install kairos@kairos
 
 # 2. In your project root, bootstrap Kairos (read-only detection, writes only spec.md)
 /init

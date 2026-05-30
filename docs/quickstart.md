@@ -6,10 +6,11 @@ Five minutes, on a project you already have. Kairos never edits your code during
 
 ## 1. Install
 
-From the Claude Code marketplace, or a local clone:
+Add the marketplace, then install the plugin:
 
 ```
-/plugin install kairos
+/plugin marketplace add sylvain-artois/kairos-claude-code-workflow
+/plugin install kairos@kairos
 ```
 
 ## 2. Bootstrap — `/init`

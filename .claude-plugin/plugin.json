@@ -1,5 +1,5 @@
 {
     "name": "kairos",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "description": "A story-driven agile workflow for Claude Code: /init, /create-prd, /create-story, /implement-story, /close-story, /qa, /release. Built for solo devs and small teams on existing projects."
 }
