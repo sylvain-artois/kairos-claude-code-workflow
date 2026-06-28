@@ -10,7 +10,7 @@ checklist, then point a service at it:
 - **review_command**: review-api
 ```
 
-`/close-story` invokes this command on the service-scoped diff and parses its output
+`/kairos:close-story` invokes this command on the service-scoped diff and parses its output
 against the contract's severity headers.
 
 ---
@@ -21,7 +21,7 @@ description: Code review for the api service — emits Kairos-contract findings
 ---
 
 You are reviewing the staged/working changes of the `api` service. Emit findings in
-the Kairos review-contract format so `/close-story` can gate on them.
+the Kairos review-contract format so `/kairos:close-story` can gate on them.
 
 ## 1. Get the service-scoped diff
 
@@ -76,7 +76,7 @@ Critical/High findings exist.
 # scripts/review.sh — reads a diff on stdin, emits Kairos-contract findings.
 set -euo pipefail
 
-diff="$(cat)"                      # service-scoped diff piped in by /close-story
+diff="$(cat)"                      # service-scoped diff piped in by /kairos:close-story
 [ -z "$diff" ] && { echo "## Low"; echo "- empty diff, nothing to review"; exit 0; }
 
 # Hand the diff to whatever does the reviewing (an LLM CLI, a linter wrapper, …)

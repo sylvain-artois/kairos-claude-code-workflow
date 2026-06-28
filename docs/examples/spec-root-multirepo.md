@@ -61,6 +61,6 @@ Workspace layout on disk:
 - In multi-repo mode, service `path` is relative to the **workspace root** (which is the parent dir of the cloned repos), **not** to a single repo root. Each repo's working tree is one subdirectory deep.
 - No `compose_file` column: each repo manages its own compose configuration, documented in its per-service spec.
 - `worktree_mode: epic_shared` means all stories of a given epic share one branch and one worktree per impacted repo. The worktree path is `{worktree_prefix}-epic-{slug}` (e.g. `acme-epic-billing-rebuild`). The worktree is created for each impacted repo on the first story of the epic and torn down when the last story closes.
-- `release_notes_dir` mode is used here because no repo ships a root `CHANGELOG.md`. `/release` will create one file per version in `docs/releases/<version>.md` of the targeted repo.
-- Cross-service stories (`Impacted Services` listing more than one service) iterate QA and review per service — see the `/close-story` documentation.
+- `release_notes_dir` mode is used here because no repo ships a root `CHANGELOG.md`. `/kairos:release` will create one file per version in `docs/releases/<version>.md` of the targeted repo.
+- Cross-service stories (`Impacted Services` listing more than one service) iterate QA and review per service — see the `/kairos:close-story` documentation.
 - Per-service VCS host can differ. `git_host: github` here is the workspace default; an individual per-service spec may override with its own `git_host` field when a service lives on GitLab while others are on GitHub.

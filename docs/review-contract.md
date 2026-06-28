@@ -2,7 +2,7 @@
 
 Code review is the hardest part of a workflow to make generic: every project has its own idioms, stack, and depth requirements. Kairos solves this by **not shipping a reviewer**. Instead it defines a small contract that any reviewer can satisfy — a native Opus pass, a project-authored slash command, or an external script — and selects one per service via the `review_command` field in that service's `spec.md`.
 
-`/close-story` runs the resolved review on the **service-scoped diff** during its per-service gate phase. This document is the contract that step depends on.
+`/kairos:close-story` runs the resolved review on the **service-scoped diff** during its per-service gate phase. This document is the contract that step depends on.
 
 ---
 
@@ -36,9 +36,9 @@ Findings as Markdown, grouped under these exact level-2 headers (omit a section 
 - {finding}
 ```
 
-This mirrors the [Anthropic `security-review` skill](https://docs.claude.com/en/docs/claude-code) grouping, so the two review surfaces in `/close-story` (code review + opt-in security review) speak the **same severity vocabulary**. Findings should be specific — cite `file:line` — and focus on correctness, security, and maintainability over style.
+This mirrors the [Anthropic `security-review` skill](https://docs.claude.com/en/docs/claude-code) grouping, so the two review surfaces in `/kairos:close-story` (code review + opt-in security review) speak the **same severity vocabulary**. Findings should be specific — cite `file:line` — and focus on correctness, security, and maintainability over style.
 
-| Level | Meaning | `/close-story` behavior |
+| Level | Meaning | `/kairos:close-story` behavior |
 |---|---|---|
 | **Critical** | Must fix before commit (data loss, security hole, broken logic) | **Gate** — stop and ask, do not commit |
 | **High** | Should fix before commit (serious bug risk, contract break) | **Gate** — stop and ask, do not commit |
@@ -49,10 +49,10 @@ This mirrors the [Anthropic `security-review` skill](https://docs.claude.com/en/
 
 For modes that run as a process (Mode 3):
 
-- **exit 0** = no Critical/High findings — `/close-story` may proceed.
+- **exit 0** = no Critical/High findings — `/kairos:close-story` may proceed.
 - **non-zero** = Critical/High present — the caller gates on it.
 
-Modes 1 and 2 (Opus / slash command) signal the same thing via the presence of `## Critical` / `## High` sections; `/close-story` parses the headers rather than an exit code.
+Modes 1 and 2 (Opus / slash command) signal the same thing via the presence of `## Critical` / `## High` sections; `/kairos:close-story` parses the headers rather than an exit code.
 
 ---
 
@@ -62,16 +62,16 @@ The per-service `review_command` field selects the mode. Resolution:
 
 | `review_command` value | Mode |
 |---|---|
-| *(unset / empty, or an unresolved `<TODO…>` placeholder from `/init`)* | **Mode 1** — default native Opus review |
+| *(unset / empty, or an unresolved `<TODO…>` placeholder from `/kairos:init`)* | **Mode 1** — default native Opus review |
 | `skip` | **Opt-out** — review step bypassed (see §3) |
 | a slash-command name (e.g. `review-api`) | **Mode 2** — project slash command |
 | a path to an executable (e.g. `scripts/review.sh`) | **Mode 3** — external binary / script |
 
 ### Mode 1 — Default (native Opus, language-agnostic)
 
-When no `review_command` is set, `/close-story` runs an inline Opus review on the service-scoped diff. No per-language tooling, no external dependency — Opus reads the raw diff. This is the deliberate default: it works across Python, TypeScript, Go, Rust, etc. without Kairos shipping language-specific linters.
+When no `review_command` is set, `/kairos:close-story` runs an inline Opus review on the service-scoped diff. No per-language tooling, no external dependency — Opus reads the raw diff. This is the deliberate default: it works across Python, TypeScript, Go, Rust, etc. without Kairos shipping language-specific linters.
 
-**Default prompt template** (used verbatim by `/close-story`):
+**Default prompt template** (used verbatim by `/kairos:close-story`):
 
 ```
 Review this diff. Emit findings grouped under `## Critical`, `## High`,
@@ -86,7 +86,7 @@ each finding. A finding is Critical/High only if it should block the commit.
 
 ### Mode 2 — Project slash command
 
-A user who wants project-aware review authors a slash command in their project's `.claude/commands/` (e.g. `review-api.md`) that encodes their stack's idioms — Pydantic patterns, NestJS module boundaries, Go error conventions — and sets `review_command: review-api` in the service spec. `/close-story` invokes that command on the service diff and parses its output against the contract.
+A user who wants project-aware review authors a slash command in their project's `.claude/commands/` (e.g. `review-api.md`) that encodes their stack's idioms — Pydantic patterns, NestJS module boundaries, Go error conventions — and sets `review_command: review-api` in the service spec. `/kairos:close-story` invokes that command on the service diff and parses its output against the contract.
 
 See [examples/review-command-example.md](examples/review-command-example.md) for a minimal, copyable template.
 
@@ -108,7 +108,7 @@ No arguments are required, no temp files are written. A script may also accept `
 
 ## 3. Opt-out: `review_command: skip`
 
-Setting `review_command: skip` on a service tells `/close-story` to **bypass the review step cleanly** for that service — no Opus pass, no prompt, no log noise. Useful for greenfield code where automated review is mostly noise, or services reviewed entirely out-of-band. Document the choice in the service spec so it is a visible decision, not an accident.
+Setting `review_command: skip` on a service tells `/kairos:close-story` to **bypass the review step cleanly** for that service — no Opus pass, no prompt, no log noise. Useful for greenfield code where automated review is mostly noise, or services reviewed entirely out-of-band. Document the choice in the service spec so it is a visible decision, not an accident.
 
 `skip` affects only the code-review step. The opt-in security-review phase (`security_review: true`) is independent and still runs.
 
@@ -130,4 +130,4 @@ Claude Code plugins **do not manage third-party skill installation**. If a user 
 
 ## 6. Consistency requirement
 
-All three modes MUST emit the same `## Critical` / `## High` / `## Medium` / `## Low` structure. `/close-story` parses these headers identically regardless of mode and applies the same gate (Critical/High block the commit). A reviewer that emits a different format breaks the gate — conform to §1.
+All three modes MUST emit the same `## Critical` / `## High` / `## Medium` / `## Low` structure. `/kairos:close-story` parses these headers identically regardless of mode and applies the same gate (Critical/High block the commit). A reviewer that emits a different format breaks the gate — conform to §1.

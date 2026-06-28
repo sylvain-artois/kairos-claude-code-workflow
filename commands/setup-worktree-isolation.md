@@ -4,7 +4,7 @@ description: One-time, idempotent rewrite of Compose files so worktree test runs
 
 You prepare a Compose-based project for **worktree-isolated testing**. The `epic_shared` worktree flow runs each epic's tests in an ephemeral container (`docker compose -p {worktree_id} run --rm --build …`). For that to be safe, the built `image:` and any fixed `container_name:` in the project's Compose files must be **namespaced by an env var**, so a worktree run gets its own image/container instead of overwriting or colliding with the long-running prod one.
 
-This command makes that change **once**, on the main working tree, and is **idempotent** — re-running it is a no-op. It is the prerequisite that `/implement-story` and `/implement-epic` check before creating a worktree.
+This command makes that change **once**, on the main working tree, and is **idempotent** — re-running it is a no-op. It is the prerequisite that `/kairos:implement-story` and `/kairos:implement-epic` check before creating a worktree.
 
 The change is **safe by construction**: when `CONTAINER_ENV_PREFIX` is unset or empty (the prod default), `${CONTAINER_ENV_PREFIX}` collapses to the empty string and behaviour is identical to today. The prefix only takes effect when a worktree run passes `CONTAINER_ENV_PREFIX={worktree_id}-` on the shell.
 
@@ -13,14 +13,14 @@ The workspace's `spec.md` is the source of truth for which services exist and wh
 ## Usage
 
 ```
-/setup-worktree-isolation
+/kairos:setup-worktree-isolation
 ```
 
 No arguments. Operates on every Compose-backed service declared in `./spec.md`.
 
 ## Cardinal rules (do not break)
 
-1. **Read `./spec.md` first.** It lists the services and their `compose_file`. If `./spec.md` is missing, stop and tell the user to run `/init` first.
+1. **Read `./spec.md` first.** It lists the services and their `compose_file`. If `./spec.md` is missing, stop and tell the user to run `/kairos:init` first.
 2. **Only edit Compose files.** The single files you may modify are the `compose_file`s referenced by services in `spec.md`. Never touch application code, `.env`, `spec.md`, or anything else.
 3. **Run on the main branch, never in a worktree.** The prefix must live in committed content on `{spec.default_branch}` so every future worktree inherits it. If `git rev-parse --show-toplevel` is itself a linked worktree (a `.git` *file*, not dir), stop and ask the user to run this on the main checkout.
 4. **Idempotent.** A line already carrying `${CONTAINER_ENV_PREFIX}` is left untouched. Re-running the command on an already-prepared project changes nothing and reports "already isolated".
@@ -44,7 +44,7 @@ No arguments. Operates on every Compose-backed service declared in `./spec.md`.
 
 ### Spec present?
 ```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /init first"
+!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### Compose files referenced by spec services
@@ -58,7 +58,7 @@ No arguments. Operates on every Compose-backed service declared in `./spec.md`.
 
 ### Phase 0 — Preconditions
 
-- `spec.md` missing → stop, tell the user to run `/init`.
+- `spec.md` missing → stop, tell the user to run `/kairos:init`.
 - Current tree is a linked worktree (dynamic check above) → stop, ask them to run on the main checkout.
 - No service in `spec.md` declares a `compose_file` → nothing to isolate. Report: "No Compose-backed services found — worktree isolation relies on Compose; nothing to do." and exit cleanly.
 
@@ -110,7 +110,7 @@ Show `git diff -- {compose_file ...}` and stop for the user to review. **You do 
 ## Failure modes and how to handle them
 
 - **Compose uses YAML anchors / `extends` / `include:` / `x-` templates** so `image:`/`container_name:` don't resolve locally → stop, show the structure, ask the user how they want it handled. Do not edit blindly.
-- **A service in `spec.md` has a `compose_file` but no matching service key in it** (renamed/stale) → report the mismatch and skip that service; suggest re-running `/init` to refresh the spec.
+- **A service in `spec.md` has a `compose_file` but no matching service key in it** (renamed/stale) → report the mismatch and skip that service; suggest re-running `/kairos:init` to refresh the spec.
 - **Run from inside a worktree** → refuse (rule 3); the change must land on the main branch's committed content.
 - **No Compose files at all** → nothing to do; exit cleanly (Phase 0).
 

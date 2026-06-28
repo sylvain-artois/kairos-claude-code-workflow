@@ -8,7 +8,7 @@ The order is deliberate: **gates first, commit second, archive last, push last o
 
 ## Cardinal rules (do not break)
 
-1. **Read `./spec.md` first.** If it is missing, stop and tell the user to run `/init`. Everything below resolves against it.
+1. **Read `./spec.md` first.** If it is missing, stop and tell the user to run `/kairos:init`. Everything below resolves against it.
 2. **Preserve every safety gate.** Failing tests, critical review findings, scope creep, and ambiguous story selection each mean: **stop and ask the user. Do NOT proceed to commit.**
 3. **Never widen scope.** Only the services declared in the story's `Impacted Services` (unioned with what the diff actually touches) are in play. A diff that touches a file outside those services trips the scope-creep gate.
 4. **Never force-push, never amend existing commits, never auto-merge a PR/MR.** The developer makes the merge call.
@@ -26,7 +26,7 @@ The order is deliberate: **gates first, commit second, archive last, push last o
 
 ### Workspace spec (required)
 ```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /init first"
+!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### Open stories
@@ -43,7 +43,7 @@ The order is deliberate: **gates first, commit second, archive last, push last o
 
 ## Argument (optional)
 
-`/close-story [STORY-NNN]`
+`/kairos:close-story [STORY-NNN]`
 
 If a story ID is passed, use it. Otherwise infer the story from the conversation (the one just implemented). **If you cannot identify exactly one story, stop and ask** — do not guess.
 
@@ -106,7 +106,7 @@ If the count looks wrong (the user expected the epic to be done but a sibling is
 2. Map each changed path to a service via the `path` column of the spec services table.
 3. `IMPACTED` = union of the story's declared `Impacted Services` and the services the diff actually touches.
 4. **Scope-creep gate:** if a changed file maps to **no** service in `IMPACTED` (i.e. it falls outside every declared service path), **stop and ask**. Show the offending files. Do NOT proceed — adding them silently would widen scope past the story's declaration. The user either amends the story's `Impacted Services` or reverts the stray change.
-   - **Exclude Kairos bookkeeping from this gate:** files under `{pm}/` (the story file itself, which `/implement-story` left edited to `Status: in_progress`, and `ROADMAP.md`) are expected and never count as scope creep. Only source files outside the declared services trip the gate.
+   - **Exclude Kairos bookkeeping from this gate:** files under `{pm}/` (the story file itself, which `/kairos:implement-story` left edited to `Status: in_progress`, and `ROADMAP.md`) are expected and never count as scope creep. Only source files outside the declared services trip the gate.
 
 For each service in `IMPACTED`, note from its `{path}/spec.md` (if present): `test_command`, `review_command`, `suggest_test_plan`, and whether a `{path}/qa/TEST_PLAN_*.md` exists.
 
@@ -122,15 +122,15 @@ These are **gates**: they run before any commit. Run them for every service in `
 For each service, in order:
 
 **(a) Unit tests.** Run the service's test command from `{WORK}` (skip if the service declares none). **Pick the command by mode:** when `worktree_mode == epic_shared` (so `{WORK}` is a separate worktree dir) and the service declares `worktree_test_command`, run **that** — substituting `{worktree}` = `{WORK}` and `{worktree_id}` = `epic-{EPIC_SLUG}` — because the plain `test_command` (e.g. `docker exec <fixed-container>`) would test the prod checkout, not the worktree. Otherwise run `{service.test_command}`.
-> **Fixed-container guard (`epic_shared` only).** Before falling back to `{test_command}`, check it: if it attaches to a fixed container — it matches `docker exec` or `docker compose exec` — **and** the service declares no `worktree_test_command`, **stop and ask**. Such a command runs against whatever checkout the long-running container was started from (prod), **not** `{WORK}` — so a "pass" here is meaningless and could even mutate prod state. Tell the user to declare a `worktree_test_command` (and run `/setup-worktree-isolation` if the Compose isn't prefixed yet). Do not silently run it.
+> **Fixed-container guard (`epic_shared` only).** Before falling back to `{test_command}`, check it: if it attaches to a fixed container — it matches `docker exec` or `docker compose exec` — **and** the service declares no `worktree_test_command`, **stop and ask**. Such a command runs against whatever checkout the long-running container was started from (prod), **not** `{WORK}` — so a "pass" here is meaningless and could even mutate prod state. Tell the user to declare a `worktree_test_command` (and run `/kairos:setup-worktree-isolation` if the Compose isn't prefixed yet). Do not silently run it.
 
 If a service needs an unavailable resource (GPU, external API, container down), **ask before skipping** — do not silently skip.
 > **If any test fails → stop and ask.** Report service, failing tests, and an output excerpt. Do NOT proceed to commit. The story stays `in_progress`.
 
-**(b) QA.** If at least one `{service.path}/qa/TEST_PLAN_*.md` exists, run `/qa {service}` for it. A `STOPPED` verdict (a gating phase failed) is a hard gate — **stop and ask**, like a failing test. An `ISSUES FOUND` verdict (non-gating failures only) is reported and the user decides whether to continue.
+**(b) QA.** If at least one `{service.path}/qa/TEST_PLAN_*.md` exists, run `/kairos:qa {service}` for it. A `STOPPED` verdict (a gating phase failed) is a hard gate — **stop and ask**, like a failing test. An `ISSUES FOUND` verdict (non-gating failures only) is reported and the user decides whether to continue.
 
 **(c) Code review.** Run the review on the **service-scoped diff** (restricted to that service's path) per the [review contract](../docs/review-contract.md), resolving `{service.review_command}`:
-- *unset, or still the `<TODO…>` placeholder `/init` wrote* → **Mode 1**: inline Opus review using the contract's default prompt template.
+- *unset, or still the `<TODO…>` placeholder `/kairos:init` wrote* → **Mode 1**: inline Opus review using the contract's default prompt template.
 - `skip` → **opt-out**: bypass the review step for this service cleanly (no prompt, no log noise). The security-review phase still runs if opted in.
 - a slash-command name → **Mode 2**: invoke that project command on the diff.
 - a script path → **Mode 3**: pipe the diff on stdin, read findings from stdout.
@@ -138,7 +138,7 @@ If a service needs an unavailable resource (GPU, external API, container down), 
 All modes emit findings under `## Critical` / `## High` / `## Medium` / `## Low`.
 > **If review surfaces a Critical or High finding → stop and ask.** Do NOT proceed to commit. Medium/Low findings are reported; the user decides whether to fix before closing.
 
-**(d) Test-plan suggestion.** If `{service.suggest_test_plan} == true` **and** the service has no `TEST_PLAN_*.md`, prompt **once**: `"No test plan for {service} — generate one via /create-test-plan? [y/N]"`. Do not nag if already prompted once for this service in this run.
+**(d) Test-plan suggestion.** If `{service.suggest_test_plan} == true` **and** the service has no `TEST_PLAN_*.md`, prompt **once**: `"No test plan for {service} — generate one via /kairos:create-test-plan? [y/N]"`. Do not nag if already prompted once for this service in this run.
 
 Subagent prompt for the parallel case (one per service):
 > You are a close-out gate runner for the `{service}` service (path `{path}`).
@@ -281,7 +281,7 @@ Branch to push: the current branch in `off` mode, `feature/story-{NNN}-{slug}` i
 
   Reply "pushed" when done, or "skip" to defer push + PR + cleanup.
   ```
-  If the user says "skip", jump to Phase 9 noting push/PR/cleanup are pending. The user can re-run `/close-story` later (it will detect the archived files and resume here).
+  If the user says "skip", jump to Phase 9 noting push/PR/cleanup are pending. The user can re-run `/kairos:close-story` later (it will detect the archived files and resume here).
 
 ### 7.2 — PR / MR (skip in `off` mode — there is no feature branch to open)
 
@@ -321,7 +321,7 @@ git worktree remove {WORK}
 git branch -d feature/epic-{EPIC_SLUG}
 ```
 
-If `worktree remove` fails on uncommitted changes, **show the error and ask before `--force`** — never force on your own. Also remove the memory symlink created by `/implement-story` if present.
+If `worktree remove` fails on uncommitted changes, **show the error and ask before `--force`** — never force on your own. Also remove the memory symlink created by `/kairos:implement-story` if present.
 
 ---
 
@@ -339,7 +339,7 @@ If `worktree remove` fails on uncommitted changes, **show the error and ask befo
   Worktree:  {WORK} (kept open)
   Remaining: {REMAINING_OPEN} open stor{y|ies} on this epic
 
-Next: run /implement-story to pick the next story of the epic.
+Next: run /kairos:implement-story to pick the next story of the epic.
 ```
 
 **Full close** (off / in_place / epic_shared last story):
@@ -359,14 +359,14 @@ Next: run /implement-story to pick the next story of the epic.
   PR/MR:     {created | command printed | n/a}
   Worktree:  {removed | n/a}
 
-Next: run /implement-story to pick the next backlog story.
+Next: run /kairos:implement-story to pick the next backlog story.
 ```
 
 ---
 
 ## Failure modes
 
-- **`spec.md` missing** → stop, point at `/init`.
+- **`spec.md` missing** → stop, point at `/kairos:init`.
 - **Story not identifiable / ambiguous** → stop and ask. Never guess.
 - **Story already in `{pm}/done/`** → report it is closed, stop.
 - **A test fails** → stop and ask; no commit; story stays `in_progress`.
@@ -374,7 +374,7 @@ Next: run /implement-story to pick the next backlog story.
 - **Security review finds Critical/High** (opt-in services) → stop and ask; no commit; story stays `in_progress`.
 - **Diff touches a file outside `Impacted Services`** → scope-creep gate; stop and ask.
 - **Worktree not found (epic_shared)** → ask for the path; offer to skip cleanup if already removed.
-- **Push deferred / fails** (`manual`, no remote, auth, user "skip") → note in summary, leave branch + worktree in place; re-running `/close-story` resumes at Phase 7.
+- **Push deferred / fails** (`manual`, no remote, auth, user "skip") → note in summary, leave branch + worktree in place; re-running `/kairos:close-story` resumes at Phase 7.
 - **`worktree remove` fails** → show the error, ask before `--force`.
 
 ---

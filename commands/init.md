@@ -221,7 +221,7 @@ Worktree default for the first run: `worktree_mode: off` (omit `worktree_prefix`
 
 Follow §4. Only emit:
 
-1. Header: `# {service-name} — Spec` + one-line purpose stub (`> <TODO: one-sentence purpose>`) + `**Last updated**: /init ({YYYY-MM-DD})`.
+1. Header: `# {service-name} — Spec` + one-line purpose stub (`> <TODO: one-sentence purpose>`) + `**Last updated**: /kairos:init ({YYYY-MM-DD})`.
 2. **Identity & Commands** block with all detected fields. Leave undetected ones as `<TODO: ...>` rather than omitting them, so the user sees the gaps.
 3. Section stubs for optional observable-behavior sections as HTML comments: `<!-- TODO: fill if applicable: API / Endpoints -->`, one per recommended section listed in `${CLAUDE_PLUGIN_ROOT}/docs/spec-format.md` §4.2. Do not invent table rows.
 
@@ -251,11 +251,11 @@ Print a table:
 
 Then a "What's next" hint:
 
-> Run `/create-prd` to capture your next initiative, or `/create-story` to start one directly. To configure per-service review commands, edit `review_command` in each `{service}/spec.md`.
+> Run `/kairos:create-prd` to capture your next initiative, or `/kairos:create-story` to start one directly. To configure per-service review commands, edit `review_command` in each `{service}/spec.md`.
 
-If any Compose file was detected, also suggest (do **not** run it — `/init` never edits Compose, per Cardinal rule 1):
+If any Compose file was detected, also suggest (do **not** run it — `/kairos:init` never edits Compose, per Cardinal rule 1):
 
-> If you plan to use `worktree_mode: epic_shared` and run containerized tests, run `/setup-worktree-isolation` once on this branch first — it prefixes built images/container names with `${CONTAINER_ENV_PREFIX}` (empty in prod, so safe) so worktree test runs don't collide with your live containers.
+> If you plan to use `worktree_mode: epic_shared` and run containerized tests, run `/kairos:setup-worktree-isolation` once on this branch first — it prefixes built images/container names with `${CONTAINER_ENV_PREFIX}` (empty in prod, so safe) so worktree test runs don't collide with your live containers.
 
 End the run. Do not run any other Kairos command for the user.
 

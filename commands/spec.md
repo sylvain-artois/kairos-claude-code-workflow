@@ -4,8 +4,8 @@ description: Maintain a service's spec.md — backfill it from the service's cod
 
 You maintain the **observable-behavior spec** of one service. Over time a `{service}/spec.md` drifts in two directions, and this command fixes both:
 
-- **Backfill** — the spec is missing, a bare `/init` stub, or thin, while the service has real behavior the team relies on. You read the service's **code** and document its observable behavior into the standard sections.
-- **Compaction** — every `/close-story` appends to the spec from its diff, so the file slowly inflates with redundant, stale, or over-verbose entries. You re-synthesize it back under a size budget **without losing any fact**.
+- **Backfill** — the spec is missing, a bare `/kairos:init` stub, or thin, while the service has real behavior the team relies on. You read the service's **code** and document its observable behavior into the standard sections.
+- **Compaction** — every `/kairos:close-story` appends to the spec from its diff, so the file slowly inflates with redundant, stale, or over-verbose entries. You re-synthesize it back under a size budget **without losing any fact**.
 
 You **never invent behavior** and you **never run the service** — this is a static read of the code plus a careful rewrite of one Markdown file. You show the diff and leave the commit to the user.
 
@@ -14,10 +14,10 @@ The observable-behavior section format is defined in [spec-format.md §4.2](../d
 ## Usage
 
 ```
-/spec {service}            # maintain one service (auto-detect: backfill if thin, offer compaction if oversized)
-/spec {service} backfill   # force backfill mode
-/spec {service} compact    # force compaction mode
-/spec                       # audit every service: print spec line counts, flag those over budget. No edits.
+/kairos:spec {service}            # maintain one service (auto-detect: backfill if thin, offer compaction if oversized)
+/kairos:spec {service} backfill   # force backfill mode
+/kairos:spec {service} compact    # force compaction mode
+/kairos:spec                       # audit every service: print spec line counts, flag those over budget. No edits.
 ```
 
 `$ARGUMENTS` carries an optional service name and an optional mode token (`backfill` | `compact`). No service name → audit-only mode.
@@ -28,7 +28,7 @@ Default soft budget: **180 lines** per `{service}/spec.md` (the YAML/identity bl
 
 ## Cardinal rules (do not break)
 
-1. **Read `./spec.md` first.** Resolve the named service to its `path` from the `## Services` table. Unknown service → stop and list the declared ones. Missing root spec → stop and tell the user to run `/init` first.
+1. **Read `./spec.md` first.** Resolve the named service to its `path` from the `## Services` table. Unknown service → stop and list the declared ones. Missing root spec → stop and tell the user to run `/kairos:init` first.
 2. **Edit exactly one file: `{path}/spec.md`.** Never touch the service's code, other services' specs, or the root spec.
 3. **Ground every claim in real code.** Each endpoint/event/table/env-var/contract you write must be traceable to something you actually read in `{path}`. Cite the source file where it helps. **Never infer behavior you cannot see** — if a section is plausible but unconfirmed, write it as a `<TODO: confirm …>` rather than asserting it.
 4. **Compaction never loses information.** It merges duplicates, drops stale entries the code no longer supports, and condenses prose — but it must not silently delete a fact that is still true. If you cannot tell whether an entry is stale, **keep it** and flag it. When in doubt, under-compact.
@@ -42,7 +42,7 @@ Default soft budget: **180 lines** per `{service}/spec.md` (the YAML/identity bl
 
 ### Workspace root & spec
 ```
-!pwd; test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /init first"
+!pwd; test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### Per-service spec sizes (audit)
@@ -57,9 +57,9 @@ Default soft budget: **180 lines** per `{service}/spec.md` (the YAML/identity bl
 
 ### Phase 0 — Resolve & classify
 
-1. Read `./spec.md`; resolve `{service}` → `{path}` (and `compose_file` if mono-repo). No service arg → **audit mode**: print the line count of every `{path}/spec.md`, flag each over the budget, suggest `/spec {name} compact` for those and `/spec {name} backfill` for any that are MISSING/stub. **Stop** (no edits).
+1. Read `./spec.md`; resolve `{service}` → `{path}` (and `compose_file` if mono-repo). No service arg → **audit mode**: print the line count of every `{path}/spec.md`, flag each over the budget, suggest `/kairos:spec {name} compact` for those and `/kairos:spec {name} backfill` for any that are MISSING/stub. **Stop** (no edits).
 2. With a service: read `{path}/spec.md` if it exists. Classify:
-   - **Thin** — missing, or only the `/init` identity/commands block with no real observable-behavior content (or `<TODO>` stubs only) → default to **backfill**.
+   - **Thin** — missing, or only the `/kairos:init` identity/commands block with no real observable-behavior content (or `<TODO>` stubs only) → default to **backfill**.
    - **Oversized** — over the line budget → default to **offer compaction**.
    - **Healthy** — present and under budget → report "nothing to do" unless a mode was forced.
    A forced mode token in `$ARGUMENTS` overrides this classification.
@@ -81,7 +81,7 @@ Read the service's code under `{path}` — entrypoints, route/handler definition
 | File Outputs | file writes, export/report generation |
 | LLM Prompts | prompt templates / system messages |
 
-Set the header `**Last updated**: /spec backfill (YYYY-MM-DD)` (compute the date at runtime: `date +%F`). Anything you cannot confirm from code → `<TODO: confirm …>`. Do **not** fabricate table rows to look complete.
+Set the header `**Last updated**: /kairos:spec backfill (YYYY-MM-DD)` (compute the date at runtime: `date +%F`). Anything you cannot confirm from code → `<TODO: confirm …>`. Do **not** fabricate table rows to look complete.
 
 ### Phase 2 — Compaction (under budget)
 
@@ -92,7 +92,7 @@ Re-synthesize the existing spec to get under the budget **losslessly**:
 - **Condense** verbose prose into the format's terse tables/bullets; strip per-story narration that isn't observable behavior.
 - **Keep** every still-true fact. Compaction shrinks redundancy and verbosity, never knowledge.
 
-Set `**Last updated**: /spec compact (YYYY-MM-DD)`. Report the before/after line counts. If you cannot get under budget without dropping facts, **stop under budget and say so** — an honest 220-line spec beats a lossy 180-line one.
+Set `**Last updated**: /kairos:spec compact (YYYY-MM-DD)`. Report the before/after line counts. If you cannot get under budget without dropping facts, **stop under budget and say so** — an honest 220-line spec beats a lossy 180-line one.
 
 ### Phase 3 — Show the diff and hand off the commit
 
@@ -109,7 +109,7 @@ Show `git diff -- {path}/spec.md` and stop. **You do not commit.** Print:
 
 ## Failure modes and how to handle them
 
-- **Service not in `./spec.md`** → stop, list the declared services, suggest re-running `/init` if it's genuinely a new service.
+- **Service not in `./spec.md`** → stop, list the declared services, suggest re-running `/kairos:init` if it's genuinely a new service.
 - **Code is generated / vendored / unreadable** under `{path}` → document only what you can read; mark the rest `<TODO>`; say what you skipped. Do not guess.
 - **Spec looks hand-curated with content the code can't explain** (design notes, rationale) → in compaction, **preserve** it; only touch what you can tie to code or to obvious redundancy. When unsure, ask.
 - **Already healthy** (present, under budget, no forced mode) → report line count and "nothing to do"; make no edit.

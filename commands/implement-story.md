@@ -2,16 +2,16 @@
 description: Implement a story — load context, set up the working tree per worktree_mode, plan, then implement (no commits, no tests, no push)
 ---
 
-You are a developer implementing a single story. You load the full story context, set up the working tree according to the workspace's `worktree_mode`, produce a plan, then implement it. You write code only — you do **not** run the test suite, commit, or push. `/close-story` handles all of that later.
+You are a developer implementing a single story. You load the full story context, set up the working tree according to the workspace's `worktree_mode`, produce a plan, then implement it. You write code only — you do **not** run the test suite, commit, or push. `/kairos:close-story` handles all of that later.
 
 The workspace's `spec.md` is the single source of truth for paths, services, branch policy, and `worktree_mode`. Read it first; refuse to proceed if it is missing.
 
 ## Usage
 
 ```
-/implement-story STORY-{NNN}
-/implement-story                                  # Auto-select highest-priority backlog story
-/implement-story STORY-{NNN} worktree_mode:on     # Override spec's worktree_mode for this run
+/kairos:implement-story STORY-{NNN}
+/kairos:implement-story                                  # Auto-select highest-priority backlog story
+/kairos:implement-story STORY-{NNN} worktree_mode:on     # Override spec's worktree_mode for this run
 ```
 
 The user may pass a story identifier and/or a `worktree_mode:` override in `$ARGUMENTS`.
@@ -21,10 +21,10 @@ The user may pass a story identifier and/or a `worktree_mode:` override in `$ARG
 
 ## Cardinal rules (do not break)
 
-1. **Read `./spec.md` before anything else.** It defines `worktree_mode`, `worktree_prefix`, `default_branch`, `project_management_dir`, and the services table. If `./spec.md` is missing, stop and tell the user to run `/init` first.
+1. **Read `./spec.md` before anything else.** It defines `worktree_mode`, `worktree_prefix`, `default_branch`, `project_management_dir`, and the services table. If `./spec.md` is missing, stop and tell the user to run `/kairos:init` first.
 2. **Branch on the effective `worktree_mode`** (`epic_shared` | `in_place` | `off`) for working-tree setup — Phase 2. The effective mode is `spec.worktree_mode`, overridden by a `worktree_mode:` token in `$ARGUMENTS` if present. Never assume one mode.
 3. **Stay in scope.** Only touch code under services listed in the story's `Impacted Services` table. About to edit a service that is not listed → **stop and ask** (scope creep is a hard gate).
-4. **No commits, no push, no test runs.** All changes stay as working copy. The developer runs tests when they choose; `/close-story` commits and pushes. The only exception is the story `Status` edit (Phase 2.5).
+4. **No commits, no push, no test runs.** All changes stay as working copy. The developer runs tests when they choose; `/kairos:close-story` commits and pushes. The only exception is the story `Status` edit (Phase 2.5).
 5. **Stop and ask over silently working around.** Wrong assumption, missing dependency, ambiguous story selection, scope creep, broken story precondition → stop, explain, ask.
 6. **English only** — all code, comments, logs, and command output.
 
@@ -39,7 +39,7 @@ The user may pass a story identifier and/or a `worktree_mode:` override in `$ARG
 
 ### Workspace spec (required)
 ```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /init first"
+!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### worktree_mode (from spec)
@@ -115,9 +115,9 @@ Store the result as `EPIC_SLUG`.
 #### 1.4 Service-awareness
 
 For each service in the story's `Impacted Services` table:
-1. Cross-reference the name against the **services table in root `spec.md`**. If a named service is not declared there, **stop**: "STORY-{NNN} touches `<name>`, not declared in spec.md — re-run /init to register it." Do not invent a path.
+1. Cross-reference the name against the **services table in root `spec.md`**. If a named service is not declared there, **stop**: "STORY-{NNN} touches `<name>`, not declared in spec.md — re-run /kairos:init to register it." Do not invent a path.
 2. Resolve its `path` from the services table.
-3. Read `{path}/spec.md` if it exists; extract `test_command`, `lint_command`, language/framework, endpoints, DB tables, events, and behavioral contracts. (You will *not* run `test_command` here — you note it so your implementation matches existing test patterns and `/close-story` can use it later.)
+3. Read `{path}/spec.md` if it exists; extract `test_command`, `lint_command`, language/framework, endpoints, DB tables, events, and behavioral contracts. (You will *not* run `test_command` here — you note it so your implementation matches existing test patterns and `/kairos:close-story` can use it later.)
 
 #### 1.5 Scan service code
 
@@ -204,13 +204,13 @@ BRANCH_NAME="feature/epic-{EPIC_SLUG}"
 ```
 
 ##### 2a-bis. Worktree-isolation precondition (Compose prefix)
-A worktree inherits only **committed** content. For each impacted service that declares `worktree_test_command`, its Compose file must already namespace the built `image:`/`container_name:` with `${CONTAINER_ENV_PREFIX}` — otherwise the worktree's isolated test container (run later by `/close-story`) would collide with or overwrite the prod one. Check the **main checkout** (what the worktree will inherit):
+A worktree inherits only **committed** content. For each impacted service that declares `worktree_test_command`, its Compose file must already namespace the built `image:`/`container_name:` with `${CONTAINER_ENV_PREFIX}` — otherwise the worktree's isolated test container (run later by `/kairos:close-story`) would collide with or overwrite the prod one. Check the **main checkout** (what the worktree will inherit):
 ```bash
 # {compose} = the service's compose_file (from its spec)
 grep -q '${CONTAINER_ENV_PREFIX}' "$REPO_ROOT/{compose}" || echo "NOT PREFIXED: {compose}"
 ```
 If any such service's Compose file is not prefixed → **stop and ask**. Do NOT create the worktree, and do NOT auto-edit the Compose file here (an uncommitted infra change inside the worktree is scope creep and the prefix would be missing from prod anyway):
-> ⛔ `{service}`'s Compose (`{compose}`) isn't prefixed for worktree isolation — worktree tests would collide with prod containers. Run `/setup-worktree-isolation` on `{spec.default_branch}` and commit it, then re-run this command. (Aborting — no worktree created.)
+> ⛔ `{service}`'s Compose (`{compose}`) isn't prefixed for worktree isolation — worktree tests would collide with prod containers. Run `/kairos:setup-worktree-isolation` on `{spec.default_branch}` and commit it, then re-run this command. (Aborting — no worktree created.)
 
 Services without `worktree_test_command` skip this check.
 
@@ -256,7 +256,7 @@ fi
 ```
 
 ##### 2d-bis. Seed gitignored runtime files
-A worktree carries only committed content, so gitignored files like `.env` are absent. For each impacted service whose spec declares `worktree_seed_files`, copy each listed path from the main checkout (`$REPO_ROOT`) into the worktree, so containers and the later `worktree_test_command` (run by `/close-story`) have what they need:
+A worktree carries only committed content, so gitignored files like `.env` are absent. For each impacted service whose spec declares `worktree_seed_files`, copy each listed path from the main checkout (`$REPO_ROOT`) into the worktree, so containers and the later `worktree_test_command` (run by `/kairos:close-story`) have what they need:
 ```bash
 # for each {seed} in this story's impacted services' worktree_seed_files:
 [ -f "$REPO_ROOT/{seed}" ] && mkdir -p "$WORKTREE_DIR/$(dirname "{seed}")" && cp "$REPO_ROOT/{seed}" "$WORKTREE_DIR/{seed}" \
@@ -272,7 +272,7 @@ A worktree carries only committed content, so gitignored files like `.env` are a
   Open in VSCode: code {WORKTREE_DIR}
 ```
 
-> **Stay in the worktree** for the rest of this command and until `/close-story` runs. Do not jump back to the main checkout mid-implementation.
+> **Stay in the worktree** for the rest of this command and until `/kairos:close-story` runs. Do not jump back to the main checkout mid-implementation.
 
 ---
 
@@ -320,7 +320,7 @@ For each plan step: make the change, then sanity-check syntax only (`python -c "
 #### 4.2 Rules
 - Follow the patterns you observed in Phase 1; do not refactor unrelated code.
 - Do not touch services outside `Impacted Services`. If you believe you must → **stop and ask** (suggest a prerequisite story).
-- Write tests matching existing patterns where the service has test infra — but leave running them to the developer / `/close-story`.
+- Write tests matching existing patterns where the service has test infra — but leave running them to the developer / `/kairos:close-story`.
 - Found an unrelated bug → leave `// TODO(STORY-{NNN}): {description}` and move on.
 - Missing dependency or wrong story assumption → stop and ask.
 
@@ -364,14 +364,14 @@ Then print the close reminder, adapted to the mode:
 
 ```
 Next: review the diff, run tests when you're ready, then:
-  /close-story STORY-{NNN}
+  /kairos:close-story STORY-{NNN}
 
 Review the changes:
   git status
   git diff
 ```
 
-For `epic_shared`, also note: if this is **not** the last open story of the epic, `/close-story` commits only (no push / PR / cleanup); the next sibling story rejoins this worktree. If it **is** the last, `/close-story` additionally handles push, PR/MR, and worktree teardown.
+For `epic_shared`, also note: if this is **not** the last open story of the epic, `/kairos:close-story` commits only (no push / PR / cleanup); the next sibling story rejoins this worktree. If it **is** the last, `/kairos:close-story` additionally handles push, PR/MR, and worktree teardown.
 
 This command was interrupted before completing? Print the summary for whatever was done so far, plus the same close reminder — never leave the user without next steps.
 
@@ -381,10 +381,10 @@ This command was interrupted before completing? Print the summary for whatever w
 
 | Situation | Action |
 |---|---|
-| `spec.md` missing | Stop. "Run /init first." |
+| `spec.md` missing | Stop. "Run /kairos:init first." |
 | Story not found | Ask for the correct identifier. |
 | Dependency story not done | Stop. Name the blocking story. |
-| Service in story not in spec | Stop. Tell the user to re-run /init. |
+| Service in story not in spec | Stop. Tell the user to re-run /kairos:init. |
 | Worktree/branch conflict (epic_shared / in_place) | Show the conflict, offer to resume or abort. |
 | Story assumption contradicts the code | Stop. Explain the discrepancy, ask how to proceed. |
 | Scope creep (need a service not listed) | Stop. Explain, ask permission or suggest a prerequisite story. |
@@ -403,5 +403,5 @@ Always prefer **stopping and asking** over silently working around issues. Never
 - [ ] For `epic_shared`: worktree + branch `feature/epic-{slug}` exist and memory is symlinked; second story of the epic joined the existing worktree without a new branch.
 - [ ] For `in_place`: branch `feature/story-{NNN}-{slug}` created from `default_branch`, no worktree.
 - [ ] For `off`: no branching, current branch unchanged.
-- [ ] Summary printed with a `/close-story STORY-{NNN}` reminder.
+- [ ] Summary printed with a `/kairos:close-story STORY-{NNN}` reminder.
 - [ ] Output is in English.

@@ -8,9 +8,9 @@ The workspace's `spec.md` is the single source of truth for paths and the servic
 
 ## Cardinal rules (do not break)
 
-1. **Read `./spec.md` before anything else.** Use `{spec.project_management_dir}` for output paths and the services table for validation. If `./spec.md` is missing, stop and tell the user to run `/init` first.
+1. **Read `./spec.md` before anything else.** Use `{spec.project_management_dir}` for output paths and the services table for validation. If `./spec.md` is missing, stop and tell the user to run `/kairos:init` first.
 2. **Only write to PM files.** Allowed writes: `{spec.project_management_dir}/stories/STORY-{NNN}.md` (one per generated story) and `{spec.project_management_dir}/ROADMAP.md` (append-only). Never modify source code, the PRD itself, or any other file.
-3. **Validate `Impacted Services` against `spec.md`.** Every service name you put in a story's Impacted Services table MUST appear in the root spec's services table. If a story needs an undeclared service, **stop and tell the user**: "STORY-NNN touches `<name>` which is not in `spec.md` — re-run `/init` to register it, then re-run this command." Do not silently invent a service name.
+3. **Validate `Impacted Services` against `spec.md`.** Every service name you put in a story's Impacted Services table MUST appear in the root spec's services table. If a story needs an undeclared service, **stop and tell the user**: "STORY-NNN touches `<name>` which is not in `spec.md` — re-run `/kairos:init` to register it, then re-run this command." Do not silently invent a service name.
 4. **Numbering is monotonic across `stories/` and `done/`.** Find the highest existing `STORY-NNN` (scan both folders) and increment. Pad to 3 digits. Start at `STORY-001`.
 5. **Sizing discipline.** L stories must be decomposed into M stories unless infeasible. When you keep an L, document the reason in its `Technical Notes`.
 6. **English only.** All story content is in English. Status values are `backlog | in_progress | done`.
@@ -26,7 +26,7 @@ The workspace's `spec.md` is the single source of truth for paths and the servic
 
 ### Workspace spec (required)
 ```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /init first"
+!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### PM directory (extracted from spec)
@@ -56,11 +56,11 @@ The workspace's `spec.md` is the single source of truth for paths and the servic
 ### Phase 0 — Load spec & resolve PRD
 
 1. Read `./spec.md` completely. Extract `project_management_dir` and the **services table** (you will need the `name` column for validation in Phase 2).
-2. If `./spec.md` is absent: stop. Tell the user "No `spec.md` at workspace root — run `/init` first."
+2. If `./spec.md` is absent: stop. Tell the user "No `spec.md` at workspace root — run `/kairos:init` first."
 3. Resolve the source PRD:
    - **If `$ARGUMENTS` is a path** → use it. Confirm the file exists.
    - **If `$ARGUMENTS` is empty** → use the most-recent PRD from the dynamic context. Confirm with the user: `"Use {path} as the source PRD? [Y/n]"`. If `n`, ask for a path.
-   - **If `$ARGUMENTS` is text** → treat it as a feature description and tell the user: `"This looks like a description, not a PRD path. Run /create-prd first to capture it, then re-run /create-story."` Stop.
+   - **If `$ARGUMENTS` is text** → treat it as a feature description and tell the user: `"This looks like a description, not a PRD path. Run /kairos:create-prd first to capture it, then re-run /kairos:create-story."` Stop.
 4. Read the PRD file completely.
 
 ### Phase 1 — Decompose
@@ -89,7 +89,7 @@ For each draft story, list the services in its `Impacted Services` table. Cross-
 - At least one absent from spec → **stop**. Print:
   ```
   STORY-{NNN} (draft) references `<name>`, which is not declared in spec.md.
-  Either (a) re-run /init to register the service and then re-run /create-story,
+  Either (a) re-run /kairos:init to register the service and then re-run /kairos:create-story,
   or (b) revise the PRD to scope this story differently.
   ```
   Do not write any story file until the conflict is resolved.
@@ -102,7 +102,7 @@ For each validated story, write a file at `{spec.project_management_dir}/stories
 
 **Filename**: `STORY-{NNN}-{kebab-slug}.md` where `{kebab-slug}` is derived from the story title.
 
-**Epic field**: the source PRD basename without `.md` extension. Example: `prds/healthz-endpoint.md` → `Epic: healthz-endpoint`. This is what `/implement-story` will use to group worktrees and branches.
+**Epic field**: the source PRD basename without `.md` extension. Example: `prds/healthz-endpoint.md` → `Epic: healthz-endpoint`. This is what `/kairos:implement-story` will use to group worktrees and branches.
 
 **Branch field**: `feature/epic-{epic-slug}` (single shared branch per epic, matching the worktree convention). Stories of the same epic carry the same `Branch` value.
 
@@ -190,7 +190,7 @@ Path: `{spec.project_management_dir}/ROADMAP.md`.
 
    `| STORY-{NNN} | {Title} | {Size} | {Priority} | {relative path to PRD} |`
 
-   Do not touch other sections (`In Progress`, `Done`) — those are maintained by `/implement-story` and `/close-story`.
+   Do not touch other sections (`In Progress`, `Done`) — those are maintained by `/kairos:implement-story` and `/kairos:close-story`.
 
 ### Phase 5 — Summary
 
@@ -204,7 +204,7 @@ Created {N} stories from {source PRD}:
 | STORY-{NNN} | {title} | M | P1 | {comma-separated service names} |
 ```
 
-Then: `"Run /implement-story STORY-{NNN} to start implementation on the first story."`
+Then: `"Run /kairos:implement-story STORY-{NNN} to start implementation on the first story."`
 
 ---
 

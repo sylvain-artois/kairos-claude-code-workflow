@@ -1,10 +1,10 @@
 # Example — LITE test plan
 
 A filled-in `TEST_PLAN_*_LITE.md` for a generic `api` service, in the shape
-[`/create-test-plan`](../../commands/create-test-plan.md) generates and
-[`/qa`](../../commands/qa.md) executes. It would live at `api/qa/TEST_PLAN_HEALTHZ_LITE.md`.
+[`/kairos:create-test-plan`](../../commands/create-test-plan.md) generates and
+[`/kairos:qa`](../../commands/qa.md) executes. It would live at `api/qa/TEST_PLAN_HEALTHZ_LITE.md`.
 
-Note the two gating signals `/qa` looks for: the per-phase observable `- [ ]`
+Note the two gating signals `/kairos:qa` looks for: the per-phase observable `- [ ]`
 checkboxes, and the closing **Critical points** table that marks which phases block.
 
 ---

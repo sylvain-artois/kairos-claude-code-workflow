@@ -83,7 +83,7 @@ Exactly one of the two fields below MUST be set (XOR):
 | `release_notes_file` | path | Append mode. Typical value: `CHANGELOG.md` |
 | `release_notes_dir` | path | Per-version file mode. Typical value: `docs/releases/` |
 
-`/init` auto-detects: if `CHANGELOG.md` exists at the root, it sets `release_notes_file`; otherwise `release_notes_dir: docs/releases/`.
+`/kairos:init` auto-detects: if `CHANGELOG.md` exists at the root, it sets `release_notes_file`; otherwise `release_notes_dir: docs/releases/`.
 
 ### 3.4 Push policy
 
@@ -104,7 +104,7 @@ Exactly one of the two fields below MUST be set (XOR):
 - `in_place` — no worktree. Kairos creates a new branch per story (`feature/story-{NNN}-{slug}`) from `default_branch` and works in the current tree. Suited to single-tree workflows that still want one branch per story.
 - `epic_shared` — all stories of one epic share a single worktree and a single branch (`feature/epic-{slug}`). The worktree is created on the first story of the epic and torn down when the last story of the epic closes. Suited to multi-story epics where Claude Code context should persist across stories.
 
-When `worktree_mode != off`, story branches and (for `epic_shared`) the worktree are created by `/implement-story`; commits, push, and worktree teardown are handled by `/close-story`.
+When `worktree_mode != off`, story branches and (for `epic_shared`) the worktree are created by `/kairos:implement-story`; commits, push, and worktree teardown are handled by `/kairos:close-story`.
 
 ### 3.6 Services
 
@@ -144,7 +144,7 @@ A table listing every service in the workspace. The shape differs slightly betwe
 
 ## 4. Per-service spec schema (`./{service-path}/spec.md`)
 
-A per-service spec is **optional but recommended**. When absent, Kairos falls back to root-spec defaults and skips the service-specific phases of `/close-story`.
+A per-service spec is **optional but recommended**. When absent, Kairos falls back to root-spec defaults and skips the service-specific phases of `/kairos:close-story`.
 
 ### 4.1 Identity & commands
 
@@ -159,8 +159,8 @@ These are the fields Kairos commands actively read. All except `name` and `path`
 | `test_command` | recommended | string | Shell command, runnable from workspace root |
 | `lint_command` | optional | string | Shell command, runnable from workspace root |
 | `review_command` | optional | string | Code-review command or skill name. Default: Opus read-only review |
-| `suggest_test_plan` | optional | bool | Default `false`. When `true`, `/close-story` prompts to create a test plan if this service is impacted and has no `qa/TEST_PLAN_*.md` |
-| `security_review` | optional | bool | Default `false`. When `true`, `/close-story` runs the Anthropic `security-review` skill against this service's diff (after the code-review gate, before commit). A **Critical or High** finding blocks the commit; Medium/Low are listed for acknowledgement. Reserve for sensitive services (auth, payments, PII) — the review is slow |
+| `suggest_test_plan` | optional | bool | Default `false`. When `true`, `/kairos:close-story` prompts to create a test plan if this service is impacted and has no `qa/TEST_PLAN_*.md` |
+| `security_review` | optional | bool | Default `false`. When `true`, `/kairos:close-story` runs the Anthropic `security-review` skill against this service's diff (after the code-review gate, before commit). A **Critical or High** finding blocks the commit; Medium/Low are listed for acknowledgement. Reserve for sensitive services (auth, payments, PII) — the review is slow |
 | `worktree_seed_files` | optional | list | Gitignored runtime files (e.g. `.env`) that a fresh worktree does **not** carry — `git worktree add` only materializes committed content. Listed paths are copied from the main checkout into the worktree at creation. Paths relative to workspace root. Used only when `worktree_mode != off` |
 | `worktree_test_command` | optional | string | Replaces `test_command` when the gate runs **inside an `epic_shared` worktree**. The plain `test_command` often attaches to a long-running prod container (e.g. `docker exec api …`), which tests the *original* checkout, not the worktree. This command must instead run against the worktree's files in an **isolated** container that never clobbers prod images/containers and never clashes on ports. Tokens: `{worktree}`, `{worktree_id}`. Defaults to `test_command` |
 
@@ -170,7 +170,7 @@ These are the fields Kairos commands actively read. All except `name` and `path`
 > ```
 > `run --rm` publishes no ports (no clash with the live service); `CONTAINER_ENV_PREFIX={worktree_id}-` passed **on the shell** (not via the compose `env_file`, which does not feed `${...}` interpolation) gives the image/container a distinct name so the prod image is never overwritten.
 >
-> **Prerequisite — run `/setup-worktree-isolation` once.** The example above only isolates if the Compose file already wraps the built `image:`/`container_name:` in `${CONTAINER_ENV_PREFIX}`. The `/setup-worktree-isolation` command does this rewrite idempotently on the main branch (safe by construction: the prefix is empty in prod). `/implement-story` and `/implement-epic` **refuse to create a worktree** for a service that declares `worktree_test_command` whose Compose isn't prefixed — they point you to run it first.
+> **Prerequisite — run `/kairos:setup-worktree-isolation` once.** The example above only isolates if the Compose file already wraps the built `image:`/`container_name:` in `${CONTAINER_ENV_PREFIX}`. The `/kairos:setup-worktree-isolation` command does this rewrite idempotently on the main branch (safe by construction: the prefix is empty in prod). `/kairos:implement-story` and `/kairos:implement-epic` **refuse to create a worktree** for a service that declares `worktree_test_command` whose Compose isn't prefixed — they point you to run it first.
 
 ### 4.2 Observable-behavior sections
 
@@ -204,7 +204,7 @@ Every per-service spec opens with:
 **Last updated**: STORY-{NNN} ({YYYY-MM-DD})
 ```
 
-`/close-story` updates the `Last updated` line automatically when it modifies the spec. Because those per-story appends accumulate, run **`/spec {service}`** occasionally to compact a spec back under its line budget — or to backfill one from the service's code when it's still empty. `/spec` sets `Last updated: /spec {backfill|compact} ({YYYY-MM-DD})`.
+`/kairos:close-story` updates the `Last updated` line automatically when it modifies the spec. Because those per-story appends accumulate, run **`/kairos:spec {service}`** occasionally to compact a spec back under its line budget — or to backfill one from the service's code when it's still empty. `/kairos:spec` sets `Last updated: /kairos:spec {backfill|compact} ({YYYY-MM-DD})`.
 
 ---
 

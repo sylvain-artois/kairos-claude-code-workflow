@@ -8,11 +8,11 @@ The workspace's `spec.md` is the single source of truth for paths and the servic
 
 ## Cardinal rules (do not break)
 
-1. **Read `./spec.md` before anything else.** Use `{spec.project_management_dir}` for the output path and `services[]` (the services table in §3.6 of the spec format) for the "Impacted Services" suggestion. If `./spec.md` is missing, stop and tell the user to run `/init` first.
+1. **Read `./spec.md` before anything else.** Use `{spec.project_management_dir}` for the output path and `services[]` (the services table in §3.6 of the spec format) for the "Impacted Services" suggestion. If `./spec.md` is missing, stop and tell the user to run `/kairos:init` first.
 2. **One file out.** The only file you may create is `{spec.project_management_dir}/prds/{slug}.md`. Never touch other PRDs, stories, or source code.
 3. **No silent overwrite.** If the target slug already exists in `prds/`, propose `-v2`, `-revised`, or a user-chosen suffix. Never overwrite.
 4. **English only.** All PRD content is in English.
-5. **No story generation here.** PRDs are decomposed into stories by `/create-story`. If the user asks for stories, point them at that command.
+5. **No story generation here.** PRDs are decomposed into stories by `/kairos:create-story`. If the user asks for stories, point them at that command.
 
 ---
 
@@ -25,7 +25,7 @@ The workspace's `spec.md` is the single source of truth for paths and the servic
 
 ### Workspace spec (required)
 ```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /init first"
+!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### Existing PRDs (for slug-collision check)
@@ -48,7 +48,7 @@ The workspace's `spec.md` is the single source of truth for paths and the servic
    - `project_name`
    - `project_management_dir` (defaults to `project-management` if absent — but it should be present)
    - the **services table** from §3.6 (you will use the `name` column)
-2. If `./spec.md` is absent: stop. Tell the user "No `spec.md` at workspace root — run `/init` first."
+2. If `./spec.md` is absent: stop. Tell the user "No `spec.md` at workspace root — run `/kairos:init` first."
 
 ### Phase 1 — Gather input
 
@@ -66,7 +66,7 @@ Wait for the response.
 
 Fill every section substantively. Where you are uncertain, make a reasonable assumption and flag it with `[to confirm]` so the user can correct it in Phase 3.
 
-When listing impacted services in §5, draw from the services table you read in Phase 0. Use the exact `name` values — do not invent service names. If the feature obviously touches a service that is not declared in `spec.md`, surface that explicitly: "Touches `<undeclared-name>` — register it via `/init` re-run before creating stories." (Stories with undeclared services will be rejected by `/create-story`.)
+When listing impacted services in §5, draw from the services table you read in Phase 0. Use the exact `name` values — do not invent service names. If the feature obviously touches a service that is not declared in `spec.md`, surface that explicitly: "Touches `<undeclared-name>` — register it via `/kairos:init` re-run before creating stories." (Stories with undeclared services will be rejected by `/kairos:create-story`.)
 
 **PRD template:**
 
@@ -127,7 +127,7 @@ Print the full draft, then derive `{slug}` from the title (kebab-case, lowercase
 
 Behavior on each answer:
 
-- **Y** → write the file. Print the absolute path. Then print: `"Run /create-story {path} to decompose this PRD into implementable stories."`
+- **Y** → write the file. Print the absolute path. Then print: `"Run /kairos:create-story {path} to decompose this PRD into implementable stories."`
 - **n** → discard. Ask whether to try again with different input.
 - **edit** → ask the user which section(s) to change, regenerate those sections only, redisplay, and loop back to this confirmation.
 
@@ -136,10 +136,10 @@ Behavior on each answer:
 ## Guidelines
 
 - Keep the PRD to one or two pages — alignment, not a tech spec.
-- The "Impacted Services" suggestion is a hint for `/create-story`; the user may revise it during decomposition.
+- The "Impacted Services" suggestion is a hint for `/kairos:create-story`; the user may revise it during decomposition.
 - If the feature touches multiple services, flag cross-service dependencies in §6.
 - Do **not** invent service names. Only reference services declared in `spec.md`.
-- Do **not** create stories in this command. That's `/create-story`.
+- Do **not** create stories in this command. That's `/kairos:create-story`.
 
 ---
 

@@ -2,13 +2,13 @@
 description: Cut a release — analyze commits since the last tag, write a release note, commit it, tag that commit, push per push_mode
 ---
 
-You are a release assistant. Given a version, you analyze the commits since the previous tag, generate a release note, commit it, and place the tag **on that release-note commit** — so `git log {version}` shows the changelog entry as the tagged commit's content. Push of branch + tag honors `push_mode`. This command is independent of `/qa`: it does not run tests.
+You are a release assistant. Given a version, you analyze the commits since the previous tag, generate a release note, commit it, and place the tag **on that release-note commit** — so `git log {version}` shows the changelog entry as the tagged commit's content. Push of branch + tag honors `push_mode`. This command is independent of `/kairos:qa`: it does not run tests.
 
 Everything resolves against `./spec.md` (`release_notes_file` XOR `release_notes_dir`, `push_mode`, `git_host`, `default_branch`).
 
 ## Cardinal rules (do not break)
 
-1. **Read `./spec.md` first.** If missing → stop, tell the user to run `/init`. Read the release-notes mode (`release_notes_file` **or** `release_notes_dir` — exactly one), `push_mode`, `git_host`, `default_branch`.
+1. **Read `./spec.md` first.** If missing → stop, tell the user to run `/kairos:init`. Read the release-notes mode (`release_notes_file` **or** `release_notes_dir` — exactly one), `push_mode`, `git_host`, `default_branch`.
 2. **Tag the release-note commit.** The sequence is always: write note → `git add` it → `git commit -m "release: {version}"` → `git tag {version}` on that commit. Never tag the prior commit.
 3. **Respect `push_mode`.** `auto` pushes branch + tag; `manual` prints both commands and waits. Never push under `manual`.
 4. **No duplicate releases.** If the release-notes target already contains `{version}` → **stop and ask** before doing anything.
@@ -26,7 +26,7 @@ Everything resolves against `./spec.md` (`release_notes_file` XOR `release_notes
 
 ### Workspace spec (required)
 ```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /init first"
+!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### Previous tag (empty = no tags yet)
@@ -49,7 +49,7 @@ Everything resolves against `./spec.md` (`release_notes_file` XOR `release_notes
 ## Argument
 
 ```
-/release <version>          # e.g. /release v1.2.3  or  /release 1.2.3
+/kairos:release <version>          # e.g. /kairos:release v1.2.3  or  /kairos:release 1.2.3
 ```
 
 `<version>` is required. If absent, print the usage line and stop.
@@ -198,7 +198,7 @@ Use an annotated tag (`-a`) by default so the tag carries a message. The tag poi
   gh release create {version} --notes-from-tag                       # Mode A (tag message)
   ```
   Ask before running; never publish without confirmation. (In `manual` push mode, print it instead.)
-- **`git_host: gitlab`** → print the tag/release URL and ask the user to create the release in the UI:
+- **`git_host: gitlab`** → print the tag/kairos:release URL and ask the user to create the release in the UI:
   ```
   https://<gitlab-host>/<project>/-/releases/new?tag_name={version}
   ```
@@ -222,7 +222,7 @@ Use an annotated tag (`-a`) by default so the tag carries a message. The tag poi
 
 ## Failure modes
 
-- **`spec.md` missing** → stop, point at `/init`.
+- **`spec.md` missing** → stop, point at `/kairos:init`.
 - **Release-notes mode is both/neither** (`release_notes_file` + `release_notes_dir`) → stop; the spec must set exactly one.
 - **`{version}` already in the target** → duplicate gate; stop and ask.
 - **No commits since the previous tag** → stop; nothing to release.

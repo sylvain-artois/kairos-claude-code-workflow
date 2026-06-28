@@ -48,5 +48,5 @@
 - All service paths are relative to the workspace root (the repo root).
 - `compose_file` is required in mono-repo mode — it tells Kairos which compose entry maps to the service.
 - `worktree_mode: off` is the right default for mono-repo workflows where work happens in-place and lands on the default branch via PR.
-- `push_mode: manual` covers the common case of an SSH passphrase the agent's shell cannot unlock; `/close-story` and `/release` will print the `git push` line instead of executing it. Switch to `auto` only when your agent shell has push capability.
+- `push_mode: manual` covers the common case of an SSH passphrase the agent's shell cannot unlock; `/kairos:close-story` and `/kairos:release` will print the `git push` line instead of executing it. Switch to `auto` only when your agent shell has push capability.
 - Per-service specs live at `{path}/spec.md` (e.g. `api/spec.md`, `ingestion/web-crawler/spec.md`).
