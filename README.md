@@ -29,13 +29,16 @@ Full walkthrough: **[docs/quickstart.md](docs/quickstart.md)**.
 
 Most spec-driven tools assume a greenfield. Kairos assumes the opposite: you have code, conventions, tests, and a backlog in your head. It gives you a handful of slash commands to turn an idea into a PRD, slice it into stories, implement them, and ship — without leaving your editor.
 
+```mermaid
+flowchart LR
+    A["/kairos:create-prd"] --> B["/kairos:create-story"]
+    B --> C["/kairos:implement-story"]
+    C --> D["/kairos:close-story"]
+    E["/kairos:implement-epic"] -. "implement + close,<br/>per story, whole epic" .-> C
+    E -.-> D
 ```
-/kairos:create-prd  →  /kairos:create-story  →  /kairos:implement-story  →  /kairos:close-story
-                                                          │
-                          /kairos:implement-epic runs implement + close per story, for a whole epic
-                                                          │
-  setup:  /kairos:init   /kairos:setup-worktree-isolation       support:  /kairos:create-test-plan · /kairos:qa · /kairos:spec · /kairos:release
-```
+
+Setup once with `/kairos:init` (and `/kairos:setup-worktree-isolation` if you use worktrees); `/kairos:create-test-plan`, `/kairos:qa`, `/kairos:spec`, and `/kairos:release` round out the loop.
 
 - **Existing projects, not greenfield.** `/kairos:init` reads your repo (services, test commands, VCS, branch) and writes a `spec.md` you'd have written by hand. No rewrite, no migration.
 - **A QA layer between unit tests and humans.** `/kairos:qa` runs per-service test plans — the pre-human check most workflows skip.
