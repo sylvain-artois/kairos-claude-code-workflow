@@ -20,7 +20,7 @@ The argument is `$ARGUMENTS`. Resolve it to an **ordered list of story files** i
 
 ## Cardinal rules (do not break)
 
-1. **Read `./spec.md` before anything else.** It defines `default_branch`, `worktree_prefix`, `push_mode`, `git_host`, `project_management_dir`, and the services table. If it is missing, stop and tell the user to run `/kairos:init` first.
+1. **Read `./spec.md` before anything else.** It defines `default_branch`, `worktree_prefix`, `push_mode`, `git_host`, `project_management_dir`, the optional `issue_tracker` / `issue_repo` (absent = `none`), and the services table. If it is missing, stop and tell the user to run `/kairos:init` first.
 2. **Preflight the working tree before creating anything (Preflight section).** The worktree branches from the **committed tip of the local `default_branch`** — uncommitted work is invisible inside it. So: **uncommitted changes under `{project_management_dir}/` are a hard block** (the run reads story `Status` and rewrites stories + roadmap; a stale base corrupts that); uncommitted changes anywhere else are a **warning** only.
 3. **This command always runs `epic_shared` semantics**, regardless of `spec.worktree_mode`. One branch (`feature/epic-{EPIC_SLUG}`), one worktree (`{worktree_prefix}-epic-{EPIC_SLUG}`), shared by every story in the run. If the spec's mode differs, announce the override; never edit `spec.md`.
 4. **Implement then close, story by story** — never implement all then close all. Closing story N (moving it to `done/`, `Status: done`) is what makes story N+1's dependency check pass. It also keeps each review diff scoped to one story.
@@ -189,6 +189,7 @@ For each story in order, spawn **one** subagent (not `isolation: worktree`) with
 > ```
 > STATUS: DONE | BLOCKED
 > STORY: STORY-{NNN} — {title}
+> ISSUE: #{N} | none          — the story's `Issue` field, verbatim
 > GATES: tests {pass/fail per service} | review {n crit / n high / n med / n low} | security {clean/n/skipped}
 > COMMITS: {sha type(scope): subject} … (source + docs)   — or "none (blocked)"
 > FILES: {n changed}; services touched: {list}
@@ -231,6 +232,8 @@ This is the deferred tail of `close-story` for the epic's **last** story — but
 
 ### 4.2 — PR / MR (after push confirmed)
 Aggregate **all** stories of the run into the Closes list and Summary. Per `git_host`, print the `gh pr create` command (github), the MR-creation URL (gitlab), or the branch + base (other) — exactly as `close-story` Phase 7.2 does. **Never auto-merge.**
+
+Under `issue_tracker: github`, add one `Closes #{N}` line per story that reported an `ISSUE` in Phase 2, so merging the PR closes the whole epic's issues at once. Take the numbers from the run log — the story files have already moved to `{WORK}/{pm}/done/`, so re-deriving them means re-reading archived files for no reason.
 
 ### 4.3 — Worktree teardown
 After the user confirms push (and the PR/MR is created or skipped):

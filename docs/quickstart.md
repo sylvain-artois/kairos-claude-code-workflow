@@ -67,5 +67,6 @@ Any failing gate stops the flow and asks you — nothing is committed on a red t
 
 - **Add a QA plan:** `/kairos:create-test-plan api "smoke test for /healthz"` → then `/kairos:qa api`.
 - **Cut a release:** `/kairos:release v0.1.0` — analyzes commits since the last tag, writes a release note, tags that commit, pushes per `push_mode`.
+- **Mirror to GitHub issues:** re-run `/kairos:init` and answer yes when it offers issue tracking — PRDs become milestones, stories become issues, and your teammates get a project-management surface without leaving GitHub. Then `/kairos:sync-pm` to backfill an existing backlog. See [github-issue-tracking.md](github-issue-tracking.md).
 
 That's the whole loop. Next: [concepts.md](concepts.md) for the model, or just keep shipping stories.

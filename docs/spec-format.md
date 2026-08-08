@@ -39,6 +39,7 @@ Kairos commands reference spec fields with a `{spec.<path>}` placeholder syntax.
 | `{spec.project_name}` | The `project_name` field from the root spec |
 | `{spec.default_branch}` | The `default_branch` field from the root spec |
 | `{spec.project_management_dir}` | The PM directory (e.g. `project-management`) |
+| `{spec.issue_repo}` | The `owner/name` of the repo hosting the mirrored issues (see §3.7) |
 | `{spec.services[*].path}` | List of all service paths (iteration context) |
 | `{spec.services[?(@.name=='api')].path}` | Path of the service whose `name` is `api` |
 | `{spec.services[api].test_command}` | Shorthand: `test_command` from the `api` service spec |
@@ -139,6 +140,40 @@ A table listing every service in the workspace. The shape differs slightly betwe
 
 - `path` is relative to the **workspace parent dir** (i.e. the folder that contains the cloned repos). The workspace root in multi-repo mode is that parent dir, and `spec.md` sits there alongside the repos.
 - `compose_file` column is omitted (each repo may have its own compose file documented in its per-service spec).
+
+### 3.7 Issue tracker (optional)
+
+Mirrors PRDs and stories onto a hosted tracker so humans get a project-management surface while agents keep reading the files. **Opt-in and off by default** — when `issue_tracker` is absent or `none`, no Kairos command touches the network, and `gh` is not required.
+
+| Field | Required | Type | Default | Notes |
+|---|---|---|---|---|
+| `issue_tracker` | no | enum | `none` | `github` \| `none`. `github` requires the `gh` CLI, authenticated |
+| `issue_repo` | when `issue_tracker != none` | string | inferred from the remote | `owner/name`. **Must be set explicitly in multi-repo mode**, where the workspace root often has no remote — it is the repo that hosts `project_management_dir` |
+| `issue_labels` | no | bool | `true` | Mirror `Size` / `Priority` / impacted services as `size:`, `prio:`, `service:` labels |
+| `issue_body_mode` | no | enum | `pointer` | `pointer` = the issue links to the story file; `summary` = it also carries the Objective and Acceptance Criteria, regenerated between markers |
+
+Written in the root spec after the push-policy block, before the services table:
+
+```markdown
+- **issue_tracker**: github
+- **issue_repo**: acme/data-platform
+- **issue_body_mode**: summary
+```
+
+The mapping is deductible — there is **no correspondence table, no state file, no cache**:
+
+| Kairos | GitHub | Link |
+|---|---|---|
+| `prds/{slug}.md` | Milestone titled `{slug}` | The title **is** the slug |
+| `STORY-{NNN}` | Issue `STORY-{NNN} — {Title}` | The title prefix **is** the key |
+| Story `Epic` field | The issue's milestone | `gh issue create --milestone "{epic}"` |
+| Story `Issue` field | The issue number | Written back on first sync — the idempotence anchor |
+| `Size` / `Priority` | Labels `size:M`, `prio:P1` | Filtering |
+| `Impacted Services` | Labels `service:{name}` | Filtering |
+| `Status: in_progress` | Label `status:in_progress` | An issue is only open or closed |
+| Story moved to `done/` | Issue closed | Via `Closes #N` in the PR, or explicitly in `off` mode |
+
+Content flows **one way, files → tracker**: an issue is not versioned, so the file stays the source of truth an agent reads at the commit it works from. The only inbound paths are GitHub closing an issue when a PR merges, and `/kairos:create-story --from-issue {N}`, which turns a human-written issue into a story. See [github-issue-tracking.md](github-issue-tracking.md).
 
 ---
 

@@ -44,6 +44,14 @@ Setup once with `/kairos:init` (and `/kairos:setup-worktree-isolation` if you us
 - **A QA layer between unit tests and humans.** `/kairos:qa` runs per-service test plans — the pre-human check most workflows skip.
 - **A small, composable command set.** A four-command core (PRD → story → implement → close), plus opt-in commands for epics, worktree isolation, QA, and releases. No hidden state, no `.kairos/` cache — everything lives in `spec.md`.
 
+## Issue tracking (opt-in)
+
+Kairos can mirror your PRDs and stories onto GitHub milestones and issues, so that **agents read the files and humans read GitHub**. Stories stay versioned in the repo — that's what an agent loads at the commit it works from; GitHub carries assignment, state and the overview — that's what a teammate opens on a Monday morning. It's the setup you want when someone on the team owns the domain but not the codebase.
+
+A PRD becomes a milestone titled with its slug, `STORY-042` becomes an issue titled `STORY-042 — …`, and the issue number is written back into the story file. That single line is the whole mechanism: **no correspondence table, no state file, no cache** — the mapping lives in git. Issues are created the moment the story is, `Closes #42` in the pull request closes them at merge, and `/kairos:sync-pm` reconciles anything missed. Content flows one way, files → GitHub; `/kairos:create-story --from-issue 57` is the one door back, turning an issue written by a non-developer into a story an agent can implement.
+
+Turn it on by re-running `/kairos:init` — it asks once, and only when `gh` is installed and authenticated. Off by default: leave it off and no command ever touches the network. Details: **[docs/github-issue-tracking.md](docs/github-issue-tracking.md)**.
+
 ## The commands
 
 | Command | What it does |
@@ -57,6 +65,7 @@ Setup once with `/kairos:init` (and `/kairos:setup-worktree-isolation` if you us
 | [`/kairos:create-test-plan`](commands/create-test-plan.md) | Generate a runnable QA test plan for a service |
 | [`/kairos:qa`](commands/qa.md) | Execute a service's test plans, report pass/fail |
 | [`/kairos:spec`](commands/spec.md) | Maintain a service's `spec.md` — backfill from code, or compact it when it inflates |
+| [`/kairos:sync-pm`](commands/sync-pm.md) | Reconcile the GitHub issue mirror with the story files (opt-in; see below) |
 | [`/kairos:setup-worktree-isolation`](commands/setup-worktree-isolation.md) | One-time Compose rewrite so worktree test runs never collide with prod (prereq for worktree mode) |
 | [`/kairos:release`](commands/release.md) | Analyze commits, write a release note, tag it, push |
 
@@ -68,7 +77,7 @@ Kairos owes a lot to the projects that mapped this space first — go look at th
 
 - **[BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD/)** — a richer agentic method, strongest on greenfield.
 - **[openspec.dev](https://openspec.dev)** — rigorous spec-driven development, also greenfield-leaning.
-- **[CCPM](https://github.com/automazeio/ccpm)** — GitHub-Issues-centric project management.
+- **[CCPM](https://github.com/automazeio/ccpm)** — GitHub-Issues-centric project management. Kairos mirrors onto issues too, but the other way round: the files stay authoritative and the tracker is a view of them.
 
 Kairos's niche: **existing projects, a pre-human QA layer, and staying small.** It sits upstream of your Claude Code / CI flow — it produces the PRDs, stories, branches and PRs; your existing pipeline takes it from there.
 
@@ -78,6 +87,7 @@ Kairos's niche: **existing projects, a pre-human QA layer, and staying small.** 
 - [docs/concepts.md](docs/concepts.md) — the model in one page (workspace vs service, the two specs, worktrees, QA, push mode).
 - [docs/spec-format.md](docs/spec-format.md) — the `spec.md` reference.
 - [docs/review-contract.md](docs/review-contract.md) — pluggable code review (default Opus, your slash command, or a script).
+- [docs/github-issue-tracking.md](docs/github-issue-tracking.md) — the opt-in GitHub mirror: mapping, inbound path, and what it deliberately doesn't do.
 - [docs/examples/](docs/examples/) — filled-in specs, a test plan, a review command.
 
 ## Contributing & license

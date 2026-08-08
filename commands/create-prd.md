@@ -9,7 +9,7 @@ The workspace's `spec.md` is the single source of truth for paths and the servic
 ## Cardinal rules (do not break)
 
 1. **Read `./spec.md` before anything else.** Use `{spec.project_management_dir}` for the output path and `services[]` (the services table in §3.6 of the spec format) for the "Impacted Services" suggestion. If `./spec.md` is missing, stop and tell the user to run `/kairos:init` first.
-2. **One file out.** The only file you may create is `{spec.project_management_dir}/prds/{slug}.md`. Never touch other PRDs, stories, or source code.
+2. **One file out.** The only **file** you may create is `{spec.project_management_dir}/prds/{slug}.md`. Never touch other PRDs, stories, or source code. (Creating the GitHub milestone in Phase 3.5 is a remote mirror action, not a file write — allowed, opt-in, and never blocking.)
 3. **No silent overwrite.** If the target slug already exists in `prds/`, propose `-v2`, `-revised`, or a user-chosen suffix. Never overwrite.
 4. **English only.** All PRD content is in English.
 5. **No story generation here.** PRDs are decomposed into stories by `/kairos:create-story`. If the user asks for stories, point them at that command.
@@ -48,6 +48,7 @@ The workspace's `spec.md` is the single source of truth for paths and the servic
    - `project_name`
    - `project_management_dir` (defaults to `project-management` if absent — but it should be present)
    - the **services table** from §3.6 (you will use the `name` column)
+   - `issue_tracker` and `issue_repo` (absent = `none`; drives Phase 3.5 only)
 2. If `./spec.md` is absent: stop. Tell the user "No `spec.md` at workspace root — run `/kairos:init` first."
 
 ### Phase 1 — Gather input
@@ -127,9 +128,27 @@ Print the full draft, then derive `{slug}` from the title (kebab-case, lowercase
 
 Behavior on each answer:
 
-- **Y** → write the file. Print the absolute path. Then print: `"Run /kairos:create-story {path} to decompose this PRD into implementable stories."`
+- **Y** → write the file. Print the absolute path, run Phase 3.5, then print: `"Run /kairos:create-story {path} to decompose this PRD into implementable stories."`
 - **n** → discard. Ask whether to try again with different input.
 - **edit** → ask the user which section(s) to change, regenerate those sections only, redisplay, and loop back to this confirmation.
+
+### Phase 3.5 — Mirror the PRD as a milestone (only if `issue_tracker == github`)
+
+Skipped entirely — no probe, no output — when `issue_tracker` is absent or `none`.
+
+A PRD maps 1:1 to a milestone whose **title is the slug**, so `/kairos:create-story` can later pass `--milestone "{Epic}"` with no lookup (the `Epic` field of a story *is* the PRD basename). Ensure it exists, idempotently:
+
+```bash
+gh api "repos/{spec.issue_repo}/milestones?state=all" --jq '.[].title' 2>/dev/null | grep -qx '{slug}' \
+  || gh api --method POST "repos/{spec.issue_repo}/milestones" \
+       -f title='{slug}' \
+       -f description='PRD: {Title}
+Source: {spec.project_management_dir}/prds/{slug}.md'
+```
+
+Report one line — `✓ milestone {slug} created` / `✓ milestone {slug} already existed`.
+
+**Never blocking.** On any failure (network, auth, permissions), print `⚠ milestone not synced ({reason}) — run /kairos:sync-pm later` and continue. The PRD file is the deliverable; the milestone is a mirror.
 
 ---
 
@@ -149,3 +168,4 @@ Behavior on each answer:
 - [ ] The slug does not collide with any existing PRD (or a suffixed variant was chosen).
 - [ ] Every service named in "Impacted Services" exists in the root `spec.md` services table (or is explicitly flagged as undeclared).
 - [ ] All PRD content is in English.
+- [ ] Phase 3.5 ran only under `issue_tracker: github`, created at most one milestone titled exactly `{slug}`, and did not stop the command on failure.

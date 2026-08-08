@@ -5,6 +5,47 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **GitHub issue tracking (opt-in).** Kairos can mirror PRDs onto milestones and
+  stories onto issues, so agents keep reading the versioned files while humans
+  get a project-management surface. Off by default: with `issue_tracker` unset,
+  no command touches the network and `gh` is not required. Full guide in
+  [docs/github-issue-tracking.md](docs/github-issue-tracking.md).
+  - New root-spec fields (`spec.md` §3.7): `issue_tracker`, `issue_repo`,
+    `issue_labels`, `issue_body_mode`. `/init` gained Phase 4-bis, which offers
+    the mirror only when `git_host` is `github` and `gh` is authenticated.
+  - The mapping carries **no state**: the milestone title *is* the PRD slug, the
+    issue title prefix *is* `STORY-NNN`, and a new `- **Issue**: #N` line written
+    back into the story file anchors it. No correspondence table, no cache.
+- **`/sync-pm` command** — reconciles the mirror with the files: creates missing
+  milestones and issues, adopts issues that already exist, updates drifted
+  titles/milestones/labels, closes what moved to `done/`. Idempotent, `--dry-run`
+  supported. It never reopens a closed issue, never deletes anything, and never
+  creates a duplicate (resolution order: `Issue` field → title search → body
+  marker). Divergences and orphaned issues are reported, not resolved by guessing.
+- **`/create-story --from-issue {N}`** — the inbound path: turns a human-written
+  GitHub issue into one story file, deriving the `Epic` from its milestone and
+  commenting back with the story path. Refuses to double-track an issue that
+  already carries a `STORY-NNN` marker.
+
+### Changed
+
+- `/create-prd` creates the milestone for the PRD it just wrote (Phase 3.5).
+- `/create-story` writes an `Issue` line in every story's Meta block (empty when
+  the tracker is off) and, in a new Phase 4.5, creates one issue per story with
+  `size:` / `prio:` / `service:` labels, then writes the number back.
+- `/implement-story` mirrors `Status: in_progress` as a `status:in_progress`
+  label and assigns the issue (Phase 2.5-bis).
+- `/close-story` adds `Closes #N` to the PR body — and, in `worktree_mode: off`
+  where no PR is ever opened, closes the issue itself at archive time.
+- `/implement-epic` collects each story's issue number from its subagent report
+  and aggregates every `Closes #N` into the epic PR.
+- Every tracker call is **best-effort**: a `gh` failure produces a one-line
+  warning, never a gate. No safety gate was added, weakened, or reordered.
+
 ## [1.0.0] - 2026-05-30
 
 First public release.

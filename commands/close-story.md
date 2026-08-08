@@ -53,6 +53,7 @@ If a story ID is passed, use it. Otherwise infer the story from the conversation
 
 1. Read `./spec.md`. Resolve and hold:
    - `git_host`, `default_branch`, `push_mode`, `project_management_dir` (`{pm}`), `worktree_mode`, `worktree_prefix`
+   - `issue_tracker`, `issue_repo` (absent = `none` → every issue-mirror step below is skipped silently)
    - The `## Services` table → `name → path` (and `compose_file` in mono-repo mode).
 2. **Resolve the story file robustly** — the filename may be bare (`STORY-{NNN}.md`) or slugged (`STORY-{NNN}-{slug}.md`); never assume one form. Glob both and hold the result as `STORY_FILE`:
    ```bash
@@ -64,7 +65,7 @@ If a story ID is passed, use it. Otherwise infer the story from the conversation
    - `n == 0` and nothing in `done/` either → the story doesn't exist: stop and ask.
    - `n > 1` → ambiguous (duplicate IDs): stop and ask which to close — never guess.
    - `n == 1` → `STORY_FILE` is that path. Continue.
-3. Read the story. Extract: title, `Size`, `Source PRD`, `Epic`, and the `Impacted Services` list.
+3. Read the story. Extract: title, `Size`, `Source PRD`, `Epic`, `Issue` (may be empty), and the `Impacted Services` list.
 
 ### 0.1 — Resolve the working directory (`WORK`) by `worktree_mode`
 
@@ -246,6 +247,17 @@ Write the returned specs to disk.
    - No other open story → `mkdir -p {WORK}/{pm}/done && git -C {WORK} mv {prd_path} {pm}/done/` (skip if already in `done/`).
    - Others remain → leave it, note `"PRD kept — referenced by N open stories."`
 3. **ROADMAP:** in `{pm}/ROADMAP.md`, remove the story row from `In Progress` (or wherever it is found) and add it to `Done`: `| STORY-{NNN} | {Title} | {Size} | {YYYY-MM-DD} |`.
+4. **Issue mirror** — only if `issue_tracker == github` **and** the story has an `Issue` number. Which action applies depends on whether a PR will close it:
+   - **`worktree_mode: in_place` or `epic_shared`** → **do not close it here.** Phase 7.2 puts `Closes #{N}` in the PR body and GitHub closes it at merge. Closing now would close the issue before the code is reviewed. Only drop the in-progress label:
+     ```bash
+     gh issue edit {N} -R {issue_repo} --remove-label "status:in_progress" 2>/dev/null || true
+     ```
+   - **`worktree_mode: off`** → there is no PR, so nothing else ever will. Close it explicitly:
+     ```bash
+     gh issue edit {N} -R {issue_repo} --remove-label "status:in_progress" 2>/dev/null || true
+     gh issue close {N} -R {issue_repo} --comment "Closed by STORY-{NNN} ({sha})"
+     ```
+   Best-effort in both cases: a failure is a one-line warning carried into the Phase 9 summary, **never a gate**. Never reopen an issue a human closed.
 
 ---
 
@@ -292,6 +304,7 @@ For `in_place` / `epic_shared`, after the push is confirmed:
   gh pr create \
     --title "<type>(<scope>): {title or epic label}" \
     --body "Closes {STORY-NNN, plus every story of the epic in epic_shared mode}
+  {Closes #{Issue} — one line per closed story that carries an Issue number; omit the block entirely when issue_tracker is none}
 
   ## Summary
   {1-3 bullets from the acceptance criteria}
@@ -308,7 +321,12 @@ For `in_place` / `epic_shared`, after the push is confirmed:
   ```
 - **`git_host: other`** → print the branch + base and ask the user to open the PR/MR in their tool.
 
-In `epic_shared` mode aggregate the epic's stories (current + every closed story under `{pm}/done/` sharing the `Epic`) into the Closes list and the Summary. **Never auto-merge.**
+In `epic_shared` mode aggregate the epic's stories (current + every closed story under `{pm}/done/` sharing the `Epic`) into the Closes list and the Summary — including their `Issue` numbers, one `Closes #{N}` line each. The plain `Closes STORY-NNN` line stays: it is readable without GitHub, and it is the only form that survives when `issue_tracker` is `none`. **Never auto-merge.**
+
+**If the user answered "skip" at 7.1** (no push, so no PR), add to the summary — the issue stays open and nothing will close it until then:
+```
+Issue #{N}: still open — no PR opened. Close it with `gh issue close {N}`, or run /kairos:sync-pm.
+```
 
 ---
 
@@ -335,6 +353,7 @@ If `worktree remove` fails on uncommitted changes, **show the error and ask befo
   Review:    {N} critical | {N} warning | {N} info
   Commit:    {sha} {type}({scope}): {subject}
   Archived:  {pm}/done/STORY-{NNN}-*.md
+  Issue:     #{N} will close on merge   ← only when issue_tracker is github
   Branch:    feature/epic-{EPIC_SLUG} (local — push deferred to last story)
   Worktree:  {WORK} (kept open)
   Remaining: {REMAINING_OPEN} open stor{y|ies} on this epic
@@ -355,6 +374,7 @@ Next: run /kairos:implement-story to pick the next story of the epic.
              {sha} docs(stories): close STORY-{NNN}
   Specs:     {service}/spec.md updated ...
   Archived:  {pm}/done/STORY-{NNN}-*.md  (+ PRD if archived)
+  Issue:     #{N} {closed | will close on merge | still open (no PR)}   ← only when issue_tracker is github
   Branch:    {branch} {pushed | push pending}
   PR/MR:     {created | command printed | n/a}
   Worktree:  {removed | n/a}
@@ -376,6 +396,7 @@ Next: run /kairos:implement-story to pick the next backlog story.
 - **Worktree not found (epic_shared)** → ask for the path; offer to skip cleanup if already removed.
 - **Push deferred / fails** (`manual`, no remote, auth, user "skip") → note in summary, leave branch + worktree in place; re-running `/kairos:close-story` resumes at Phase 7.
 - **`worktree remove` fails** → show the error, ask before `--force`.
+- **Issue mirror fails** (`gh` missing, auth expired, network, issue deleted) → one-line warning in the summary, pointing at `/kairos:sync-pm`. **Never a gate** — a tracker outage must not block a close.
 
 ---
 
@@ -389,4 +410,5 @@ Next: run /kairos:implement-story to pick the next backlog story.
 - [ ] `worktree_mode: epic_shared` with `IS_LAST == false` did **not** push, open a PR/MR, or remove the worktree; the story still moved to `{pm}/done/`.
 - [ ] Each impacted service's `spec.md` was updated from its scoped diff, with no unexplained deletions.
 - [ ] Story `Status` is `done` and the file is under `{pm}/done/`; ROADMAP `Done` row added.
+- [ ] Issue mirror (when `issue_tracker: github`): the issue was closed **explicitly only in `off` mode**; in `in_place` / `epic_shared` it was left open with `Closes #{N}` in the PR body. No mirror failure blocked the close.
 - [ ] All output, commit messages, and spec edits are in English. No source-project names leaked.

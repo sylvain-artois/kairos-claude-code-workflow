@@ -21,10 +21,10 @@ The user may pass a story identifier and/or a `worktree_mode:` override in `$ARG
 
 ## Cardinal rules (do not break)
 
-1. **Read `./spec.md` before anything else.** It defines `worktree_mode`, `worktree_prefix`, `default_branch`, `project_management_dir`, and the services table. If `./spec.md` is missing, stop and tell the user to run `/kairos:init` first.
+1. **Read `./spec.md` before anything else.** It defines `worktree_mode`, `worktree_prefix`, `default_branch`, `project_management_dir`, the optional `issue_tracker` / `issue_repo` (absent = `none`), and the services table. If `./spec.md` is missing, stop and tell the user to run `/kairos:init` first.
 2. **Branch on the effective `worktree_mode`** (`epic_shared` | `in_place` | `off`) for working-tree setup — Phase 2. The effective mode is `spec.worktree_mode`, overridden by a `worktree_mode:` token in `$ARGUMENTS` if present. Never assume one mode.
 3. **Stay in scope.** Only touch code under services listed in the story's `Impacted Services` table. About to edit a service that is not listed → **stop and ask** (scope creep is a hard gate).
-4. **No commits, no push, no test runs.** All changes stay as working copy. The developer runs tests when they choose; `/kairos:close-story` commits and pushes. The only exception is the story `Status` edit (Phase 2.5).
+4. **No commits, no push, no test runs.** All changes stay as working copy. The developer runs tests when they choose; `/kairos:close-story` commits and pushes. The only exception is the story `Status` edit (Phase 2.5). Mirroring that status onto the tracker (Phase 2.5-bis) is a remote label edit, not a commit or a push — it is allowed, opt-in, and never blocking.
 5. **Stop and ask over silently working around.** Wrong assumption, missing dependency, ambiguous story selection, scope creep, broken story precondition → stop, explain, ask.
 6. **English only** — all code, comments, logs, and command output.
 
@@ -283,6 +283,20 @@ Edit the story file: set `Status: backlog` → `Status: in_progress`.
 - **`epic_shared`**: edit the story file inside the worktree and `git add` it so the change is **staged but not committed** (consistent with the no-commits-during-implementation rule).
 - **`in_place` / `off`**: edit the story file and leave it as an **unstaged** change.
 
+### Phase 2.5-bis — Mirror the status onto the tracker
+
+Only when `spec.issue_tracker == github` **and** the story carries an `Issue` number. Otherwise skip silently.
+
+A GitHub issue is only open or closed, so "an agent is working on this" has to be a label. Signal it, and take the issue so it stops looking unassigned:
+
+```bash
+gh label create 'status:in_progress' -R {spec.issue_repo} --color FBCA04 2>/dev/null || true
+gh issue edit {N} -R {spec.issue_repo} --add-label 'status:in_progress' --add-assignee '@me' 2>/dev/null \
+  || echo "⚠ issue #{N} not updated — continuing"
+```
+
+**Never blocking.** A tracker outage must not stop an implementation. `/kairos:close-story` removes the label; `/kairos:sync-pm` repairs anything missed.
+
 Then continue.
 
 ---
@@ -399,7 +413,7 @@ Always prefer **stopping and asking** over silently working around issues. Never
 - [ ] `./spec.md` was read; behavior matched the **effective** `worktree_mode` (spec value, or the `worktree_mode:` CLI override if one was passed). If overridden, the notice was printed and `spec.md` was left untouched.
 - [ ] No commit, no push, no test-suite run was performed.
 - [ ] No file under a service outside `Impacted Services` was created or modified.
-- [ ] Story `Status` is `in_progress` (staged in epic_shared mode; unstaged in in_place/off).
+- [ ] Story `Status` is `in_progress` (staged in epic_shared mode; unstaged in in_place/off). Under `issue_tracker: github` with an `Issue` number, the mirror label was attempted and its failure (if any) did not stop the run.
 - [ ] For `epic_shared`: worktree + branch `feature/epic-{slug}` exist and memory is symlinked; second story of the epic joined the existing worktree without a new branch.
 - [ ] For `in_place`: branch `feature/story-{NNN}-{slug}` created from `default_branch`, no worktree.
 - [ ] For `off`: no branching, current branch unchanged.

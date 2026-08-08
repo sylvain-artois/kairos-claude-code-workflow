@@ -1,6 +1,6 @@
 # Kairos concepts (one page)
 
-Five ideas. Read this once; the commands handle the rest interactively.
+Six ideas. Read this once; the commands handle the rest interactively.
 
 ## 1. Workspace vs service
 
@@ -30,6 +30,10 @@ Between unit tests and a human reviewer, Kairos adds runnable **test plans** per
 ## 5. Push mode
 
 `push_mode: manual` (the safe default) means commands **print** the `git push` line and wait — handy when an SSH passphrase blocks the agent's shell. `push_mode: auto` pushes directly. It applies to `/kairos:close-story` and `/kairos:release`.
+
+## 6. The GitHub mirror (opt-in)
+
+Set `issue_tracker: github` and each PRD gets a milestone, each story an issue — so **agents read the files and humans read GitHub**. The mapping is deductible (the issue title carries `STORY-NNN`, the milestone title *is* the PRD slug) and anchored by one `Issue: #42` line written back into the story: no correspondence table, no state file. Content flows one way, files → tracker; `/kairos:create-story --from-issue N` is the door back. Off by default. Details: [github-issue-tracking.md](github-issue-tracking.md).
 
 ---
 

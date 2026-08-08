@@ -167,6 +167,26 @@ Where `<host>` is `github.com` or the GitLab host extracted from the remote.
 
 Then **always ask the user** to confirm: "SSH probe suggests push could be {auto|manual}. Set `push_mode` to [auto / manual]? (default: manual)". Default to `manual` on any hesitation — it is the safe value.
 
+### Phase 4-bis — Issue tracker (opt-in, GitHub only)
+
+Mirrors PRDs → milestones and stories → issues, so humans get a PM surface while agents keep reading the files. See `${CLAUDE_PLUGIN_ROOT}/docs/spec-format.md` §3.7.
+
+Only consider this when `git_host: github`. Otherwise set nothing (the field is absent = `none`) and move on **silently** — do not mention it.
+
+1. Probe, read-only: `command -v gh >/dev/null && gh auth status >/dev/null 2>&1`.
+2. **Probe fails** (no `gh`, or not authenticated) → write nothing, print one line: `ℹ gh CLI unavailable — issue mirroring not configured (see docs/github-issue-tracking.md).` Do not offer to install anything.
+3. **Probe succeeds** → ask once:
+   > "Mirror PRDs → milestones and stories → issues on GitHub? Humans get a project-management surface; agents keep reading the story files. One-way, opt-in, off by default. [y/N]"
+   - `n` or no answer → set nothing. This is the default.
+   - `y` → set `issue_tracker: github`, then resolve `issue_repo`:
+     ```bash
+     gh repo view --json nameWithOwner -q .nameWithOwner
+     ```
+     In **multi-repo** mode the workspace root usually has no remote, so this returns nothing: **ask explicitly** — "Which repo hosts `{project_management_dir}`? (owner/name)". Never guess; a wrong `issue_repo` would create issues in someone else's repo.
+   - Then ask the body mode: `"Issue body: [pointer] a link to the story file, or [summary] the Objective + Acceptance Criteria too (better when a non-developer reads the issues)?"` → `issue_body_mode`. Default `pointer`.
+
+Leave `issue_labels` unset (defaults to `true`).
+
 ### Phase 5 — Release notes mode
 
 - `CHANGELOG.md` exists at the workspace root → propose `release_notes_file: CHANGELOG.md`.
@@ -213,7 +233,9 @@ After all prompts are resolved, write the files.
 
 #### Root `./spec.md`
 
-Follow `${CLAUDE_PLUGIN_ROOT}/docs/spec-format.md` §3. Order: Identity → Project Management → Release Notes → Push Policy → Worktree → Services table. Use the marker syntax `- **field**: value`. No YAML front-matter.
+Follow `${CLAUDE_PLUGIN_ROOT}/docs/spec-format.md` §3. Order: Identity → Project Management → Release Notes → Push Policy → Issue Tracker → Worktree → Services table. Use the marker syntax `- **field**: value`. No YAML front-matter.
+
+Omit the Issue Tracker fields entirely when the user did not opt in (Phase 4-bis) — an absent `issue_tracker` means `none`. Never write `issue_tracker: none` explicitly.
 
 Worktree default for the first run: `worktree_mode: off` (omit `worktree_prefix`). Users opt in later.
 
@@ -279,3 +301,4 @@ End the run. Do not run any other Kairos command for the user.
 - [ ] The root spec's services table matches the schema in `${CLAUDE_PLUGIN_ROOT}/docs/spec-format.md` §3.6 for the chosen topology (mono vs multi).
 - [ ] Either `release_notes_file` **or** `release_notes_dir` is set — never both, never neither.
 - [ ] `push_mode` is one of `auto` / `manual`, defaulting to `manual` on any uncertainty.
+- [ ] `issue_tracker` was written **only** when `git_host` is `github`, `gh` is installed and authenticated, and the user explicitly opted in — otherwise the field is absent. When set, `issue_repo` is a real `owner/name` the user confirmed (never guessed in multi-repo mode).
