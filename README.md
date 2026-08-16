@@ -21,6 +21,10 @@
 # 4. Build and ship one story
 /kairos:implement-story STORY-001
 /kairos:close-story STORY-001   # tests + QA + review + commit, per your push_mode
+
+# 5. Later — pull a new Kairos version (restart Claude Code to apply)
+/plugin marketplace update kairos
+/plugin update kairos@kairos
 ```
 
 Full walkthrough: **[docs/quickstart.md](docs/quickstart.md)**.
@@ -86,6 +90,7 @@ Kairos's niche: **existing projects, a pre-human QA layer, and staying small.** 
 - [Kairos — a spec-driven workflow for existing projects](https://sylvain.artois.io/tech/kairos-spec-driven-workflow) — the story behind the design (blog post).
 - [docs/concepts.md](docs/concepts.md) — the model in one page (workspace vs service, the two specs, worktrees, QA, push mode).
 - [docs/spec-format.md](docs/spec-format.md) — the `spec.md` reference.
+- [docs/dependencies.md](docs/dependencies.md) — the dependency graph: what PRDs and stories declare, and what a third-party planner can derive from it.
 - [docs/review-contract.md](docs/review-contract.md) — pluggable code review (default Opus, your slash command, or a script).
 - [docs/github-issue-tracking.md](docs/github-issue-tracking.md) — the opt-in GitHub mirror: mapping, inbound path, and what it deliberately doesn't do.
 - [docs/examples/](docs/examples/) — filled-in specs, a test plan, a review command.

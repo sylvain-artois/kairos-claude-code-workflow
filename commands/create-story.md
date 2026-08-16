@@ -14,6 +14,7 @@ The workspace's `spec.md` is the single source of truth for paths and the servic
 4. **Numbering is monotonic across `stories/` and `done/`.** Find the highest existing `STORY-NNN` (scan both folders) and increment. Pad to 3 digits. Start at `STORY-001`.
 5. **Sizing discipline.** L stories must be decomposed into M stories unless infeasible. When you keep an L, document the reason in its `Technical Notes`.
 6. **English only.** All story content is in English. Status values are `backlog | in_progress | done`.
+7. **Preview before writing.** Print the slice plan and get an explicit approval (Phase 2.5) before creating any story file, roadmap row, or issue. Silence is not approval — do **not** proceed without an answer.
 
 ---
 
@@ -87,10 +88,10 @@ This is the one direction that does not start from a file. Someone with the doma
 
 6. **Preset `- **Issue**: #{N}`** in the story Meta, and **skip Phase 4.5 for this story** — the issue already exists.
 
-7. **Close the loop on GitHub**, best-effort: normalize the title to `STORY-{NNN} — {Title}`, prepend the `<!-- kairos:STORY-{NNN} -->` marker and the story-file pointer to the body (preserving everything the human wrote), attach the labels, and comment:
+7. **Close the loop on GitHub** — **only once the story file exists** (after Phase 3): an approval can still be refused at Phase 2.5, and an issue retitled `STORY-{NNN}` pointing at a file nobody wrote is worse than an untouched issue. Best-effort: normalize the title to `STORY-{NNN} — {Title}`, prepend the `<!-- kairos:STORY-{NNN} -->` marker and the story-file pointer to the body (preserving everything the human wrote), attach the labels, and comment:
    > Tracked as **STORY-{NNN}** — `{path}`. Implement with `/kairos:implement-story STORY-{NNN}`.
 
-Then continue at Phase 3 (write the file) and Phase 4 (roadmap) as usual.
+Then continue at Phase 2.5 (preview — a single row), Phase 3 (write the file), step 7 above, and Phase 4 (roadmap) as usual.
 
 ### Phase 1 — Decompose
 
@@ -110,6 +111,11 @@ Decomposition principles:
 - A story without an `Impacted Services` table is not allowed. If a chunk of work doesn't touch any declared service, it doesn't belong in a story — it belongs in the PRD's Open Questions.
 - If the PRD is vague, ask clarifying questions **before** generating any story file.
 
+**Ordering constraints.** While decomposing, note which stories genuinely cannot start before another has landed — a migration before the endpoint that reads it, a contract before its consumer. Those become the `Depends on` field. Two rules keep the graph honest:
+
+- **Declare only real constraints.** Sharing a service is not a dependency; it is a merge-conflict hint. Priority is not a dependency either. Over-declaring serializes `/kairos:implement-epic` for nothing.
+- **Prefer intra-epic edges.** A dependency on a story of *another* epic is legitimate but coarse — it is the PRD-level `depends_on` that carries cross-epic ordering. When you write one, check that the source PRD declares the other epic in its `depends_on`; if it does not, **warn** the user (`"STORY-{NNN} depends on STORY-{MMM} (epic {other}), but PRD {this} does not declare depends_on: {other}"`) and let them decide. Never edit the PRD yourself — this command does not write PRDs.
+
 ### Phase 2 — Validate against the spec
 
 For each draft story, list the services in its `Impacted Services` table. Cross-check against the services declared in root `spec.md`:
@@ -123,6 +129,31 @@ For each draft story, list the services in its `Impacted Services` table. Cross-
   ```
   Do not write any story file until the conflict is resolved.
 
+### Phase 2.5 — Preview the slice plan and confirm
+
+Decomposition is the one decision here that is expensive to undo: a bad slice becomes N files, N roadmap rows, and N issues. **Nothing reaches disk before the user approves the plan.**
+
+Print one compact table — no story bodies, no acceptance criteria, one line of summary each:
+
+```
+Slicing {PRD title} into {N} stories:
+
+| Story | Title | Size | Depends on | Summary |
+|-------|-------|------|------------|---------|
+| STORY-042 | Add the export endpoint | M | — | Serves the generated file over HTTP. |
+| STORY-043 | Wire the download button | S | STORY-042 | Calls the endpoint from the reports page. |
+```
+
+Then ask: `"Write these {N} stories to {pm}/stories/? [Y/edit/n]"`
+
+- **Y** → proceed to Phase 3.
+- **edit** → ask what to change (merge two, split one, resize, reorder, drop one, revise a dependency), re-decompose, **re-run Phase 2 validation**, redisplay the table, and loop back to this question. Never write a partial set between two rounds.
+- **n** → stop. Write nothing, create nothing on GitHub. If the slicing keeps coming out wrong, say so plainly and suggest sharpening the PRD's scope section first.
+
+Story numbers shown are provisional. After any `edit` round, re-assign them contiguously from the current max so the written set has no gaps.
+
+The `--from-issue` path shows the same table with a single row: one story is still a decision, and its `Impacted Services` were deduced from prose.
+
 ### Phase 3 — Generate story files
 
 For each validated story, write a file at `{spec.project_management_dir}/stories/STORY-{NNN}.md` using the template below.
@@ -135,6 +166,8 @@ For each validated story, write a file at `{spec.project_management_dir}/stories
 
 **Branch field**: `feature/epic-{epic-slug}` (single shared branch per epic, matching the worktree convention). Stories of the same epic carry the same `Branch` value.
 
+**Depends on field**: the stories that must be `done` before this one can start, as comma-separated ids — `STORY-012, STORY-015`. This is the execution half of the dependency graph: `/kairos:implement-story` refuses to start while one of them is open, and `/kairos:implement-epic` topologically sorts on it. The PRD's `depends_on` is the planning half, one level up ([docs/dependencies.md](../docs/dependencies.md)). **Always write the line, even when empty** — like `Issue`, it is a stable optional field. Never write a reverse `blocks` field, and never edit the story you depend on: that direction is derived.
+
 **Issue field**: the number of the mirrored GitHub issue (`#42`). **Always write the line, even when left empty** — it is a stable optional field, and Phase 4.5 or `/kairos:sync-pm` fills it in later without having to rewrite the Meta block. Leave it empty here; never invent a number.
 
 **Story template:**
@@ -146,6 +179,7 @@ For each validated story, write a file at `{spec.project_management_dir}/stories
 - **Status**: backlog
 - **Size**: S | M | L
 - **Priority**: P0 (blocking) | P1 (current) | P2 (next)
+- **Depends on**: {comma-separated STORY ids, or empty}
 - **Source PRD**: {relative path to source PRD from workspace root}
 - **Epic**: {basename of Source PRD without `.md`}
 - **Created**: {YYYY-MM-DD}
@@ -325,6 +359,10 @@ Then: `"Run /kairos:implement-story STORY-{NNN} to start implementation on the f
 
 - **PRD references services not in `spec.md`** → handled in Phase 2 (stop, surface, do not write).
 - **PRD is too vague to decompose** → ask clarifying questions before generating any files. Don't generate placeholder stories.
+- **The user rejects the slice plan twice or more** (Phase 2.5) → stop proposing variants of the same cut. Name what you think is unclear in the PRD and suggest tightening its scope section first.
+- **A `Depends on` id points at a story that is neither in this batch nor on disk** → drop the edge and say so. A dangling id would block `/kairos:implement-story` forever.
+- **`Depends on` forms a cycle within the batch** → stop before writing. Print the cycle and ask which edge to drop; a cycle makes the epic unschedulable.
+- **A story depends on another epic's story while the PRD lacks the matching `depends_on`** → warn, write the story anyway, and leave the PRD to the user. This command never edits a PRD.
 - **Two stories collide on numbering due to a race / interrupted prior run** → re-scan `stories/` + `done/` and bump. Numbering is cheap; collisions are not.
 - **ROADMAP.md exists but lacks a "To Prioritize" section** → add the section header above the first existing section. Do not rewrite or reorder other sections.
 - **`gh` unavailable / an issue fails to create** (Phase 4.5) → warn on one line, leave `Issue` empty, keep going. The files are the deliverable; `/kairos:sync-pm` reconciles later.
@@ -338,7 +376,9 @@ Then: `"Run /kairos:implement-story STORY-{NNN} to start implementation on the f
 ## QA self-check (run before declaring success)
 
 - [ ] No file outside `{pm}/stories/STORY-NNN-*.md` and `{pm}/ROADMAP.md` was created or modified.
-- [ ] Every generated story has all mandatory fields: Status, Size, Priority, Source PRD, Epic, Created, Branch, Issue (possibly empty), Objective, Existing References, Context, Acceptance Criteria, Impacted Services, Out of Scope, QA Checklist.
+- [ ] The slice plan was previewed as a table and explicitly approved before the first file was written.
+- [ ] Every generated story has all mandatory fields: Status, Size, Priority, Depends on (possibly empty), Source PRD, Epic, Created, Branch, Issue (possibly empty), Objective, Existing References, Context, Acceptance Criteria, Impacted Services, Out of Scope, QA Checklist.
+- [ ] Every `Depends on` id resolves to a story in this batch or already on disk, forms no cycle, and — when it crosses epics — was either backed by the PRD's `depends_on` or surfaced as a warning.
 - [ ] Every service named in any `Impacted Services` table is declared in root `spec.md`.
 - [ ] All stories from the same PRD share the same `Epic` value (the PRD basename).
 - [ ] Status is `backlog`. No `todo` / `a_prioriser` / French vocabulary leaked in.

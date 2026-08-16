@@ -5,6 +5,48 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **PRD-level dependencies.** PRDs gained a `- **depends_on**:` header field
+  holding the slugs of the PRDs they cannot ship without — the planning half of
+  a dependency graph third-party tools (a scheduler, a Gantt renderer, an LLM
+  handed the repo) can read. Kairos ships no renderer: it produces the graph and
+  stops there. Contract in [docs/dependencies.md](docs/dependencies.md).
+  - **One direction, never two.** There is no `blocks` / `is_blocked_by` field:
+    it is the transpose of `depends_on`, derived in one pass. Storing it would
+    mean editing the blocker every time a dependent appears, and keeping two
+    copies of one edge in sync. `/create-prd` is explicitly forbidden from
+    writing a reverse edge into another PRD.
+  - Edges reference **slugs, not paths** — `/close-story` archives a PRD to
+    `done/` when its last story closes, and resolution scans both folders. A
+    dependency found in `done/` is satisfied, not dangling.
+  - `/create-prd` gained Phase 2-bis: propose the edges from §6, resolve every
+    slug against `prds/` + `done/`, refuse cycles, stop and ask on an unknown
+    slug rather than inventing one.
+- **`Depends on` in the story template.** The field was already read by
+  `/implement-story` (start gate) and `/implement-epic` (topological sort) but
+  never written by `/create-story` — the producer side is now closed. A
+  cross-epic story edge that the source PRD does not declare in `depends_on`
+  produces a warning, never a silent PRD edit.
+- **`docs/dependencies.md`** — where the edges live, how to resolve one, how the
+  two levels relate, and what a scheduler may derive (ordering from the graph,
+  bar length from the stories' `Size`, progress from `done/`). Dates, relation
+  types beyond finish-to-start, and capacity are deliberately out of scope.
+
+### Changed
+
+- `/create-story` **previews the slice plan before writing anything** (new Phase
+  2.5): one compact table — story, title, size, dependencies, one-line summary —
+  then `[Y/edit/n]`. `edit` re-decomposes, re-validates, and redisplays; nothing
+  partial is ever written between rounds. Decomposition is the expensive
+  decision in that command, and it was the one step with no gate.
+- `/create-prd` §6 *Dependencies* is now explicitly the prose half: the *why*,
+  plus everything that is not a PRD (vendor APIs, infra, product decisions).
+  Only resolvable slugs go in `depends_on`, which keeps the graph closed.
+- `docs/concepts.md` gained a seventh concept covering the graph.
+
 ## [1.1.0] - 2026-08-08
 
 ### Added

@@ -43,7 +43,7 @@ This writes a PRD under `{project_management_dir}/prds/`. Then slice it:
 /kairos:create-story
 ```
 
-You get one or more `STORY-NNN-*.md` files, each with acceptance criteria and an `Impacted Services` list, plus a `ROADMAP.md` entry.
+It shows you the proposed cut first — one table, one line per story — and writes nothing until you approve it (`edit` re-slices as many times as you need). You then get one or more `STORY-NNN-*.md` files, each with acceptance criteria and an `Impacted Services` list, plus a `ROADMAP.md` entry.
 
 ## 4. Implement one story
 

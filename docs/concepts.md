@@ -1,6 +1,6 @@
 # Kairos concepts (one page)
 
-Six ideas. Read this once; the commands handle the rest interactively.
+Seven ideas. Read this once; the commands handle the rest interactively.
 
 ## 1. Workspace vs service
 
@@ -34,6 +34,12 @@ Between unit tests and a human reviewer, Kairos adds runnable **test plans** per
 ## 6. The GitHub mirror (opt-in)
 
 Set `issue_tracker: github` and each PRD gets a milestone, each story an issue — so **agents read the files and humans read GitHub**. The mapping is deductible (the issue title carries `STORY-NNN`, the milestone title *is* the PRD slug) and anchored by one `Issue: #42` line written back into the story: no correspondence table, no state file. Content flows one way, files → tracker; `/kairos:create-story --from-issue N` is the door back. Off by default. Details: [github-issue-tracking.md](github-issue-tracking.md).
+
+## 7. Dependencies, declared once
+
+A PRD lists the PRDs it needs (`depends_on`, by slug); a story lists the stories it needs (`Depends on`, by id). Nothing records the reverse: **`blocks` is the transpose**, computed in one pass whenever someone wants it. Writing it down too would mean editing the blocker every time a new dependent appears — the edit everyone forgets, and a second version of the truth to keep in sync.
+
+Story edges gate execution (`/kairos:implement-story` stops on an open dependency, `/kairos:implement-epic` sorts on them). PRD edges are descriptive: they exist so a planning tool — or an LLM you hand the repo to — can order initiatives, rank blockers, and size bars from the stories' `Size`. Kairos draws no chart itself. Contract: [dependencies.md](dependencies.md).
 
 ---
 
