@@ -83,6 +83,7 @@ When listing impacted services in §5, draw from the services table you read in 
 - **status**: draft
 - **created**: {YYYY-MM-DD}
 - **depends_on**: {comma-separated PRD slugs, or empty}
+- **serves**: {comma-separated external requirement ids, or empty}
 
 ---
 
@@ -138,6 +139,8 @@ When listing impacted services in §5, draw from the services table you read in 
 4. **Reject cycles.** Using the declared-edges block from the dynamic context, walk the dependencies of each candidate transitively. If this PRD's own slug appears in that closure, **stop** and print the cycle (`a → b → c → a`). Ask which edge to drop. This matters on the `edit` path of Phase 3 and whenever a `-v2` slug re-enters an existing graph.
 5. **Empty is normal.** Most PRDs depend on nothing. Write the line anyway, empty — a stable optional field never has to be inserted later.
 
+**`serves` is the other direction, and there is no phase for it.** The two fields sit on adjacent lines and will be confused otherwise, so hold them apart: `depends_on` points **inward**, at other PRDs Kairos manages — it is resolved against `prds/` + `done/` and cycle-checked, above. `serves` points **outward**, at the host project's own requirement vocabulary (feature lots, hardening tasks, OKRs, compliance controls, spec sections) — ids Kairos knows nothing about. There is nothing to resolve, so nothing is resolved: no lookup, no vocabulary file, no cycle check, no "unknown id" warning, never an error. Write the ids the user gives you, verbatim, and write the line empty when there are none — the normal case, and a project with no such vocabulary must never be asked about it. **Never put a PRD slug in `serves`, never put a requirement id in `depends_on`.** `/kairos:create-story` proposes a per-story subset of this line; what a host derives from it is in [docs/dependencies.md](../docs/dependencies.md).
+
 ### Phase 3 — Preview and confirm
 
 Print the full draft, then derive `{slug}` from the title (kebab-case, lowercase, no punctuation other than `-`). Check against the existing PRDs listed in dynamic context:
@@ -177,6 +180,7 @@ Report one line — `✓ milestone {slug} created` / `✓ milestone {slug} alrea
 - The "Impacted Services" suggestion is a hint for `/kairos:create-story`; the user may revise it during decomposition.
 - If the feature touches multiple services, flag cross-service dependencies in §6.
 - `depends_on` holds PRD slugs and nothing else. Prose, rationale, and non-PRD dependencies live in §6.
+- `serves` holds opaque host-project requirement ids and nothing else. Never resolve, interpret, or validate one; never mix the two fields.
 - Never write a `blocks` or `is_blocked_by` field, and never edit the PRD you depend on to record the reverse edge. One direction is stored, the other is derived — maintaining both by hand is how the two halves drift apart.
 - Do **not** invent service names. Only reference services declared in `spec.md`.
 - Do **not** create stories in this command. That's `/kairos:create-story`.
@@ -188,6 +192,7 @@ Report one line — `✓ milestone {slug} created` / `✓ milestone {slug} alrea
 - [ ] No file outside `{project_management_dir}/prds/{slug}.md` was created or modified — no other PRD was edited to carry a reverse edge.
 - [ ] The slug does not collide with any existing PRD (or a suffixed variant was chosen).
 - [ ] The `depends_on` line exists (empty is fine); every slug it holds resolves to a PRD under `prds/` or `done/`; no cycle was introduced.
+- [ ] The `serves` line exists (empty is fine) and was written verbatim — nothing was resolved, validated, or cycle-checked; no PRD slug leaked into it and no requirement id leaked into `depends_on`.
 - [ ] Every service named in "Impacted Services" exists in the root `spec.md` services table (or is explicitly flagged as undeclared).
 - [ ] All PRD content is in English.
 - [ ] Phase 3.5 ran only under `issue_tracker: github`, created at most one milestone titled exactly `{slug}`, and did not stop the command on failure.

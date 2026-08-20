@@ -5,6 +5,92 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`Serves` — an outward traceability edge on stories and PRDs.** Kairos owns
+  the *how* (PRDs, stories, `Status`, `Depends on`). Real projects also carry a
+  *what*: feature lots, hardening tasks, OKRs, compliance controls, spec
+  sections — a vocabulary that predates Kairos and outlives it. Nothing
+  connected the two, so host projects ended up maintaining a hand-written
+  "done / partial / absent" status table next to a `ROADMAP.md` that already
+  knew the answer. Two registries for one fact, and the hand-written one is
+  stale one commit after it is written. One field closes it: a story declares
+  which requirement ids it serves, and the host derives "what is done" per
+  requirement in one pass over the story files.
+  - **Kairos gains a field and no knowledge.** An id in `Serves` is an **opaque
+    token**: never resolved, never interpreted, never validated. No vocabulary
+    file, no registry, no `requirements_dir` spec field, no "unknown id"
+    warning, no error. Validation, if a host wants it, is a test in the host
+    repo. An empty `Serves` everywhere is the normal case, and a project with
+    no such vocabulary sees nothing of the field but the empty line — the same
+    posture [docs/dependencies.md](docs/dependencies.md) already states:
+    *Kairos itself draws nothing.*
+  - `/create-story` writes `- **Serves**:` in the story template, immediately
+    before `- **Issue**:` — the two fields that point *out* of Kairos, kept
+    adjacent. Always written, even empty, like `Issue`. When the source PRD
+    declares `serves:`, Phase 1 proposes a per-story **subset** of it (a story
+    serves part of what its PRD claims) and the Phase 2.5 preview gains a
+    `Serves` column so the split is part of what the user approves.
+    `--from-issue` leaves it empty unless the issue body names ids explicitly —
+    never deduced from prose, the same rule that governs `Impacted Services`.
+  - `/create-prd` writes `- **serves**:` right after `depends_on`, and says in
+    one paragraph how they differ, because they will be confused otherwise:
+    `depends_on` points **inward** at PRDs Kairos manages and is resolved and
+    cycle-checked (Phase 2-bis); `serves` points **outward** and is **not**
+    resolved — there is nothing to resolve. No Phase 2-bis equivalent was
+    added, deliberately.
+  - `docs/dependencies.md` §5 *The outward edge: `Serves`* — filed apart from
+    the two ordering levels, on purpose, so nobody topologically sorts on it:
+    it takes no part in `/implement-story`'s start gate nor in the sort of
+    `/implement-epic` or `/implement-wave`. Same one-direction rule as
+    `depends_on` (the requirement never stores the stories serving it — that is
+    the transpose), with the derivation a host is expected to run written out
+    so it need not be reinvented.
+  - Inert everywhere else: `/implement-story`, `/close-story`,
+    `/implement-epic`, `/qa`, `/release`, `/sync-pm`, `/init` and `/spec` are
+    unchanged. The field travels with the file and no command reads it.
+- **`/implement-wave` — an arbitrary set of stories as one unit of delivery.**
+  `/implement-epic` runs *one* epic: it refuses a story set spanning several and
+  names its branch after the PRD. That is a policy, not a technical limit —
+  `Depends on` is already a plain story-id list and the sort is already
+  cross-epic capable. But real plans are not shaped like PRDs: *"these nine
+  things, from four PRDs, must land together before anyone can test anything"*
+  was unrunnable, leaving the operator to split it into four epic runs that each
+  finalize separately, or drive the stories by hand.
+  `/kairos:implement-wave {wave-name} STORY-A STORY-B …` runs the list as one
+  worktree, one branch, one pull request, where crossing epics is the normal
+  case rather than an error.
+  - **A wave is the host project's planning object, not Kairos's.** It is
+    assembled by a human — typically from what `Serves` now makes derivable —
+    and handed over as an explicit list plus a name. Kairos does not compute a
+    wave, does not know what one means, and **does not store one**: no `waves/`
+    directory, no `Wave:` field, no state file.
+  - **Written as a delegating command, not a fork.** The file is ~75 lines: it
+    states its usage and its five overrides, then points at
+    `commands/implement-epic.md` to be followed end to end. Copying 300 lines
+    would have drifted within two releases.
+  - The overrides: the wave name is required and comes first (slugified into
+    the branch `feature/wave-{slug}` and the worktree
+    `{worktree_prefix}-wave-{slug}`); the single-epic gate is deleted and `Epic`
+    is read only to group the PR body; membership *is* the list, so
+    finalization gates on the list rather than on re-globbing an epic — one
+    blocked story keeps the worktree, publishes nothing, and re-running the
+    same command resumes; the PR groups its `Closes #N` lines under one
+    subheading per epic and touches no milestone.
+  - Both hard stops stay, and matter more here: a cycle inside the list, and a
+    dependency pointing outside the list that is not yet `done`. A
+    hand-assembled wave is exactly where a prerequisite gets forgotten.
+  - Deliberate non-goals, stated in the command file itself: **no parallelism**
+    (a conflict partition cannot be computed — `Impacted Services` is far too
+    coarse — and if lanes are ever added the operator must declare them), no
+    wave persistence, and **`/implement-epic` is not deprecated** — it keeps the
+    epic-completeness gate a wave cannot have.
+  - One caution carried into the command: a wave PR mixes several PRDs, so it
+    is a bigger review surface and a coarser revert unit than an epic one. Keep
+    a wave to what genuinely must land together.
+
 ## [1.1.1] - 2026-08-16
 
 ### Added

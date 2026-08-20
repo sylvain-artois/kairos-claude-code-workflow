@@ -9,7 +9,7 @@
     {
       "name": "kairos",
       "source": "./",
-      "description": "A story-driven agile workflow: /init, /create-prd, /create-story, /implement-story, /close-story, /qa, /release."
+      "description": "A story-driven agile workflow: /init, /create-prd, /create-story, /implement-story, /implement-epic, /implement-wave, /close-story, /qa, /release."
     }
   ]
 }

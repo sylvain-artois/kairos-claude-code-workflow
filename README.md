@@ -40,13 +40,15 @@ flowchart LR
     C --> D["/kairos:close-story"]
     E["/kairos:implement-epic"] -. "implement + close,<br/>per story, whole epic" .-> C
     E -.-> D
+    F["/kairos:implement-wave"] -. "same, over an explicit<br/>story list, across epics" .-> C
+    F -.-> D
 ```
 
 Setup once with `/kairos:init` (and `/kairos:setup-worktree-isolation` if you use worktrees); `/kairos:create-test-plan`, `/kairos:qa`, `/kairos:spec`, and `/kairos:release` round out the loop.
 
 - **Existing projects, not greenfield.** `/kairos:init` reads your repo (services, test commands, VCS, branch) and writes a `spec.md` you'd have written by hand. No rewrite, no migration.
 - **A QA layer between unit tests and humans.** `/kairos:qa` runs per-service test plans — the pre-human check most workflows skip.
-- **A small, composable command set.** A four-command core (PRD → story → implement → close), plus opt-in commands for epics, worktree isolation, QA, and releases. No hidden state, no `.kairos/` cache — everything lives in `spec.md`.
+- **A small, composable command set.** A four-command core (PRD → story → implement → close), plus opt-in commands for epics, waves, worktree isolation, QA, and releases. No hidden state, no `.kairos/` cache — everything lives in `spec.md`.
 
 ## Issue tracking (opt-in)
 
@@ -65,6 +67,7 @@ Turn it on by re-running `/kairos:init` — it asks once, and only when `gh` is 
 | [`/kairos:create-story`](commands/create-story.md) | Decompose a PRD into independent, shippable stories |
 | [`/kairos:implement-story`](commands/implement-story.md) | Implement one story (worktree opt-in; no commits — that's close-story's job) |
 | [`/kairos:implement-epic`](commands/implement-epic.md) | Run a whole epic in one shared worktree — implement + close each story in sequence, then push/PR once at the end |
+| [`/kairos:implement-wave`](commands/implement-wave.md) | Run an explicit list of stories — crossing epics on purpose — as one unit: one worktree, one branch, one PR |
 | [`/kairos:close-story`](commands/close-story.md) | Test → QA → review → commit → push/PR → archive |
 | [`/kairos:create-test-plan`](commands/create-test-plan.md) | Generate a runnable QA test plan for a service |
 | [`/kairos:qa`](commands/qa.md) | Execute a service's test plans, report pass/fail |

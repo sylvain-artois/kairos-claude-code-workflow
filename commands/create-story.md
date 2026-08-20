@@ -15,6 +15,7 @@ The workspace's `spec.md` is the single source of truth for paths and the servic
 5. **Sizing discipline.** L stories must be decomposed into M stories unless infeasible. When you keep an L, document the reason in its `Technical Notes`.
 6. **English only.** All story content is in English. Status values are `backlog | in_progress | done`.
 7. **Preview before writing.** Print the slice plan and get an explicit approval (Phase 2.5) before creating any story file, roadmap row, or issue. Silence is not approval — do **not** proceed without an answer.
+8. **`Serves` is opaque — never validate it.** Every story carries a `Serves` line (possibly empty) holding ids from the host project's *own* requirement vocabulary. Unlike `Impacted Services` (rule 3), it is **never** resolved, interpreted, or checked against anything: no vocabulary file, no registry, no "unknown id" warning, no error. Empty everywhere is the normal case.
 
 ---
 
@@ -86,7 +87,7 @@ This is the one direction that does not start from a file. Someone with the doma
 
 5. **Validate services as usual** (Phase 2). Deducing `Impacted Services` from prose is the fragile step here: a service that is not declared in `spec.md` is a **stop and ask**, never an invention. If the issue gives no usable signal, ask the user which services it touches rather than guessing from the wording.
 
-6. **Preset `- **Issue**: #{N}`** in the story Meta, and **skip Phase 4.5 for this story** — the issue already exists.
+6. **Preset `- **Issue**: #{N}`** in the story Meta, and **skip Phase 4.5 for this story** — the issue already exists. **Leave `Serves` empty** unless the issue body names requirement ids explicitly; never deduce one from prose — the same rule that governs `Impacted Services` in step 5.
 
 7. **Close the loop on GitHub** — **only once the story file exists** (after Phase 3): an approval can still be refused at Phase 2.5, and an issue retitled `STORY-{NNN}` pointing at a file nobody wrote is worse than an untouched issue. Best-effort: normalize the title to `STORY-{NNN} — {Title}`, prepend the `<!-- kairos:STORY-{NNN} -->` marker and the story-file pointer to the body (preserving everything the human wrote), attach the labels, and comment:
    > Tracked as **STORY-{NNN}** — `{path}`. Implement with `/kairos:implement-story STORY-{NNN}`.
@@ -116,6 +117,8 @@ Decomposition principles:
 - **Declare only real constraints.** Sharing a service is not a dependency; it is a merge-conflict hint. Priority is not a dependency either. Over-declaring serializes `/kairos:implement-epic` for nothing.
 - **Prefer intra-epic edges.** A dependency on a story of *another* epic is legitimate but coarse — it is the PRD-level `depends_on` that carries cross-epic ordering. When you write one, check that the source PRD declares the other epic in its `depends_on`; if it does not, **warn** the user (`"STORY-{NNN} depends on STORY-{MMM} (epic {other}), but PRD {this} does not declare depends_on: {other}"`) and let them decide. Never edit the PRD yourself — this command does not write PRDs.
 
+**Outward traceability.** If the source PRD declares a `serves:` line, propose a per-story **subset** of it: a story serves part of what its PRD claims, not all of it. Split the ids the way you split the work — the slice that builds the export endpoint serves the requirement about the export, not the one about retention. When the PRD declares nothing, every story's `Serves` stays empty and there is nothing to decide. These ids are never resolved or validated (Phase 3, *Serves field*).
+
 ### Phase 2 — Validate against the spec
 
 For each draft story, list the services in its `Impacted Services` table. Cross-check against the services declared in root `spec.md`:
@@ -140,14 +143,16 @@ Slicing {PRD title} into {N} stories:
 
 | Story | Title | Size | Depends on | Summary |
 |-------|-------|------|------------|---------|
-| STORY-042 | Add the export endpoint | M | — | Serves the generated file over HTTP. |
+| STORY-042 | Add the export endpoint | M | — | Streams the generated file over HTTP. |
 | STORY-043 | Wire the download button | S | STORY-042 | Calls the endpoint from the reports page. |
 ```
+
+When the source PRD declares a `serves:` line, add a `Serves` column so the per-story subset is part of what the user approves — reallocating an id between two slices is exactly the kind of edit this preview exists for. **Omit the column entirely otherwise:** a project with no requirement vocabulary should see no trace of the field here.
 
 Then ask: `"Write these {N} stories to {pm}/stories/? [Y/edit/n]"`
 
 - **Y** → proceed to Phase 3.
-- **edit** → ask what to change (merge two, split one, resize, reorder, drop one, revise a dependency), re-decompose, **re-run Phase 2 validation**, redisplay the table, and loop back to this question. Never write a partial set between two rounds.
+- **edit** → ask what to change (merge two, split one, resize, reorder, drop one, revise a dependency or a `Serves` subset), re-decompose, **re-run Phase 2 validation**, redisplay the table, and loop back to this question. Never write a partial set between two rounds.
 - **n** → stop. Write nothing, create nothing on GitHub. If the slicing keeps coming out wrong, say so plainly and suggest sharpening the PRD's scope section first.
 
 Story numbers shown are provisional. After any `edit` round, re-assign them contiguously from the current max so the written set has no gaps.
@@ -168,6 +173,8 @@ For each validated story, write a file at `{spec.project_management_dir}/stories
 
 **Depends on field**: the stories that must be `done` before this one can start, as comma-separated ids — `STORY-012, STORY-015`. This is the execution half of the dependency graph: `/kairos:implement-story` refuses to start while one of them is open, and `/kairos:implement-epic` topologically sorts on it. The PRD's `depends_on` is the planning half, one level up ([docs/dependencies.md](../docs/dependencies.md)). **Always write the line, even when empty** — like `Issue`, it is a stable optional field. Never write a reverse `blocks` field, and never edit the story you depend on: that direction is derived.
 
+**Serves field**: the ids of the host project's own requirement vocabulary that this story contributes to, comma-separated — `F01-L1, T-12`, `OKR-3.2`, `SOC2-CC6.1`, whatever the host uses. It is the **outward** edge of the story: where `Depends on` points inward at other stories Kairos manages, `Serves` points at a vocabulary that predates Kairos and outlives it — feature lots, hardening tasks, OKRs, compliance controls, spec sections. **Kairos never resolves, never interprets, and never validates these ids** (cardinal rule 8): an id in `Serves` is an opaque token, its meaning lives in the host repo, and if the host wants the ids checked that is a test in the host repo. **Always write the line, even when empty** — like `Issue`, it is a stable optional field. What a host derives from it — "which requirements are done" in one pass over the story files — is in [docs/dependencies.md](../docs/dependencies.md).
+
 **Issue field**: the number of the mirrored GitHub issue (`#42`). **Always write the line, even when left empty** — it is a stable optional field, and Phase 4.5 or `/kairos:sync-pm` fills it in later without having to rewrite the Meta block. Leave it empty here; never invent a number.
 
 **Story template:**
@@ -184,6 +191,7 @@ For each validated story, write a file at `{spec.project_management_dir}/stories
 - **Epic**: {basename of Source PRD without `.md`}
 - **Created**: {YYYY-MM-DD}
 - **Branch**: feature/epic-{epic-slug}
+- **Serves**: {comma-separated external requirement ids, or empty}
 - **Issue**:
 
 ## Objective
@@ -363,6 +371,7 @@ Then: `"Run /kairos:implement-story STORY-{NNN} to start implementation on the f
 - **A `Depends on` id points at a story that is neither in this batch nor on disk** → drop the edge and say so. A dangling id would block `/kairos:implement-story` forever.
 - **`Depends on` forms a cycle within the batch** → stop before writing. Print the cycle and ask which edge to drop; a cycle makes the epic unschedulable.
 - **A story depends on another epic's story while the PRD lacks the matching `depends_on`** → warn, write the story anyway, and leave the PRD to the user. This command never edits a PRD.
+- **A `Serves` id looks wrong, unknown, or points at nothing** → **not a failure mode.** Write it verbatim and move on. Kairos has no vocabulary to check it against, and inventing one would be a second registry to keep in sync with the host's.
 - **Two stories collide on numbering due to a race / interrupted prior run** → re-scan `stories/` + `done/` and bump. Numbering is cheap; collisions are not.
 - **ROADMAP.md exists but lacks a "To Prioritize" section** → add the section header above the first existing section. Do not rewrite or reorder other sections.
 - **`gh` unavailable / an issue fails to create** (Phase 4.5) → warn on one line, leave `Issue` empty, keep going. The files are the deliverable; `/kairos:sync-pm` reconciles later.
@@ -377,10 +386,11 @@ Then: `"Run /kairos:implement-story STORY-{NNN} to start implementation on the f
 
 - [ ] No file outside `{pm}/stories/STORY-NNN-*.md` and `{pm}/ROADMAP.md` was created or modified.
 - [ ] The slice plan was previewed as a table and explicitly approved before the first file was written.
-- [ ] Every generated story has all mandatory fields: Status, Size, Priority, Depends on (possibly empty), Source PRD, Epic, Created, Branch, Issue (possibly empty), Objective, Existing References, Context, Acceptance Criteria, Impacted Services, Out of Scope, QA Checklist.
+- [ ] Every generated story has all mandatory fields: Status, Size, Priority, Depends on (possibly empty), Source PRD, Epic, Created, Branch, Serves (possibly empty), Issue (possibly empty), Objective, Existing References, Context, Acceptance Criteria, Impacted Services, Out of Scope, QA Checklist.
 - [ ] Every `Depends on` id resolves to a story in this batch or already on disk, forms no cycle, and — when it crosses epics — was either backed by the PRD's `depends_on` or surfaced as a warning.
 - [ ] Every service named in any `Impacted Services` table is declared in root `spec.md`.
 - [ ] All stories from the same PRD share the same `Epic` value (the PRD basename).
+- [ ] Every `Serves` line was written verbatim from the PRD's `serves:` (a subset per story) or from the user — no id was resolved, validated, or warned about, and no story in a repo without a requirement vocabulary got anything but an empty line.
 - [ ] Status is `backlog`. No `todo` / `a_prioriser` / French vocabulary leaked in.
 - [ ] Story numbering is contiguous with the prior max across `stories/` + `done/`.
 - [ ] Every new story appears under "To Prioritize" in `ROADMAP.md`.

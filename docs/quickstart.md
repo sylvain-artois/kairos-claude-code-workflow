@@ -66,6 +66,7 @@ Any failing gate stops the flow and asks you — nothing is committed on a red t
 ## Optional
 
 - **Add a QA plan:** `/kairos:create-test-plan api "smoke test for /healthz"` → then `/kairos:qa api`.
+- **Run several stories as one unit:** `/kairos:implement-epic {epic-slug}` for a whole epic, or `/kairos:implement-wave {name} STORY-002 STORY-005 …` for an explicit list that crosses epics — one worktree, one branch, one PR either way.
 - **Cut a release:** `/kairos:release v0.1.0` — analyzes commits since the last tag, writes a release note, tags that commit, pushes per `push_mode`.
 - **Mirror to GitHub issues:** re-run `/kairos:init` and answer yes when it offers issue tracking — PRDs become milestones, stories become issues, and your teammates get a project-management surface without leaving GitHub. Then `/kairos:sync-pm` to backfill an existing backlog. See [github-issue-tracking.md](github-issue-tracking.md).
 
