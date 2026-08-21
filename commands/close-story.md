@@ -131,12 +131,15 @@ If a service needs an unavailable resource (GPU, external API, container down), 
 **(b) QA.** If at least one `{service.path}/qa/TEST_PLAN_*.md` exists, run `/kairos:qa {service}` for it. A `STOPPED` verdict (a gating phase failed) is a hard gate — **stop and ask**, like a failing test. An `ISSUES FOUND` verdict (non-gating failures only) is reported and the user decides whether to continue.
 
 **(c) Code review.** Run the review on the **service-scoped diff** (restricted to that service's path) per the [review contract](../docs/review-contract.md), resolving `{service.review_command}`:
-- *unset, or still the `<TODO…>` placeholder `/kairos:init` wrote* → **Mode 1**: inline Opus review using the contract's default prompt template.
+- *unset, **or** still the `<TODO…>` placeholder `/kairos:init` wrote* → **Mode 1**: run `/kairos:review {service.path} --from {WORK}`. Both values resolve to this same default — never treat "never configured" and "configured to the placeholder" as two different behaviors.
 - `skip` → **opt-out**: bypass the review step for this service cleanly (no prompt, no log noise). The security-review phase still runs if opted in.
 - a slash-command name → **Mode 2**: invoke that project command on the diff.
 - a script path → **Mode 3**: pipe the diff on stdin, read findings from stdout.
 
+> **`--from {WORK}` is not optional.** In `worktree_mode: epic_shared` your working directory is the main checkout while the story's changes live in the worktree. A reviewer pointed at the wrong tree reports nothing and reads as a clean pass. Pass `{WORK}` explicitly in every mode — including to a Mode 2 command or a Mode 3 script, whose diff must come from `git -C {WORK}`.
+
 All modes emit findings under `## Critical` / `## High` / `## Medium` / `## Low`.
+
 > **If review surfaces a Critical or High finding → stop and ask.** Do NOT proceed to commit. Medium/Low findings are reported; the user decides whether to fix before closing.
 
 **(d) Test-plan suggestion.** If `{service.suggest_test_plan} == true` **and** the service has no `TEST_PLAN_*.md`, prompt **once**: `"No test plan for {service} — generate one via /kairos:create-test-plan? [y/N]"`. Do not nag if already prompted once for this service in this run.
@@ -144,10 +147,11 @@ All modes emit findings under `## Critical` / `## High` / `## Medium` / `## Low`
 Subagent prompt for the parallel case (one per service):
 > You are a close-out gate runner for the `{service}` service (path `{path}`).
 > 1. Run the test command from `{WORK}` (skip if none): in `epic_shared` mode prefer `{worktree_test_command}` (with `{worktree}`=`{WORK}`, `{worktree_id}`=`epic-{EPIC_SLUG}`), else `{test_command}`. **Guard:** if no `{worktree_test_command}` is set and `{test_command}` matches `docker exec`/`docker compose exec` (fixed container), do NOT run it — return `BLOCKED: {service} test_command attaches to a fixed container; it would test prod, not the worktree. Declare worktree_test_command.` Report pass/fail + last 50 lines on failure.
-> 2. Run the service-scoped code review per the review contract (`{review_command}`, or the default Opus prompt if unset; skip entirely if `skip`) on this diff:
+> 2. Run the service-scoped code review per the review contract (`{review_command}`, or the default reviewer if unset or still the `<TODO…>` placeholder; skip entirely if `skip`) on this diff:
 >    ```
 >    {git diff scoped to {path}}
 >    ```
+>    In Mode 1 that is `/kairos:review {path} --from {WORK}` — pass `--from` even though the diff is above, so the reviewer resolves the same tree you did.
 >    Return findings grouped under `## Critical` / `## High` / `## Medium` / `## Low` (omit empty sections).
 > Do not commit, do not edit files. Return only the gate results.
 
@@ -161,22 +165,45 @@ Subagent prompt for the parallel case (one per service):
 
 Runs **after** the Phase 2 gates pass and **before** any commit, so a finding has a clean remediation path (still uncommitted, easy to fix or amend). This phase **wraps Anthropic's `security-review` skill** — it does not reimplement security analysis.
 
-Trigger: for each service in `IMPACTED` whose per-service spec sets `security_review: true`.
+Trigger: `OPTED_IN` = the services in `IMPACTED` whose per-service spec sets `security_review: true`.
 
-- **If no impacted service opts in → skip this phase entirely.** No log line, no prompt.
-- **If a service opts in but its scoped `git diff` is empty → skip that service** (nothing to review).
+- **`OPTED_IN` empty → skip this phase entirely.** No log line, no prompt.
+- **Every opted-in service has an empty scoped `git diff` → skip too** (nothing to review).
 
-For each opted-in service with a non-empty diff, run the skill scoped to that service's path:
+**Run the skill once, not once per service.** It takes no path argument — it reviews the pending changes of the work tree it runs in — so running it per service would re-analyze the same diff N times for one filtered result each.
 
-> Invoke the `security-review` skill (via the `Skill` tool) focused on the changes under `{service.path}`. The skill analyzes the pending changes and returns markdown findings grouped under `## Critical`, `## High`, `## Medium`, `## Low` headers.
+**Check the tree first.** Because it has no target argument, it reviews **your** working directory, and in `worktree_mode: epic_shared` that is the main checkout while the story's changes are in `{WORK}`:
 
-Parse the findings by those headers and apply the gate:
+```bash
+git rev-parse --show-toplevel
+```
 
-- **Any Critical or High finding → stop and ask.** Report the findings (service, severity, location). Do NOT proceed to commit — the story stays `in_progress` until the user addresses them. (Same safety-gate vocabulary as the test/review gates.)
-- **Medium / Low findings only → list them and prompt** the user to acknowledge before continuing (`"Security review found N medium/low finding(s) for {service}. Continue? [Y/n]"`). These do not block by default.
-- **Clean → continue silently** to the next opted-in service, then to Phase 3.
+Not `{WORK}` → the skill cannot be aimed at the right tree from here. **Stop and ask**: `"security-review reviews this session's working tree, which is not {WORK} — the story's changes are not visible to it. Continue without the security gate, or re-run /kairos:close-story from {WORK}? [continue / abort]"`. Do **not** run it anyway: it would report on an empty or unrelated diff and return clean, which is indistinguishable from a passing gate.
 
-Run this sequentially in the main agent (opted-in services are few by design, and the gate may need user input). Do not delegate it to the Phase 2 subagents.
+> Invoke the `security-review` skill (via the `Skill` tool) on the pending changes. It returns a markdown report and nothing else.
+
+Then **attribute** each finding to a service by the file path it cites, and **drop findings whose file falls outside `OPTED_IN` paths** — a service that did not opt in is not silently reviewed into a gate.
+
+**Parse `* Severity:` fields, not headers.** The report is one level-1 header per finding with the severity as a field:
+
+```markdown
+# Vuln 1: xss: `foo.py:42`
+* Severity: High
+* Description: …
+* Exploit Scenario: …
+* Recommendation: …
+```
+
+There is **no `## High` section, and no Critical level at all** — `High` is the skill's ceiling. Looking for the code-review contract's headers here finds nothing in a report full of vulnerabilities and passes the gate silently. Match `* Severity:` case-insensitively. A report with no findings is the expected clean result: the skill reports only `High` and `Medium` and drops anything below a high confidence bar.
+
+Apply the gate on the attributed findings:
+
+- **Any High (or Critical) finding → stop and ask.** Report them (service, severity, location). Do NOT proceed to commit — the story stays `in_progress` until the user addresses them. (Same safety-gate vocabulary as the test/review gates.)
+- **Medium / Low findings only → list them and prompt** the user to acknowledge before continuing (`"Security review found N medium/low finding(s) in {services}. Continue? [Y/n]"`). These do not block by default.
+- **Clean → continue silently** to Phase 3.
+- **Skill unavailable** (not installed, not resolvable, errors out) → **stop and ask**: `"security-review is unavailable — {reason}. Continue without the security gate? [y/N]"`. Never pass silently. A code-review fallback can be inline prose; a security gate that quietly does not run is a gate the user believes in and does not have.
+
+Run this sequentially in the main agent (the skill spawns its own sub-tasks, and the gate may need user input). Do not delegate it to the Phase 2 subagents.
 
 **All security gates clear → proceed to Phase 3.**
 
@@ -391,7 +418,8 @@ Next: run /kairos:implement-story to pick the next backlog story.
 - **Story already in `{pm}/done/`** → report it is closed, stop.
 - **A test fails** → stop and ask; no commit; story stays `in_progress`.
 - **Review finds a Critical or High issue** → stop and ask; no commit. (`review_command: skip` bypasses this step; see the [review contract](../docs/review-contract.md).)
-- **Security review finds Critical/High** (opt-in services) → stop and ask; no commit; story stays `in_progress`.
+- **Security review finds High/Critical** (opt-in services) → stop and ask; no commit; story stays `in_progress`.
+- **`security-review` skill unavailable** → stop and ask whether to continue without the gate. Never skip it silently.
 - **Diff touches a file outside `Impacted Services`** → scope-creep gate; stop and ask.
 - **Worktree not found (epic_shared)** → ask for the path; offer to skip cleanup if already removed.
 - **Push deferred / fails** (`manual`, no remote, auth, user "skip") → note in summary, leave branch + worktree in place; re-running `/kairos:close-story` resumes at Phase 7.
@@ -402,8 +430,9 @@ Next: run /kairos:implement-story to pick the next backlog story.
 
 ## QA self-check (before declaring success)
 
-- [ ] All gates (tests, QA, review) ran for every impacted service and passed — or the flow stopped at the first failure. Review honored `review_command` (default Opus / slash command / script / `skip`) and gated on Critical/High per the review contract.
-- [ ] Security review ran only for services with `security_review: true` and a non-empty diff; Critical/High blocked the commit; no opt-in service → phase skipped silently.
+- [ ] All gates (tests, QA, review) ran for every impacted service and passed — or the flow stopped at the first failure. Review honored `review_command` (default `/kairos:review` / slash command / script / `skip`) and gated on Critical/High per the review contract.
+- [ ] Every review — whatever the mode — resolved its diff from `{WORK}`, not from the calling session's directory.
+- [ ] Security review ran once (not once per service) when at least one service opted in with a non-empty diff, and only after confirming the session's work tree is `{WORK}`; findings were attributed by file path and filtered to opted-in services; severity was read from `* Severity:` fields; High blocked the commit; an unavailable skill or a mismatched tree stopped and asked rather than passing.
 - [ ] No file outside the declared `Impacted Services` was committed (scope-creep gate honored).
 - [ ] Single-service story used the inline path; multi-service used parallel subagents and fired the bundled-vs-split commit prompt.
 - [ ] `push_mode: manual` printed the push command and waited; `auto` pushed.

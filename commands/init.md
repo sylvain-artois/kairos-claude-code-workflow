@@ -134,7 +134,9 @@ Same approach: `package.json` `scripts.lint`, `pyproject.toml` `[tool.ruff]` →
 
 #### `review_command`
 
-Always set to `<TODO: configure review command>` for now. (Configured later — see the pluggable-review story.)
+Always set to `<TODO: configure review command>`. Never try to detect one.
+
+The placeholder is **not** an unconfigured state to be fixed later: it resolves to the same default as an unset field — `/kairos:review`, the reviewer that ships with Kairos (see the [review contract](../docs/review-contract.md)). It is written so the field is visible and editable in the spec, and so a user who wants a project-specific reviewer knows where to put it. A service left exactly as `/kairos:init` wrote it is fully reviewed.
 
 #### Opt-in flags
 

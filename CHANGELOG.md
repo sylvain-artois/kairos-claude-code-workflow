@@ -5,6 +5,83 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`/kairos:review` — Kairos ships a default reviewer.** Mode 1 of the
+  [review contract](docs/review-contract.md) was a prompt template pasted inline
+  by `/kairos:close-story`. It is now a command, which makes the default
+  reviewer something you can run on its own, point a Mode 2 command at, and fix
+  in one place. It is a two-layer default: it prefers Claude Code's native
+  `code-review` skill — read-only, never `ultra`/`--fix`/`--comment`/`--post` —
+  and falls back to the inline pass on the raw diff whenever that skill is
+  unavailable or returned something unusable. The skill ships with Claude Code,
+  but "ships with" is not "present everywhere" (CLI version, headless and SDK
+  sessions, hosts that bind the name to a different skill), and the default
+  reviewer is not allowed to simply stop existing. It degrades; it does not
+  disappear.
+  - **Severity is derived, because the skill emits none.** Its findings carry a
+    `category` and — only when a verify pass ran — a `verdict`, with no severity
+    field anywhere. Kairos gates on Critical/High, so §1.1 of the contract
+    derives one, and the derivation is normative rather than left to feel: a
+    `failure_scenario` ending in lost data, leaked data, or corrupted state is
+    Critical, one ending in a wrong answer or a crash is High, `PLAUSIBLE`
+    demotes a notch, and a **missing** `verdict` counts as confident — it is
+    absent precisely at the effort levels that only report what they are already
+    sure of, so reading it as uncertainty would push every correctness bug to
+    Medium and quietly disarm the gate.
+  - **Effort is pinned to `medium`, not inherited.** Left alone the skill reuses
+    the last level the *user* typed, which would make a commit gate's strictness
+    depend on unrelated session history. Projects that want more depth write a
+    one-line Mode 2 command with `--effort high`.
+  - **The wrong-tree failure is verified, not trusted.** The skill resolves the
+    diff itself from a target, while `worktree_mode: epic_shared` puts the
+    changes in a worktree the calling session is not sitting in — and a reviewer
+    pointed at the wrong tree finds nothing and returns green, which is the one
+    failure worse than an error. `/kairos:review` takes `--from <dir>`, runs
+    every git command there, and checks each reported file against the scoped
+    diff's own file list, discarding the whole result on mismatch rather than
+    believing it.
+
+### Fixed
+
+- **The security-review gate never fired.** Phase 2.5 of `/kairos:close-story`
+  parsed the `security-review` skill's report for `## Critical` / `## High`
+  headers. That skill emits one level-1 header per finding with the severity as
+  a `* Severity:` field, and its scale tops out at `High` — there is no Critical
+  at all. So the parse found nothing in a report full of vulnerabilities, and a
+  gate that finds nothing reports nothing and blocks nothing: it read exactly
+  like a clean review. It now reads `* Severity:` and fires on `High`. The gate
+  itself is unchanged — High blocks, Medium/Low are listed for acknowledgement —
+  it simply works now.
+  - The skill also takes no path argument (it reviews the pending changes of the
+    tree it runs in), so the phase ran it once per opted-in service to
+    re-analyze the same diff each time. It now runs **once** and attributes
+    findings to services by file path, dropping anything outside an opted-in
+    service.
+  - It has no target argument either, so it reviews whatever tree the session is
+    sitting in — which in `worktree_mode: epic_shared` is not the one holding the
+    story's changes. The phase now checks that first and stops rather than
+    reviewing an empty diff and calling it clean.
+  - An unavailable skill now **stops and asks** instead of passing, and unlike
+    the code-review default it gets no fallback: Kairos does not reimplement
+    security analysis, and an inline substitute would be a weaker check wearing
+    the same name. A code review can degrade to prose; a security gate that
+    quietly does not run is a gate the user believes in and does not have.
+
+### Changed
+
+- **`review_command` unset and the `<TODO…>` placeholder resolve to the same
+  default.** The contract already said so; the wording in `/kairos:init`
+  ("configured later — see the pluggable-review story") implied the placeholder
+  was an unfinished state. Two defaults that diverge on whether `/kairos:init`
+  has run is a distinction nobody can document. There is one default, and a
+  service left exactly as `/kairos:init` wrote it is fully reviewed.
+- `/kairos:close-story` now passes `--from {WORK}` to the review in every mode,
+  and says why: Mode 2 commands and Mode 3 scripts must resolve their diff from
+  the work tree being closed, not from the calling session's directory.
+
 ## [1.2.0] - 2026-08-20
 
 ### Added

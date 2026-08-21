@@ -44,7 +44,7 @@ flowchart LR
     F -.-> D
 ```
 
-Setup once with `/kairos:init` (and `/kairos:setup-worktree-isolation` if you use worktrees); `/kairos:create-test-plan`, `/kairos:qa`, `/kairos:spec`, and `/kairos:release` round out the loop.
+Setup once with `/kairos:init` (and `/kairos:setup-worktree-isolation` if you use worktrees); `/kairos:create-test-plan`, `/kairos:qa`, `/kairos:review`, `/kairos:spec`, and `/kairos:release` round out the loop.
 
 - **Existing projects, not greenfield.** `/kairos:init` reads your repo (services, test commands, VCS, branch) and writes a `spec.md` you'd have written by hand. No rewrite, no migration.
 - **A QA layer between unit tests and humans.** `/kairos:qa` runs per-service test plans — the pre-human check most workflows skip.
@@ -71,6 +71,7 @@ Turn it on by re-running `/kairos:init` — it asks once, and only when `gh` is 
 | [`/kairos:close-story`](commands/close-story.md) | Test → QA → review → commit → push/PR → archive |
 | [`/kairos:create-test-plan`](commands/create-test-plan.md) | Generate a runnable QA test plan for a service |
 | [`/kairos:qa`](commands/qa.md) | Execute a service's test plans, report pass/fail |
+| [`/kairos:review`](commands/review.md) | Review a diff scope against the review contract — the default reviewer `close-story` calls |
 | [`/kairos:spec`](commands/spec.md) | Maintain a service's `spec.md` — backfill from code, or compact it when it inflates |
 | [`/kairos:sync-pm`](commands/sync-pm.md) | Reconcile the GitHub issue mirror with the story files (opt-in; see below) |
 | [`/kairos:setup-worktree-isolation`](commands/setup-worktree-isolation.md) | One-time Compose rewrite so worktree test runs never collide with prod (prereq for worktree mode) |
@@ -94,7 +95,7 @@ Kairos's niche: **existing projects, a pre-human QA layer, and staying small.** 
 - [docs/concepts.md](docs/concepts.md) — the model in one page (workspace vs service, the two specs, worktrees, QA, push mode).
 - [docs/spec-format.md](docs/spec-format.md) — the `spec.md` reference.
 - [docs/dependencies.md](docs/dependencies.md) — the dependency graph: what PRDs and stories declare, and what a third-party planner can derive from it.
-- [docs/review-contract.md](docs/review-contract.md) — pluggable code review (default Opus, your slash command, or a script).
+- [docs/review-contract.md](docs/review-contract.md) — pluggable code review (the default `/kairos:review`, your slash command, or a script).
 - [docs/github-issue-tracking.md](docs/github-issue-tracking.md) — the opt-in GitHub mirror: mapping, inbound path, and what it deliberately doesn't do.
 - [docs/examples/](docs/examples/) — filled-in specs, a test plan, a review command.
 

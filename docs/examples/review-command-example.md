@@ -65,6 +65,30 @@ If there are no Critical or High findings, say so explicitly so the caller can p
 
 ---
 
+## Thin variant — the default reviewer at a different depth
+
+Not every Mode 2 command needs its own checklist. The most common reason to leave Mode 1
+is depth, and that is a one-line command — the default reviewer, pinned to a higher effort
+level:
+
+```markdown
+---
+description: Code review for the api service — default reviewer at high effort
+---
+
+Run `/kairos:review api/ --from {WORK} --effort high` and return its output unchanged.
+```
+
+`{WORK}` is the work tree `/kairos:close-story` is closing in — the worktree in
+`worktree_mode: epic_shared`, the checkout otherwise. Passing it through matters: a review
+that resolves its diff from the calling session's directory reviews the wrong tree and
+reports a clean pass.
+
+Write the full checklist version above instead when the point is *what* gets reviewed —
+your framework's idioms, your migration rules — rather than how hard.
+
+---
+
 ## Mode 3 variant — external script
 
 Same contract, process interface instead of a slash command. The script reads the diff
