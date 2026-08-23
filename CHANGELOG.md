@@ -5,6 +5,42 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **The security gate is aimed at the worktree instead of giving up on it.**
+  The `security-review` skill takes no target argument, so `/kairos:close-story`
+  used to *check* whether the session's work tree was `{WORK}` and stop when it
+  was not — which, under `worktree_mode: epic_shared`, it never is. Interactively
+  that was a prompt; inside `/kairos:implement-epic` or `/kairos:implement-wave`,
+  where the per-story subagent has nobody to ask, it was a dead end — and the
+  subagents worked around it by reviewing `git -C {WORK} diff` themselves and
+  reporting that as the security gate. Phase 2.5 now **names the tree in the
+  invocation** (`{WORK}`, with `git -C {WORK} diff` as the way to collect the
+  changes) rather than inspecting where it happens to be standing. That is
+  version-agnostic by construction: it assumes nothing about how a given build
+  of the skill resolves a tree on its own, and `git -C` addresses a linked
+  worktree and a plain checkout identically — so one invocation serves every
+  `worktree_mode`, with no special case for `off` / `in_place`.
+  - **A provenance footer is what makes a clean report mean something.** Aiming
+    the skill is half the mechanism; proving where it landed is the other half,
+    because an empty report from the wrong tree is indistinguishable from a
+    passing gate. The invocation now requires a closing `_Reviewed N file(s): …_`
+    line, and the phase checks those paths against the pending files of `{WORK}`
+    before reading a single finding — as do findings that all cite files pending
+    there, which is the same evidence by another route. No footer *and* no
+    findings, or any path that is not pending in `{WORK}` → the gate **did not
+    run**, whatever it says. Same doctrine as the scope check the default
+    reviewer already applies to the native `code-review` skill: a wrapped
+    reviewer is trusted about *findings*, never about *which tree it read*.
+  - **A gate that cannot run is never replaced by a stand-in.** Unavailable skill
+    or failed verification → stop and ask interactively, `BLOCKED` from an
+    epic/wave subagent. Writing your own pass and reporting it as the gate is
+    explicitly forbidden: the run log states that a security review passed while
+    none ran. `security skipped` in a subagent report now means *no service opted
+    in* and nothing else.
+
 ## [1.3.0] - 2026-08-21
 
 ### Added

@@ -184,13 +184,14 @@ For each story in order, spawn **one** subagent (not `isolation: worktree`) with
 >    - Run **Phases 0–6 only** (gates → commit source → update specs → archive + ROADMAP → commit docs). **Do NOT run Phase 7/8** (push, PR/MR, worktree cleanup) even if this is the last open story — the orchestrator handles those. Treat this as an intermediate close.
 >    - For the bundled-vs-split commit choice (multi-service), **default to one bundled commit**.
 > 3. **Gates are sacred.** If any gate is blocking — a failing test, a Critical/High code-review or security finding, scope creep (a changed file outside the declared services), an unmet dependency, or an ambiguous selection — **stop immediately, do not commit, leave the story `in_progress`**, and return `BLOCKED`. Never work around a red gate.
+> 4. **A gate you cannot run is not a gate you may replace.** Both reviewers are aimed at the worktree explicitly, because your own directory is the main checkout where the story's changes do not exist: code review through `/kairos:review {path} --from {WORK}`, and the security gate through the `security-review` skill invoked with `{WORK}` and verified by its provenance footer (`close-story` Phase 2.5). If that skill is unavailable, or its footer does not prove it read `{WORK}`, return `BLOCKED: security gate could not be aimed at {WORK} — {reason}`. Do **not** run an equivalent pass of your own over `git -C {WORK} diff` and report it as the gate: the run log would state that a security review passed when none ran. `security skipped` means *no service opted in* — nothing else.
 >
 > Return **only** this structured report (no narration):
 > ```
 > STATUS: DONE | BLOCKED
 > STORY: STORY-{NNN} — {title}
 > ISSUE: #{N} | none          — the story's `Issue` field, verbatim
-> GATES: tests {pass/fail per service} | review {n crit / n high / n med / n low} | security {clean/n/skipped}
+> GATES: tests {pass/fail per service} | review {n crit / n high / n med / n low} | security {clean/n finding(s)/skipped}
 > COMMITS: {sha type(scope): subject} … (source + docs)   — or "none (blocked)"
 > FILES: {n changed}; services touched: {list}
 > DEVIATIONS: {short list or "none"}

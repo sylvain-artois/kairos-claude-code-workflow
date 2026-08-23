@@ -172,15 +172,28 @@ Trigger: `OPTED_IN` = the services in `IMPACTED` whose per-service spec sets `se
 
 **Run the skill once, not once per service.** It takes no path argument — it reviews the pending changes of the work tree it runs in — so running it per service would re-analyze the same diff N times for one filtered result each.
 
-**Check the tree first.** Because it has no target argument, it reviews **your** working directory, and in `worktree_mode: epic_shared` that is the main checkout while the story's changes are in `{WORK}`:
+**Aim it explicitly — do not detect the wrong tree and give up.** Having no target argument, the skill reviews whatever tree it is run in, and in `worktree_mode: epic_shared` that is the calling session's main checkout while the story's changes are in `{WORK}`: a clean report on an empty diff, indistinguishable from a passing gate. The answer is to **name the tree in the invocation** rather than to inspect where you happen to be standing. `git -C {WORK}` resolves **any** work tree — a linked worktree and a plain checkout alike — so the invocation below is identical in every `worktree_mode`, with no special case for `off` / `in_place` (there `{WORK}` simply *is* the workspace root).
+
+First hold what the gate must cover:
 
 ```bash
-git rev-parse --show-toplevel
+git -C {WORK} diff --name-only
+git -C {WORK} diff --staged --name-only
 ```
 
-Not `{WORK}` → the skill cannot be aimed at the right tree from here. **Stop and ask**: `"security-review reviews this session's working tree, which is not {WORK} — the story's changes are not visible to it. Continue without the security gate, or re-run /kairos:close-story from {WORK}? [continue / abort]"`. Do **not** run it anyway: it would report on an empty or unrelated diff and return clean, which is indistinguishable from a passing gate.
+Union → `PENDING_FILES`.
 
-> Invoke the `security-review` skill (via the `Skill` tool) on the pending changes. It returns a markdown report and nothing else.
+Then invoke the `security-review` skill (via the `Skill` tool), passing the tree, the diff commands, and the provenance footer as its arguments:
+
+> Review the pending changes of the work tree at `{WORK}` — **not** this session's current directory, which is a different checkout. Collect them with `git -C {WORK} diff` and `git -C {WORK} diff --staged`. Every path you report is relative to `{WORK}`; read a file as `{WORK}/<path>`. Do not diff or read any other tree. After the findings, end the report with exactly one line: `_Reviewed N file(s): <comma-separated paths, relative to {WORK}>_`.
+
+It returns a markdown report and nothing else.
+
+**Verify that footer before reading a single finding.** A report is evidence of a gate only if it demonstrably looked at `{WORK}`, and an empty report proves nothing by itself — the wrong tree yields the same empty report as clean code.
+
+- Footer present and every path in it is in `PENDING_FILES` → the gate ran on the right tree. A **subset** is fine (the skill skips what it judges irrelevant); a path **outside** `PENDING_FILES` is not.
+- Footer absent, but the report has findings and **every** file they cite is in `PENDING_FILES` → same evidence by another route; accept it and note the missing footer.
+- Anything else — no footer **and** no findings, or any cited path outside `PENDING_FILES` → **the gate did not run on `{WORK}`**, whatever it reports. An empty report with nothing tying it to `{WORK}` is the exact shape of the failure this check exists for. Treat it as *not run* — never as clean — and handle it as "the gate cannot run" below.
 
 Then **attribute** each finding to a service by the file path it cites, and **drop findings whose file falls outside `OPTED_IN` paths** — a service that did not opt in is not silently reviewed into a gate.
 
@@ -201,9 +214,12 @@ Apply the gate on the attributed findings:
 - **Any High (or Critical) finding → stop and ask.** Report them (service, severity, location). Do NOT proceed to commit — the story stays `in_progress` until the user addresses them. (Same safety-gate vocabulary as the test/review gates.)
 - **Medium / Low findings only → list them and prompt** the user to acknowledge before continuing (`"Security review found N medium/low finding(s) in {services}. Continue? [Y/n]"`). These do not block by default.
 - **Clean → continue silently** to Phase 3.
-- **Skill unavailable** (not installed, not resolvable, errors out) → **stop and ask**: `"security-review is unavailable — {reason}. Continue without the security gate? [y/N]"`. Never pass silently. A code-review fallback can be inline prose; a security gate that quietly does not run is a gate the user believes in and does not have.
+- **The gate cannot run** — the skill is unavailable (not installed, not resolvable, errors out) **or** the provenance check above failed:
+  - *Interactive* → **stop and ask**: `"The security gate could not be verified against {WORK} — {reason}. Continue without it? [y/N]"`. Never pass silently. A code-review fallback can be inline prose; a security gate that quietly does not run is a gate the user believes in and does not have.
+  - *Non-interactive* (you are a per-story subagent of `/kairos:implement-epic` or `/kairos:implement-wave` and cannot ask) → return `BLOCKED: security gate could not be aimed at {WORK} — {reason}` **without committing**. That decision is the user's, not yours.
+  - **Never substitute your own pass for the skill**, in either case. Reviewing the diff yourself and reporting it as the security gate is a false green wearing the gate's name — the run states that a security review passed when none ran. Kairos does not reimplement security analysis ([review contract §7](../docs/review-contract.md)): the gate either ran on `{WORK}` or it did not.
 
-Run this sequentially in the main agent (the skill spawns its own sub-tasks, and the gate may need user input). Do not delegate it to the Phase 2 subagents.
+Run this sequentially in the agent running `/kairos:close-story` (the skill spawns its own sub-tasks, and the gate may need user input). Do not delegate it to the Phase 2 per-service subagents.
 
 **All security gates clear → proceed to Phase 3.**
 
@@ -419,7 +435,7 @@ Next: run /kairos:implement-story to pick the next backlog story.
 - **A test fails** → stop and ask; no commit; story stays `in_progress`.
 - **Review finds a Critical or High issue** → stop and ask; no commit. (`review_command: skip` bypasses this step; see the [review contract](../docs/review-contract.md).)
 - **Security review finds High/Critical** (opt-in services) → stop and ask; no commit; story stays `in_progress`.
-- **`security-review` skill unavailable** → stop and ask whether to continue without the gate. Never skip it silently.
+- **`security-review` unavailable, or its provenance footer does not match `{WORK}`'s pending files** → the gate did not run: stop and ask (interactive) or return `BLOCKED` (as a subagent of an epic/wave run). Never skip it silently, and never stand in for it with a hand-rolled pass.
 - **Diff touches a file outside `Impacted Services`** → scope-creep gate; stop and ask.
 - **Worktree not found (epic_shared)** → ask for the path; offer to skip cleanup if already removed.
 - **Push deferred / fails** (`manual`, no remote, auth, user "skip") → note in summary, leave branch + worktree in place; re-running `/kairos:close-story` resumes at Phase 7.
@@ -432,7 +448,7 @@ Next: run /kairos:implement-story to pick the next backlog story.
 
 - [ ] All gates (tests, QA, review) ran for every impacted service and passed — or the flow stopped at the first failure. Review honored `review_command` (default `/kairos:review` / slash command / script / `skip`) and gated on Critical/High per the review contract.
 - [ ] Every review — whatever the mode — resolved its diff from `{WORK}`, not from the calling session's directory.
-- [ ] Security review ran once (not once per service) when at least one service opted in with a non-empty diff, and only after confirming the session's work tree is `{WORK}`; findings were attributed by file path and filtered to opted-in services; severity was read from `* Severity:` fields; High blocked the commit; an unavailable skill or a mismatched tree stopped and asked rather than passing.
+- [ ] Security review ran once (not once per service) when at least one service opted in with a non-empty diff, aimed at `{WORK}` through its arguments and confirmed by a provenance footer matching `PENDING_FILES` (or, footer absent, by findings that all cite files in it); findings were attributed by file path and filtered to opted-in services; severity was read from `* Severity:` fields; High blocked the commit; an unavailable skill or an unverifiable report stopped, asked, or returned `BLOCKED` — it never passed, and no self-written pass was reported as the gate.
 - [ ] No file outside the declared `Impacted Services` was committed (scope-creep gate honored).
 - [ ] Single-service story used the inline path; multi-service used parallel subagents and fired the bundled-vs-split commit prompt.
 - [ ] `push_mode: manual` printed the push command and waited; `auto` pushed.

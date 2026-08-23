@@ -41,7 +41,7 @@ That command file is the single source of truth for every step: read it, do not 
    ```
    The title names the wave (`wave {WAVE_SLUG}: {n} stories across {m} epics`). Take the numbers from the run log, as `implement-epic` Phase 4.2 does. **Do not touch milestones** — a wave crosses them, and a milestone stays a mirror of one PRD.
 
-Everything else is identical **by delegation**: `{project_management_dir}` clean is a hard block; one fresh subagent per story; implement-then-close, strictly sequential; a subagent that returns `BLOCKED` stops the whole run; no subagent pushes, opens a PR/MR, or tears anything down; `push_mode` is honoured once, at the end, by you.
+Everything else is identical **by delegation**: `{project_management_dir}` clean is a hard block; one fresh subagent per story; implement-then-close, strictly sequential; a subagent that returns `BLOCKED` stops the whole run; every gate — code review and the security gate alike — is aimed at the wave worktree and returns `BLOCKED` when it cannot be verified there, never a substitute pass the subagent wrote itself; no subagent pushes, opens a PR/MR, or tears anything down; `push_mode` is honoured once, at the end, by you.
 
 ## Ordering, and the one thing that must still stop the run
 
