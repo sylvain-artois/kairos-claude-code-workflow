@@ -73,18 +73,20 @@ If a story ID is passed, use it. Otherwise infer the story from the conversation
 
 - **`off`** — `WORK` = workspace root, current branch. No epic deferral. `IS_LAST = true`.
 - **`in_place`** — `WORK` = workspace root, branch `feature/story-{NNN}-{slug}`. No epic deferral. `IS_LAST = true`.
-- **`epic_shared`** — resolve `EPIC_SLUG`, find the shared worktree, compute `REMAINING_OPEN` (see 0.2). `WORK` = the worktree path. All `git` commands in later phases run as `git -C {WORK}`.
+- **`epic_shared`** — resolve `EPIC_SLUG`, **confirm you are standing in that epic's worktree**, compute `REMAINING_OPEN` (see 0.2). `WORK` = `git rev-parse --show-toplevel` — the current worktree, not a path you go looking for. All `git` commands in later phases still run as `git -C {WORK}`: redundant with the working directory now, and kept for exactly that reason.
 
 **Resolve `EPIC_SLUG`** (epic_shared only) — keep this fallback chain intact:
 1. The `Epic` field from the story Meta, if present.
 2. Else the `Source PRD` basename without `.md`.
 3. Else the per-story slug — **print a warning** that no epic was detected and the story is treated as a 1:1 close.
 
-**Find the worktree:**
+**Confirm the worktree** (epic_shared only) — `epic_shared` work happens in a session opened inside the epic worktree by `/kairos:worktree`; this command never goes looking for one:
 ```bash
-git worktree list
+WORK=$(git rev-parse --show-toplevel)
+test "$(git rev-parse --absolute-git-dir)" = "$(cd "$(git rev-parse --git-common-dir)" && pwd)" && echo "MAIN-CLONE" || echo "LINKED-WORKTREE"
 ```
-Match path `*-epic-{EPIC_SLUG}` or branch `feature/epic-{EPIC_SLUG}`. If none matches, fall back to a legacy `story-{NNN}` worktree, else ask the user for the path (offer to skip cleanup if it was already removed).
+- `MAIN-CLONE` → **stop.** The story's work is not here; committing would put it on `{default_branch}`. Tell the user to close the story from the session where it was implemented (`cd {worktree_prefix}-epic-{EPIC_SLUG} && claude`).
+- Basename of `WORK` not `{worktree_prefix}-epic-{EPIC_SLUG}`, or `HEAD` not `feature/epic-{EPIC_SLUG}` → **stop**, and name the tree and branch you are actually in. Committing one epic's story onto another epic's branch is silent and survives the run.
 
 ### 0.2 — Compute `REMAINING_OPEN` (epic_shared only)
 
@@ -138,7 +140,7 @@ If a service needs an unavailable resource (GPU, external API, container down), 
 - a slash-command name → **Mode 2**: invoke that project command on the diff.
 - a script path → **Mode 3**: pipe the diff on stdin, read findings from stdout.
 
-> **`--from {WORK}` is not optional.** In `worktree_mode: epic_shared` your working directory is the main checkout while the story's changes live in the worktree. A reviewer pointed at the wrong tree reports nothing and reads as a clean pass. Pass `{WORK}` explicitly in every mode — including to a Mode 2 command or a Mode 3 script, whose diff must come from `git -C {WORK}`.
+> **`--from {WORK}` is not optional.** A reviewer pointed at the wrong tree reports nothing, and an empty report is indistinguishable from a clean pass — that is the failure this argument exists to prevent. Under the one-session-one-tree doctrine `{WORK}` and your working directory agree, so the argument is now a **confirmation** rather than a correction: it makes the scope explicit, auditable, and identical in every `worktree_mode`. Pass it everywhere — including to a Mode 2 command or a Mode 3 script, whose diff must come from `git -C {WORK}`.
 
 All modes emit findings under `## Critical` / `## High` / `## Medium` / `## Low`.
 
@@ -174,7 +176,7 @@ Trigger: `OPTED_IN` = the services in `IMPACTED` whose per-service spec sets `se
 
 **Run the skill once, not once per service.** It takes no path argument — it reviews the pending changes of the work tree it runs in — so running it per service would re-analyze the same diff N times for one filtered result each.
 
-**Aim it explicitly — do not detect the wrong tree and give up.** Having no target argument, the skill reviews whatever tree it is run in, and in `worktree_mode: epic_shared` that is the calling session's main checkout while the story's changes are in `{WORK}`: a clean report on an empty diff, indistinguishable from a passing gate. The answer is to **name the tree in the invocation** rather than to inspect where you happen to be standing. `git -C {WORK}` resolves **any** work tree — a linked worktree and a plain checkout alike — so the invocation below is identical in every `worktree_mode`, with no special case for `off` / `in_place` (there `{WORK}` simply *is* the workspace root).
+**Aim it explicitly — do not detect the wrong tree and give up.** Having no target argument, the skill reviews whatever tree it is run in. Under the one-session-one-tree doctrine that tree is now the right one **by construction** — the session was opened inside the epic worktree and never moved — and 0.1 has just verified it. Aim it anyway: a gate that depends on an invariant holding is weaker than one that states its scope, and `git -C {WORK}` resolves **any** work tree, so the invocation below is identical in every `worktree_mode`, with no special case for `off` / `in_place` (there `{WORK}` simply *is* the workspace root).
 
 First hold what the gate must cover:
 
@@ -375,16 +377,20 @@ Issue #{N}: still open — no PR opened. Close it with `gh issue close {N}`, or 
 
 ---
 
-## Phase 8 — Worktree cleanup (epic_shared + IS_LAST only)
+## Phase 8 — Worktree teardown: print it, do not run it (epic_shared + IS_LAST only)
 
-Only when `worktree_mode == epic_shared` **and** `IS_LAST == true`, after the user confirms push (and PR/MR created or "skip PR"):
+Only when `worktree_mode == epic_shared` **and** `IS_LAST == true`, after the user confirms push (and PR/MR created or "skip PR"). **You do not remove the worktree**: it is the tree this session is standing in, and git does not protect you — `git worktree remove .` returns 0 and deletes the directory the session is running in. Print the handoff instead:
 
-```bash
-git worktree remove {WORK}
-git branch -d feature/epic-{EPIC_SLUG}
+```
+Epic {EPIC_SLUG} is published. To reclaim the worktree, from the MAIN CLONE:
+
+    cd {main clone path} && claude
+    /kairos:worktree epic-{EPIC_SLUG} --teardown
 ```
 
-If `worktree remove` fails on uncommitted changes, **show the error and ask before `--force`** — never force on your own. Also remove the memory symlink created by `/kairos:implement-story` if present.
+The main clone's path is `git rev-parse --git-common-dir` with the trailing `/.git` removed. `/kairos:worktree --teardown` owns the whole sequence — the isolated Compose project, the `epic-{EPIC_SLUG}-`-prefixed images and only those, `git worktree remove`, the memory symlink — and stops on uncommitted **or unpushed** work, the second of which git itself does not check. Do not reimplement a piece of it here: pruning this worktree's containers from inside it and leaving the tree behind is a teardown that reads as done and is not.
+
+In `worktree_mode: off` / `in_place` there is nothing to tear down; skip this phase silently.
 
 ---
 
@@ -441,7 +447,7 @@ Next: run /kairos:implement-story to pick the next backlog story.
 - **Diff touches a file outside `Impacted Services`** → scope-creep gate; stop and ask.
 - **Worktree not found (epic_shared)** → ask for the path; offer to skip cleanup if already removed.
 - **Push deferred / fails** (`manual`, no remote, auth, user "skip") → note in summary, leave branch + worktree in place; re-running `/kairos:close-story` resumes at Phase 7.
-- **`worktree remove` fails** → show the error, ask before `--force`.
+- **The user asks you to remove the worktree** → decline; it is the tree you are in, and git would let you delete it out from under the session. Print the `/kairos:worktree … --teardown` line for the main clone (Phase 8).
 - **Issue mirror fails** (`gh` missing, auth expired, network, issue deleted) → one-line warning in the summary, pointing at `/kairos:sync-pm`. **Never a gate** — a tracker outage must not block a close.
 
 ---
@@ -454,7 +460,8 @@ Next: run /kairos:implement-story to pick the next backlog story.
 - [ ] No file outside the declared `Impacted Services` was committed (scope-creep gate honored).
 - [ ] Single-service story used the inline path; multi-service used parallel subagents and fired the bundled-vs-split commit prompt.
 - [ ] `push_mode: manual` printed the push command and waited; `auto` pushed.
-- [ ] `worktree_mode: epic_shared` with `IS_LAST == false` did **not** push, open a PR/MR, or remove the worktree; the story still moved to `{pm}/done/`.
+- [ ] `worktree_mode: epic_shared` with `IS_LAST == false` did **not** push or open a PR/MR; the story still moved to `{pm}/done/`.
+- [ ] In `epic_shared`, 0.1 confirmed this session is in **this epic's** worktree (not the main clone, not a sibling epic's) before anything was committed; no worktree was created or removed.
 - [ ] Each impacted service's `spec.md` was updated from its scoped diff, with no unexplained deletions.
 - [ ] Story `Status` is `done` and the file is under `{pm}/done/`; ROADMAP `Done` row added.
 - [ ] Issue mirror (when `issue_tracker: github`): the issue was closed **explicitly only in `off` mode**; in `in_place` / `epic_shared` it was left open with `Closes #{N}` in the PR body. No mirror failure blocked the close.

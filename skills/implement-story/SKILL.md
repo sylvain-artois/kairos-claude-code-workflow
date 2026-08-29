@@ -194,87 +194,59 @@ If the branch already exists, ask: `"Branch {BRANCH_NAME} exists. Resume on it? 
 ```
 Continue to Phase 2.5.
 
-#### Mode `epic_shared` — create or join the epic worktree
+#### Mode `epic_shared` — you are already in the worktree; verify it
 
-All stories of `EPIC_SLUG` share one branch (`feature/epic-{EPIC_SLUG}`) and one worktree (`{spec.worktree_prefix}-epic-{EPIC_SLUG}`).
+All stories of `EPIC_SLUG` share one branch (`feature/epic-{EPIC_SLUG}`) and one worktree (`{spec.worktree_prefix}-epic-{EPIC_SLUG}`) — and **this session runs inside it**. The worktree was created by `/kairos:worktree`, from the main clone, before the session existed. **This command creates nothing in `epic_shared` mode**: no `git worktree add`, no branch, no symlink, no `cd`.
 
-##### 2a. Resolve paths
+The rule behind it is worth stating once, because it is what makes every downstream gate trustworthy: **one session, one tree, decided before the first token.** A working directory that changes mid-run is how a review ends up reading code the story never touched.
+
+##### 2a. Confirm you are in the right tree — hard gate
+
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_DIR="${REPO_ROOT}/../{spec.worktree_prefix}-epic-{EPIC_SLUG}"
-BRANCH_NAME="feature/epic-{EPIC_SLUG}"
+IS_MAIN=$(test "$(git rev-parse --absolute-git-dir)" = "$(cd "$(git rev-parse --git-common-dir)" && pwd)" && echo yes || echo no)
+WORK=$(git rev-parse --show-toplevel)
+BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
 ```
 
-##### 2a-bis. Worktree-isolation precondition (Compose prefix)
-A worktree inherits only **committed** content. For each impacted service that declares `worktree_test_command`, its Compose file must already namespace the built `image:`/`container_name:` with `${CONTAINER_ENV_PREFIX}` — otherwise the worktree's isolated test container (run later by `/kairos:close-story`) would collide with or overwrite the prod one. Check the **main checkout** (what the worktree will inherit):
-```bash
-# {compose} = the service's compose_file (from its spec)
-grep -q '${CONTAINER_ENV_PREFIX}' "$REPO_ROOT/{compose}" || echo "NOT PREFIXED: {compose}"
+Two ways to fail, both **stop the command**:
+
+1. **`IS_MAIN` is `yes`** — this is the main clone. Do not create the worktree here, do not work in place, do not offer to change directory:
+   > ⛔ `worktree_mode: epic_shared` runs **inside** the epic worktree, and this session is in the main clone.
+   > ```
+   > /kairos:worktree epic-{EPIC_SLUG}                       # here, in the main clone
+   > cd {spec.worktree_prefix}-epic-{EPIC_SLUG} && claude
+   > /kairos:implement-story STORY-{NNN}                     # in that new session
+   > ```
+   > (Running a single story of an epic? That is exactly what this is for. Running the whole epic? Use `/kairos:implement-epic` in that session instead.)
+2. **`basename $WORK` is not `{spec.worktree_prefix}-epic-{EPIC_SLUG}`, or `BRANCH_NAME` is not `feature/epic-{EPIC_SLUG}`** — you are in *a* worktree, but not this story's. Say which one, and stop:
+   > ⛔ This worktree is `{actual}` on `{actual branch}`, but STORY-{NNN} belongs to epic `{EPIC_SLUG}`. Committing here would put one epic's work on another epic's branch.
+
+The second check is the one that catches the plausible mistake — the operator has three worktrees open and types in the wrong terminal — and its failure mode is silent, which is why it is a gate and not a warning.
+
+##### 2b. Verify what the worktree was given
+
+`/kairos:worktree` linked memory and seeded the gitignored runtime files. Confirm, do not redo:
+
+- **Compose prefix — hard gate, impacted services only.** For each impacted service declaring `worktree_test_command`, its Compose file must namespace the built `image:`/`container_name:` with `${CONTAINER_ENV_PREFIX}`, or the isolated test container `/kairos:close-story` runs later will collide with — or overwrite — the prod one:
+  ```bash
+  grep -q '${CONTAINER_ENV_PREFIX}' "$WORK/{compose}" || echo "NOT PREFIXED: {compose}"
+  ```
+  Unprefixed → **stop and ask.** Do not auto-edit the Compose file: an uncommitted infra change inside the worktree is scope creep, and the prefix would still be missing from `{spec.default_branch}`, where it is actually needed.
+  > ⛔ `{service}`'s Compose (`{compose}`) isn't prefixed for worktree isolation — worktree tests would collide with prod containers. Run `/kairos:setup-worktree-isolation` on `{spec.default_branch}` in the main clone and commit it, then re-create the worktree. (Aborting.)
+
+  Services without `worktree_test_command` skip this check.
+- **Seed files — warn.** For each impacted service declaring `worktree_seed_files`, `test -f "$WORK/{seed}"`. Missing → name the file and note that `/kairos:worktree epic-{EPIC_SLUG}` re-seeds on join, then continue: the story may never touch what needs it.
+
+##### 2c. Print readiness
 ```
-If any such service's Compose file is not prefixed → **stop and ask**. Do NOT create the worktree, and do NOT auto-edit the Compose file here (an uncommitted infra change inside the worktree is scope creep and the prefix would be missing from prod anyway):
-> ⛔ `{service}`'s Compose (`{compose}`) isn't prefixed for worktree isolation — worktree tests would collide with prod containers. Run `/kairos:setup-worktree-isolation` on `{spec.default_branch}` and commit it, then re-run this command. (Aborting — no worktree created.)
-
-Services without `worktree_test_command` skip this check.
-
-##### 2b. Detect existing worktree / branch
-```bash
-EXISTING_WT=$(git worktree list --porcelain | awk -v p="$WORKTREE_DIR" '$1=="worktree" && $2==p {print $2}')
-EXISTING_BR=$(git branch --list "$BRANCH_NAME")
-```
-
-Three cases:
-
-1. **Worktree exists** → joining an epic already in progress. **Do not create or reset anything.** `cd "$WORKTREE_DIR"`, verify it carries the prior stories' uncommitted/committed work, and continue. Print:
-   ```
-   ℹ Joining epic {EPIC_SLUG}
-     Worktree: {WORKTREE_DIR}
-     Branch:   {BRANCH_NAME}
-   ```
-2. **Branch exists, worktree does not** (cleaned up mid-epic) → re-attach:
-   ```bash
-   git worktree add "$WORKTREE_DIR" "$BRANCH_NAME"
-   ```
-   `cd "$WORKTREE_DIR"`, print `✓ Re-attached worktree to existing epic branch {BRANCH_NAME}`, go to 2d.
-3. **Neither exists** → first story of the epic. Go to 2c.
-
-##### 2c. Create the epic worktree (first story)
-```bash
-git fetch origin
-git worktree add -b "$BRANCH_NAME" "$WORKTREE_DIR" "origin/{spec.default_branch}"
-cd "$WORKTREE_DIR"
-```
-
-##### 2d. Sync Claude Code memory (so context follows into the worktree)
-```bash
-MAIN_PROJECT=$(echo "$REPO_ROOT" | sed 's|^/||; s|/|-|g')
-WT_PROJECT=$(echo "$WORKTREE_DIR" | sed 's|^/||; s|/|-|g')
-CLAUDE_PROJECTS="$HOME/.claude/projects"
-if [ -d "$CLAUDE_PROJECTS/-$MAIN_PROJECT" ]; then
-  ln -sfn "$CLAUDE_PROJECTS/-$MAIN_PROJECT" "$CLAUDE_PROJECTS/-$WT_PROJECT"
-  echo "✓ Claude Code memory linked from main project"
-else
-  echo "⚠ No Claude Code memory found for main project (fine for first run)"
-fi
-```
-
-##### 2d-bis. Seed gitignored runtime files
-A worktree carries only committed content, so gitignored files like `.env` are absent. For each impacted service whose spec declares `worktree_seed_files`, copy each listed path from the main checkout (`$REPO_ROOT`) into the worktree, so containers and the later `worktree_test_command` (run by `/kairos:close-story`) have what they need:
-```bash
-# for each {seed} in this story's impacted services' worktree_seed_files:
-[ -f "$REPO_ROOT/{seed}" ] && mkdir -p "$WORKTREE_DIR/$(dirname "{seed}")" && cp "$REPO_ROOT/{seed}" "$WORKTREE_DIR/{seed}" \
-  && echo "✓ seeded {seed}" || echo "⚠ {seed} not found in main checkout (skipped)"
-```
-
-##### 2e. Print readiness
-```
-✓ Epic worktree ready
+✓ Epic worktree confirmed
   Epic:   {EPIC_SLUG}
-  Path:   {WORKTREE_DIR}
+  Path:   {WORK}          (this session's working directory)
   Branch: {BRANCH_NAME}
-  Open in VSCode: code {WORKTREE_DIR}
+  Seeds:  {n} present, {n} missing
 ```
 
-> **Stay in the worktree** for the rest of this command and until `/kairos:close-story` runs. Do not jump back to the main checkout mid-implementation.
+> **Never change directory** — not during this command, not before `/kairos:close-story`, not to "just check something" in the main clone. The working directory is the one thing every gate downstream trusts without being told.
 
 ---
 
@@ -416,7 +388,7 @@ Always prefer **stopping and asking** over silently working around issues. Never
 - [ ] No commit, no push, no test-suite run was performed.
 - [ ] No file under a service outside `Impacted Services` was created or modified.
 - [ ] Story `Status` is `in_progress` (staged in epic_shared mode; unstaged in in_place/off). Under `issue_tracker: github` with an `Issue` number, the mirror label was attempted and its failure (if any) did not stop the run.
-- [ ] For `epic_shared`: worktree + branch `feature/epic-{slug}` exist and memory is symlinked; second story of the epic joined the existing worktree without a new branch.
+- [ ] For `epic_shared`: the session was **already** in `{worktree_prefix}-epic-{slug}` on `feature/epic-{slug}` — both were verified, nothing was created, and the working directory never changed. A main-clone session stopped with the `/kairos:worktree` handoff.
 - [ ] For `in_place`: branch `feature/story-{NNN}-{slug}` created from `default_branch`, no worktree.
 - [ ] For `off`: no branching, current branch unchanged.
 - [ ] Summary printed with a `/kairos:close-story STORY-{NNN}` reminder.

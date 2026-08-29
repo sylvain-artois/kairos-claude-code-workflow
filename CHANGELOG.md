@@ -5,6 +5,69 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-08-29
+
+### Added
+
+- **`/kairos:worktree` — create, join, or tear down a worktree.** Extracted from
+  the three near-identical copies that lived in `implement-epic`, `implement-story`
+  and (by delegation) `implement-wave`. It creates the branch, links Claude Code
+  memory, seeds the gitignored runtime files a fresh worktree cannot inherit, and
+  hands you the two lines to type. `--teardown` reclaims it: Compose project,
+  prefixed images only, worktree, memory link — refusing a tree with uncommitted or
+  unpushed work. It also serves the case that had no command at all: a plain
+  exploration worktree, unattached to any epic.
+
+### Changed
+
+- **One session, one tree.** Under `worktree_mode: epic_shared`, an epic now runs
+  from a session opened **inside** its worktree, rather than from the main clone
+  reaching in through `git -C`. Create it with `/kairos:worktree epic-{slug}`, then
+  `cd` into it and start Claude Code there.
+
+  The reason is not ergonomics. Every review, test command and tool that resolves
+  the working directory on its own — including the built-in security review, which
+  accepts no target — was reading the main clone, where the story's changes do not
+  exist. A gate that reads the wrong tree does not fail: it returns a clean report,
+  which is indistinguishable from a passing one. Aiming each caller explicitly had
+  been tried twice and held neither time. Starting in the right tree removes the
+  question instead of answering it: there is no longer a moment when the working
+  directory is wrong.
+
+- **`implement-epic`, `implement-wave`, `implement-story` and `close-story` refuse
+  to run `epic_shared` from the wrong tree.** Launched from the main clone, they
+  stop and print the two commands. Launched from *another epic's* worktree, they
+  stop and name the tree and branch you are actually in — that one is the plausible
+  mistake (three terminals open, wrong one), and its failure is silent: one epic's
+  story committed onto another epic's branch.
+
+- **Teardown moved out of `implement-epic` and `close-story`.** Git does not refuse
+  to remove the worktree you are standing in: `git worktree remove .` returns 0 and
+  deletes the directory the session is running in, after which every command fails
+  with `getcwd: cannot access parent directories` — including the one that would have
+  printed the run summary. Both commands now print `/kairos:worktree {slug} --teardown`
+  for the main clone. `--teardown` also stops on **unpushed** commits, which git
+  removes a worktree over without complaint.
+
+- **The "`{pm}/` must be committed" gate moved to `/kairos:worktree`.** It is a
+  statement about the main clone, and a session inside the worktree can no longer
+  see it — by then the omission is already baked in. What survives downstream is its
+  consequence, checked locally: a story absent from the worktree is a story that was
+  never committed, and the message now says that instead of "not found".
+
+### Fixed
+
+- **The memory symlink no longer resolves through `..`.** It was built from
+  `$REPO_ROOT/../{name}`; Claude Code keys a project by its **resolved** path, so
+  those links could never match a real session — two dead ones on the author's
+  machine were the tell. The path is resolved before the slug is derived.
+
+- **The memory symlink no longer reports success when it did nothing.**
+  `ln -sfn target dir/` where `dir` is a real directory silently creates
+  `dir/target` and exits 0 — printing `✓ memory linked` with no link made. Now
+  checked, and reported as what actually happened. The case became likely the moment
+  operators started opening sessions in worktrees.
+
 ## [1.4.0] - 2026-08-29
 
 ### Changed

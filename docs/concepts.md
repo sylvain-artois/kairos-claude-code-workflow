@@ -21,7 +21,17 @@ Set `worktree_mode` in the root spec:
 
 - **`off`** — work in the current tree on the current branch. Simplest.
 - **`in_place`** — one branch per story (`feature/story-NNN-slug`), no worktree.
-- **`epic_shared`** — every story of one epic shares a single git worktree + branch. Context (including Claude Code memory) persists across the whole epic; push/PR/cleanup happen when the last story of the epic closes. Best for multi-story initiatives.
+- **`epic_shared`** — every story of one epic shares a single git worktree + branch. Context (including Claude Code memory) persists across the whole epic; push and PR happen when the last story of the epic closes. Best for multi-story initiatives.
+
+**One session, one tree.** In `epic_shared` you create the worktree first, from the main clone, then open a session **inside it**:
+
+```
+/kairos:worktree epic-{slug}              # in the main clone: branch, memory link, seeded .env files
+cd {worktree_prefix}-epic-{slug} && claude
+/kairos:implement-epic {slug}             # in the new session
+```
+
+Kairos never moves a running session between trees. Every review, test command and tool that reads the working directory therefore sees the epic's code **by construction** — there is no moment when the directory is wrong, and no gate that can quietly report on code it never read. `/kairos:implement-epic` refuses to start from the main clone, and refuses to start in another epic's worktree. When the epic is published, `/kairos:worktree epic-{slug} --teardown` reclaims it — from the main clone, because a session that removes the tree it is standing in succeeds and then cannot run another command.
 
 `/kairos:implement-epic` runs one epic that way, end to end. When the unit of delivery is not an epic — "these nine things, from four PRDs, must land together" — `/kairos:implement-wave {name} STORY-… STORY-…` runs the same machinery over an explicit list, crossing epics on purpose. The list is yours to assemble: Kairos receives it, orders it on `Depends on`, and publishes it as one pull request.
 

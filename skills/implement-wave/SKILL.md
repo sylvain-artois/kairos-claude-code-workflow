@@ -18,7 +18,9 @@ A wave is a planning object of the **host project**, assembled by a human (often
 
 ## How to run it
 
-**Follow [`implement-epic.md`](../implement-epic/SKILL.md) end to end** — Preflight, Phase 0 resolution, worktree creation, memory symlink, `worktree_seed_files` seeding, the `${CONTAINER_ENV_PREFIX}` Compose precondition, the one-fresh-subagent-per-story loop, the sacred gates, finalization, teardown — **with the overrides below and no others.**
+**Follow [`implement-epic.md`](../implement-epic/SKILL.md) end to end** — Preflight and its two location gates, Phase 0 resolution, Phase 1's verification of the worktree you are standing in, the one-fresh-subagent-per-story loop, the sacred gates, finalization, the printed teardown — **with the overrides below and no others.**
+
+**Including the doctrine.** Like an epic, a wave runs **inside its own worktree**, created beforehand by `/kairos:worktree wave-{WAVE_SLUG}` from the main clone. This command creates no worktree and removes none; launched from the main clone it stops at Preflight gate A and prints the handoff.
 
 That command file is the single source of truth for every step: read it, do not restate it, and do not re-derive its behaviour from this page. This file only says where a wave differs.
 
@@ -28,7 +30,7 @@ That command file is the single source of truth for every step: read it, do not 
 
 2. **Mixed epics are normal.** Delete the single-epic gate (`implement-epic` Phase 0 steps 0 and 2, and its "Stories span more than one epic" failure mode). Do not read `Epic` to validate the set, do not stop when the values differ, do not ask about it. Read the distinct `Epic` values only to group the pull-request body (override 5). A story with no `Epic` is fine here; file it under `(no epic)`.
 
-3. **Naming.** Branch `feature/wave-{WAVE_SLUG}`; worktree `{worktree_prefix}-wave-{WAVE_SLUG}`; `{worktree_id}` = `wave-{WAVE_SLUG}` (the isolation slug for `worktree_test_command`, and the image prefix teardown prunes). `READ_ROOT` resolution is unchanged — if that worktree already exists, read the story list from it, because stories closed by an earlier run of the same wave live in its `done/`. Everything else about worktree creation is unchanged.
+3. **Naming.** Branch `feature/wave-{WAVE_SLUG}`; worktree `{worktree_prefix}-wave-{WAVE_SLUG}`; `{worktree_id}` = `wave-{WAVE_SLUG}` (the isolation slug for `worktree_test_command`, and the image prefix teardown prunes). Preflight gate B checks **these** names, not the epic ones: the current directory's basename must be `{worktree_prefix}-wave-{WAVE_SLUG}` and `HEAD` must be `feature/wave-{WAVE_SLUG}`. Everything is read from the worktree you are in, as in an epic run — stories closed by an earlier run of the same wave are already in its `done/`.
 
 4. **Membership is the list, so finalization gates on the list.** `implement-epic` Phase 3 re-globs the epic to ask "does it still have open stories?". A wave has no membership beyond the list it was handed, so **replace that recomputation**: after the loop, every story of the list is closed → finalize (Phase 4: push, PR/MR, teardown). One story blocked or deliberately skipped → **keep the worktree, publish nothing**, print the incomplete-run summary and stop. Re-running the same command with the same name and list rejoins the worktree and resumes with what is still open. Never finalize on a partial list: half a wave in a pull request titled after the whole one is a lie to the reviewer.
 
@@ -71,7 +73,7 @@ A wave pull request mixes several PRDs: it is a **bigger review surface** and a 
 - [ ] `implement-epic.md` was followed end to end; only the five overrides above deviated from it.
 - [ ] The wave name came from the argument (never invented); an empty list or a missing name stopped the run.
 - [ ] No question was asked about stories spanning several epics; `Epic` was read only to group the PR body.
-- [ ] Exactly one worktree `{worktree_prefix}-wave-{WAVE_SLUG}` on `feature/wave-{WAVE_SLUG}`, created once, memory symlinked, seeded.
+- [ ] The session ran **inside** `{worktree_prefix}-wave-{WAVE_SLUG}` on `feature/wave-{WAVE_SLUG}`, verified by Preflight gates A and B against the **wave** names; nothing was created and nothing was torn down here.
 - [ ] The list was topologically sorted; a cycle, or an unmet dependency outside the list, stopped the run by name.
 - [ ] Finalization gated on **the list**, not on any epic being complete; a blocked or skipped story published nothing and kept the worktree.
 - [ ] The PR body grouped `Closes #{N}` by epic; no milestone was created or edited.

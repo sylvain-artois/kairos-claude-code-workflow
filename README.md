@@ -44,7 +44,7 @@ flowchart LR
     F -.-> D
 ```
 
-Setup once with `/kairos:init` (and `/kairos:setup-worktree-isolation` if you use worktrees); `/kairos:create-test-plan`, `/kairos:qa`, `/kairos:review`, `/kairos:spec`, and `/kairos:release` round out the loop.
+Setup once with `/kairos:init` (and `/kairos:setup-worktree-isolation` if you use worktrees); `/kairos:worktree` opens the tree an epic runs in; `/kairos:create-test-plan`, `/kairos:qa`, `/kairos:review`, `/kairos:spec`, and `/kairos:release` round out the loop.
 
 - **Existing projects, not greenfield.** `/kairos:init` reads your repo (services, test commands, VCS, branch) and writes a `spec.md` you'd have written by hand. No rewrite, no migration.
 - **A QA layer between unit tests and humans.** `/kairos:qa` runs per-service test plans — the pre-human check most workflows skip.
@@ -74,6 +74,7 @@ Turn it on by re-running `/kairos:init` — it asks once, and only when `gh` is 
 | [`/kairos:review`](skills/review/SKILL.md) | Review a diff scope against the review contract — the default reviewer `close-story` calls |
 | [`/kairos:spec`](skills/spec/SKILL.md) | Maintain a service's `spec.md` — backfill from code, or compact it when it inflates |
 | [`/kairos:sync-pm`](skills/sync-pm/SKILL.md) | Reconcile the GitHub issue mirror with the story files (opt-in; see below) |
+| [`/kairos:worktree`](skills/worktree/SKILL.md) | Create, join, or tear down a worktree — the entry point of every `epic_shared` run |
 | [`/kairos:setup-worktree-isolation`](skills/setup-worktree-isolation/SKILL.md) | One-time Compose rewrite so worktree test runs never collide with prod (prereq for worktree mode) |
 | [`/kairos:release`](skills/release/SKILL.md) | Analyze commits, write a release note, tag it, push |
 
