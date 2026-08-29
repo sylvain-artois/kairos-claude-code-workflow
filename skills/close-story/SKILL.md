@@ -1,5 +1,7 @@
 ---
+name: close-story
 description: Close a completed story — test, QA, review, commit, push/PR, archive — driven by spec.md
+disable-model-invocation: true
 ---
 
 You are a release assistant. Your job is to close a story that has just been implemented: run tests, QA and code review per impacted service, commit with Conventional Commits, update specs, push or print the push command (per `push_mode`), prompt for the PR/MR, and archive the story. Everything is driven by `./spec.md` — there is no hardcoded service table, no baked-in VCS, no implicit push.
@@ -130,7 +132,7 @@ If a service needs an unavailable resource (GPU, external API, container down), 
 
 **(b) QA.** If at least one `{service.path}/qa/TEST_PLAN_*.md` exists, run `/kairos:qa {service}` for it. A `STOPPED` verdict (a gating phase failed) is a hard gate — **stop and ask**, like a failing test. An `ISSUES FOUND` verdict (non-gating failures only) is reported and the user decides whether to continue.
 
-**(c) Code review.** Run the review on the **service-scoped diff** (restricted to that service's path) per the [review contract](../docs/review-contract.md), resolving `{service.review_command}`:
+**(c) Code review.** Run the review on the **service-scoped diff** (restricted to that service's path) per the [review contract](../../docs/review-contract.md), resolving `{service.review_command}`:
 - *unset, **or** still the `<TODO…>` placeholder `/kairos:init` wrote* → **Mode 1**: run `/kairos:review {service.path} --from {WORK}`. Both values resolve to this same default — never treat "never configured" and "configured to the placeholder" as two different behaviors.
 - `skip` → **opt-out**: bypass the review step for this service cleanly (no prompt, no log noise). The security-review phase still runs if opted in.
 - a slash-command name → **Mode 2**: invoke that project command on the diff.
@@ -217,7 +219,7 @@ Apply the gate on the attributed findings:
 - **The gate cannot run** — the skill is unavailable (not installed, not resolvable, errors out) **or** the provenance check above failed:
   - *Interactive* → **stop and ask**: `"The security gate could not be verified against {WORK} — {reason}. Continue without it? [y/N]"`. Never pass silently. A code-review fallback can be inline prose; a security gate that quietly does not run is a gate the user believes in and does not have.
   - *Non-interactive* (you are a per-story subagent of `/kairos:implement-epic` or `/kairos:implement-wave` and cannot ask) → return `BLOCKED: security gate could not be aimed at {WORK} — {reason}` **without committing**. That decision is the user's, not yours.
-  - **Never substitute your own pass for the skill**, in either case. Reviewing the diff yourself and reporting it as the security gate is a false green wearing the gate's name — the run states that a security review passed when none ran. Kairos does not reimplement security analysis ([review contract §7](../docs/review-contract.md)): the gate either ran on `{WORK}` or it did not.
+  - **Never substitute your own pass for the skill**, in either case. Reviewing the diff yourself and reporting it as the security gate is a false green wearing the gate's name — the run states that a security review passed when none ran. Kairos does not reimplement security analysis ([review contract §7](../../docs/review-contract.md)): the gate either ran on `{WORK}` or it did not.
 
 Run this sequentially in the agent running `/kairos:close-story` (the skill spawns its own sub-tasks, and the gate may need user input). Do not delegate it to the Phase 2 per-service subagents.
 
@@ -433,7 +435,7 @@ Next: run /kairos:implement-story to pick the next backlog story.
 - **Story not identifiable / ambiguous** → stop and ask. Never guess.
 - **Story already in `{pm}/done/`** → report it is closed, stop.
 - **A test fails** → stop and ask; no commit; story stays `in_progress`.
-- **Review finds a Critical or High issue** → stop and ask; no commit. (`review_command: skip` bypasses this step; see the [review contract](../docs/review-contract.md).)
+- **Review finds a Critical or High issue** → stop and ask; no commit. (`review_command: skip` bypasses this step; see the [review contract](../../docs/review-contract.md).)
 - **Security review finds High/Critical** (opt-in services) → stop and ask; no commit; story stays `in_progress`.
 - **`security-review` unavailable, or its provenance footer does not match `{WORK}`'s pending files** → the gate did not run: stop and ask (interactive) or return `BLOCKED` (as a subagent of an epic/wave run). Never skip it silently, and never stand in for it with a hand-rolled pass.
 - **Diff touches a file outside `Impacted Services`** → scope-creep gate; stop and ask.

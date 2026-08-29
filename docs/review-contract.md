@@ -49,7 +49,7 @@ These four levels are **Kairos's own vocabulary**, not one borrowed from a revie
 
 ### 1.1 Severity derivation (native `code-review` findings)
 
-The native skill the default reviewer wraps reports through the `ReportFindings` tool, not as text. A finding carries `file`, `line`, `summary`, `failure_scenario`, `category` (`correctness`, `simplification`, `efficiency`, `test-coverage`, …) and — only when a verify pass ran — `verdict` (`CONFIRMED` / `PLAUSIBLE`). **No severity field exists.** This table derives one. It is normative; [`commands/review.md`](../commands/review.md) carries the executable copy — keep the two in sync.
+The native skill the default reviewer wraps reports through the `ReportFindings` tool, not as text. A finding carries `file`, `line`, `summary`, `failure_scenario`, `category` (`correctness`, `simplification`, `efficiency`, `test-coverage`, …) and — only when a verify pass ran — `verdict` (`CONFIRMED` / `PLAUSIBLE`). **No severity field exists.** This table derives one. It is normative; [`skills/review/SKILL.md`](../skills/review/SKILL.md) carries the executable copy — keep the two in sync.
 
 | `category` | `verdict` | Severity |
 |---|---|---|
@@ -84,7 +84,7 @@ The per-service `review_command` field selects the mode. Resolution:
 | a slash-command name (e.g. `review-api`) | **Mode 2** — project slash command |
 | a path to an executable (e.g. `scripts/review.sh`) | **Mode 3** — external binary / script |
 
-### Mode 1 — The default reviewer: [`/kairos:review`](../commands/review.md)
+### Mode 1 — The default reviewer: [`/kairos:review`](../skills/review/SKILL.md)
 
 Unset and the `<TODO…>` placeholder `/kairos:init` writes resolve to the **same** default — there is deliberately no third behavior depending on whether `/kairos:init` has run. `/kairos:close-story` invokes:
 

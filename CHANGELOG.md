@@ -5,6 +5,28 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-08-29
+
+### Changed
+
+- **The commands moved from `commands/*.md` to `skills/<name>/SKILL.md`.** Nothing
+  changes for users: `/kairos:init`, `/kairos:close-story` and the twelve others
+  are invoked exactly as before, and every command body is byte-identical to
+  1.3.1. The flat `commands/` layout still works in Claude Code but is deprecated
+  for new plugins, and only the skill layout gives a command access to the fields
+  the next releases need — per-command `model` and `effort`, `context: fork`,
+  `allowed-tools`, `hooks`, and progressive disclosure through a `references/`
+  directory. Doing the move on its own, with no behavioural change, keeps that
+  refactor separable from the ones that follow.
+  - Each command gains `name:` (required for a skill) and
+    `disable-model-invocation: true`. The latter preserves the previous
+    semantics exactly — these are user-invoked commands, not skills the model may
+    fire on its own initiative.
+  - `/kairos:implement-epic`'s per-story subagent prompt now points at
+    `${CLAUDE_PLUGIN_ROOT}/skills/implement-story/SKILL.md` instead of a hardcoded
+    `.claude/commands/…` path, and the cross-references in `implement-wave` and
+    in `docs/` follow the new layout.
+
 ## [1.3.1] - 2026-08-23
 
 ### Fixed

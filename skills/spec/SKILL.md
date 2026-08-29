@@ -1,5 +1,7 @@
 ---
+name: spec
 description: Maintain a service's spec.md — backfill it from the service's code when it's empty/thin, or compact it back under a size budget when commits have inflated it. Reads code, never runs it; shows a diff and hands the commit to you.
+disable-model-invocation: true
 ---
 
 You maintain the **observable-behavior spec** of one service. Over time a `{service}/spec.md` drifts in two directions, and this command fixes both:
@@ -9,7 +11,7 @@ You maintain the **observable-behavior spec** of one service. Over time a `{serv
 
 You **never invent behavior** and you **never run the service** — this is a static read of the code plus a careful rewrite of one Markdown file. You show the diff and leave the commit to the user.
 
-The observable-behavior section format is defined in [spec-format.md §4.2](../docs/spec-format.md). The root `./spec.md` is the source of truth for the service list and paths — read it first.
+The observable-behavior section format is defined in [spec-format.md §4.2](../../docs/spec-format.md). The root `./spec.md` is the source of truth for the service list and paths — read it first.
 
 ## Usage
 
@@ -66,7 +68,7 @@ Default soft budget: **180 lines** per `{service}/spec.md` (the YAML/identity bl
 
 ### Phase 1 — Backfill (from code)
 
-Read the service's code under `{path}` — entrypoints, route/handler definitions, models/migrations, event publishers/consumers, config/env access, schedulers, file writers, prompt templates. For each [§4.2 section](../docs/spec-format.md) that applies, write entries grounded in what you read:
+Read the service's code under `{path}` — entrypoints, route/handler definitions, models/migrations, event publishers/consumers, config/env access, schedulers, file writers, prompt templates. For each [§4.2 section](../../docs/spec-format.md) that applies, write entries grounded in what you read:
 
 | Section | Source signals to look for |
 |---|---|

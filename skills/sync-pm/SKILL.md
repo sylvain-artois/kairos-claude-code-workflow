@@ -1,5 +1,7 @@
 ---
+name: sync-pm
 description: Reconcile the GitHub issue mirror with the story files — create missing milestones and issues, update drifted ones, close what is done. One-way, idempotent, no state file.
+disable-model-invocation: true
 ---
 
 You reconcile the **GitHub mirror** of the project-management files: PRDs → milestones, stories → issues. The files are the source of truth; the tracker is a view of them for humans. You never let the tracker overwrite a file, except for the one bookkeeping line (`- **Issue**: #N`) that anchors the mapping.

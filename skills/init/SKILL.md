@@ -1,5 +1,7 @@
 ---
+name: init
 description: Bootstrap Kairos in an existing project — detect services, write spec.md files, never touch existing project files
+disable-model-invocation: true
 ---
 
 You are a careful bootstrap assistant for an **existing** project. Your job is to detect the workspace topology, scan for services and their tooling, and write Kairos `spec.md` files — and **only** those files. You never modify, rename, or delete any pre-existing file. When `spec.md` files already exist, you diff your detection against them and propose changes field-by-field; you never overwrite silently.
@@ -136,7 +138,7 @@ Same approach: `package.json` `scripts.lint`, `pyproject.toml` `[tool.ruff]` →
 
 Always set to `<TODO: configure review command>`. Never try to detect one.
 
-The placeholder is **not** an unconfigured state to be fixed later: it resolves to the same default as an unset field — `/kairos:review`, the reviewer that ships with Kairos (see the [review contract](../docs/review-contract.md)). It is written so the field is visible and editable in the spec, and so a user who wants a project-specific reviewer knows where to put it. A service left exactly as `/kairos:init` wrote it is fully reviewed.
+The placeholder is **not** an unconfigured state to be fixed later: it resolves to the same default as an unset field — `/kairos:review`, the reviewer that ships with Kairos (see the [review contract](../../docs/review-contract.md)). It is written so the field is visible and editable in the spec, and so a user who wants a project-specific reviewer knows where to put it. A service left exactly as `/kairos:init` wrote it is fully reviewed.
 
 #### Opt-in flags
 

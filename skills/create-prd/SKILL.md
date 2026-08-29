@@ -1,5 +1,7 @@
 ---
+name: create-prd
 description: Capture a feature idea as a PRD file under the workspace's project-management directory
+disable-model-invocation: true
 ---
 
 You are a pragmatic Product Manager. Your job is to turn a free-form description (or pre-existing notes) into a tight, decision-ready PRD that subsequent Kairos commands can consume. You write **only** the PRD file you are asked to create — nothing else.
@@ -128,7 +130,7 @@ When listing impacted services in §5, draw from the services table you read in 
 
 ### Phase 2-bis — Resolve `depends_on`
 
-`depends_on` is the machine-readable half of §6: the edges of the PRD dependency graph, declared **once**, on the PRD that needs the other. There is no reciprocal `blocks` field — it is the transpose, derived in one pass over every PRD. Full contract: [docs/dependencies.md](../docs/dependencies.md).
+`depends_on` is the machine-readable half of §6: the edges of the PRD dependency graph, declared **once**, on the PRD that needs the other. There is no reciprocal `blocks` field — it is the transpose, derived in one pass over every PRD. Full contract: [docs/dependencies.md](../../docs/dependencies.md).
 
 1. **Propose the edges.** From the §6 prose you just drafted (and the user's input), list the PRDs this feature cannot ship without. Ask when unsure — a wrong edge misorders a plan, an absent one is merely silent.
 2. **Every entry is a PRD slug** — a basename without `.md`, from the active-and-archived list in the dynamic context. Never a path, never a title: PRDs move from `prds/` to `done/` when their last story closes, and a path would break there. Anything that is not a PRD (vendor API, infra, a product decision) stays prose in §6.
@@ -139,7 +141,7 @@ When listing impacted services in §5, draw from the services table you read in 
 4. **Reject cycles.** Using the declared-edges block from the dynamic context, walk the dependencies of each candidate transitively. If this PRD's own slug appears in that closure, **stop** and print the cycle (`a → b → c → a`). Ask which edge to drop. This matters on the `edit` path of Phase 3 and whenever a `-v2` slug re-enters an existing graph.
 5. **Empty is normal.** Most PRDs depend on nothing. Write the line anyway, empty — a stable optional field never has to be inserted later.
 
-**`serves` is the other direction, and there is no phase for it.** The two fields sit on adjacent lines and will be confused otherwise, so hold them apart: `depends_on` points **inward**, at other PRDs Kairos manages — it is resolved against `prds/` + `done/` and cycle-checked, above. `serves` points **outward**, at the host project's own requirement vocabulary (feature lots, hardening tasks, OKRs, compliance controls, spec sections) — ids Kairos knows nothing about. There is nothing to resolve, so nothing is resolved: no lookup, no vocabulary file, no cycle check, no "unknown id" warning, never an error. Write the ids the user gives you, verbatim, and write the line empty when there are none — the normal case, and a project with no such vocabulary must never be asked about it. **Never put a PRD slug in `serves`, never put a requirement id in `depends_on`.** `/kairos:create-story` proposes a per-story subset of this line; what a host derives from it is in [docs/dependencies.md](../docs/dependencies.md).
+**`serves` is the other direction, and there is no phase for it.** The two fields sit on adjacent lines and will be confused otherwise, so hold them apart: `depends_on` points **inward**, at other PRDs Kairos manages — it is resolved against `prds/` + `done/` and cycle-checked, above. `serves` points **outward**, at the host project's own requirement vocabulary (feature lots, hardening tasks, OKRs, compliance controls, spec sections) — ids Kairos knows nothing about. There is nothing to resolve, so nothing is resolved: no lookup, no vocabulary file, no cycle check, no "unknown id" warning, never an error. Write the ids the user gives you, verbatim, and write the line empty when there are none — the normal case, and a project with no such vocabulary must never be asked about it. **Never put a PRD slug in `serves`, never put a requirement id in `depends_on`.** `/kairos:create-story` proposes a per-story subset of this line; what a host derives from it is in [docs/dependencies.md](../../docs/dependencies.md).
 
 ### Phase 3 — Preview and confirm
 

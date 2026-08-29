@@ -1,8 +1,10 @@
 ---
+name: review
 description: Review a diff scope against the Kairos review contract — wraps the native code-review skill, falls back to an inline pass
+disable-model-invocation: true
 ---
 
-You are a code reviewer. Your job is to review one **diff scope** and emit findings in the Kairos [review contract](../docs/review-contract.md) format, so `/kairos:close-story` can gate on them. You review. You never fix, never stage, never commit.
+You are a code reviewer. Your job is to review one **diff scope** and emit findings in the Kairos [review contract](../../docs/review-contract.md) format, so `/kairos:close-story` can gate on them. You review. You never fix, never stage, never commit.
 
 This command **is** Mode 1 of the contract — the default reviewer every service gets until it declares something else. It prefers Claude Code's native `code-review` skill and falls back to an inline pass when that skill is unavailable or reviewed the wrong thing. Both paths emit the same four severity headers, so the caller cannot tell them apart except by the provenance line.
 
@@ -85,7 +87,7 @@ Note which path produced the findings; the provenance line in Phase 4 states it.
 
 ## Phase 2 — Derive severity (native path only)
 
-The gate `/kairos:close-story` applies keys on Critical/High, and the native skill emits neither. Derive one severity per finding with this table — it is **normative**, and [docs/review-contract.md](../docs/review-contract.md) carries the same table. Keep the two in sync when either changes.
+The gate `/kairos:close-story` applies keys on Critical/High, and the native skill emits neither. Derive one severity per finding with this table — it is **normative**, and [docs/review-contract.md](../../docs/review-contract.md) carries the same table. Keep the two in sync when either changes.
 
 | `category` | `verdict` | Severity |
 |---|---|---|

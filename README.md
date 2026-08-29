@@ -62,20 +62,20 @@ Turn it on by re-running `/kairos:init` — it asks once, and only when `gh` is 
 
 | Command | What it does |
 |---|---|
-| [`/kairos:init`](commands/init.md) | Detect your project, write `spec.md` (idempotent, never touches your files) |
-| [`/kairos:create-prd`](commands/create-prd.md) | Turn an idea into a product requirements doc |
-| [`/kairos:create-story`](commands/create-story.md) | Decompose a PRD into independent, shippable stories |
-| [`/kairos:implement-story`](commands/implement-story.md) | Implement one story (worktree opt-in; no commits — that's close-story's job) |
-| [`/kairos:implement-epic`](commands/implement-epic.md) | Run a whole epic in one shared worktree — implement + close each story in sequence, then push/PR once at the end |
-| [`/kairos:implement-wave`](commands/implement-wave.md) | Run an explicit list of stories — crossing epics on purpose — as one unit: one worktree, one branch, one PR |
-| [`/kairos:close-story`](commands/close-story.md) | Test → QA → review → commit → push/PR → archive |
-| [`/kairos:create-test-plan`](commands/create-test-plan.md) | Generate a runnable QA test plan for a service |
-| [`/kairos:qa`](commands/qa.md) | Execute a service's test plans, report pass/fail |
-| [`/kairos:review`](commands/review.md) | Review a diff scope against the review contract — the default reviewer `close-story` calls |
-| [`/kairos:spec`](commands/spec.md) | Maintain a service's `spec.md` — backfill from code, or compact it when it inflates |
-| [`/kairos:sync-pm`](commands/sync-pm.md) | Reconcile the GitHub issue mirror with the story files (opt-in; see below) |
-| [`/kairos:setup-worktree-isolation`](commands/setup-worktree-isolation.md) | One-time Compose rewrite so worktree test runs never collide with prod (prereq for worktree mode) |
-| [`/kairos:release`](commands/release.md) | Analyze commits, write a release note, tag it, push |
+| [`/kairos:init`](skills/init/SKILL.md) | Detect your project, write `spec.md` (idempotent, never touches your files) |
+| [`/kairos:create-prd`](skills/create-prd/SKILL.md) | Turn an idea into a product requirements doc |
+| [`/kairos:create-story`](skills/create-story/SKILL.md) | Decompose a PRD into independent, shippable stories |
+| [`/kairos:implement-story`](skills/implement-story/SKILL.md) | Implement one story (worktree opt-in; no commits — that's close-story's job) |
+| [`/kairos:implement-epic`](skills/implement-epic/SKILL.md) | Run a whole epic in one shared worktree — implement + close each story in sequence, then push/PR once at the end |
+| [`/kairos:implement-wave`](skills/implement-wave/SKILL.md) | Run an explicit list of stories — crossing epics on purpose — as one unit: one worktree, one branch, one PR |
+| [`/kairos:close-story`](skills/close-story/SKILL.md) | Test → QA → review → commit → push/PR → archive |
+| [`/kairos:create-test-plan`](skills/create-test-plan/SKILL.md) | Generate a runnable QA test plan for a service |
+| [`/kairos:qa`](skills/qa/SKILL.md) | Execute a service's test plans, report pass/fail |
+| [`/kairos:review`](skills/review/SKILL.md) | Review a diff scope against the review contract — the default reviewer `close-story` calls |
+| [`/kairos:spec`](skills/spec/SKILL.md) | Maintain a service's `spec.md` — backfill from code, or compact it when it inflates |
+| [`/kairos:sync-pm`](skills/sync-pm/SKILL.md) | Reconcile the GitHub issue mirror with the story files (opt-in; see below) |
+| [`/kairos:setup-worktree-isolation`](skills/setup-worktree-isolation/SKILL.md) | One-time Compose rewrite so worktree test runs never collide with prod (prereq for worktree mode) |
+| [`/kairos:release`](skills/release/SKILL.md) | Analyze commits, write a release note, tag it, push |
 
 Commands are interactive — they ask before doing anything irreversible. You rarely need the docs below; they're here when you want the *why*.
 

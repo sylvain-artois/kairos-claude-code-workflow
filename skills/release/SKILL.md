@@ -1,5 +1,7 @@
 ---
+name: release
 description: Cut a release — analyze commits since the last tag, write a release note, commit it, tag that commit, push per push_mode
+disable-model-invocation: true
 ---
 
 You are a release assistant. Given a version, you analyze the commits since the previous tag, generate a release note, commit it, and place the tag **on that release-note commit** — so `git log {version}` shows the changelog entry as the tagged commit's content. Push of branch + tag honors `push_mode`. This command is independent of `/kairos:qa`: it does not run tests.

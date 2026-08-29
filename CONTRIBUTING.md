@@ -1,12 +1,12 @@
 # Contributing to Kairos
 
-Kairos is **just Markdown**. There's no application code, no build step, no test runner — the deliverable is the slash-command definitions in [`commands/`](commands/) and the reference docs in [`docs/`](docs/). That makes contributing easy: edit a file, try it, open a PR.
+Kairos is **just Markdown**. There's no application code, no build step, no test runner — the deliverable is the slash-command definitions in [`skills/`](skills/) and the reference docs in [`docs/`](docs/). That makes contributing easy: edit a file, try it, open a PR.
 
 ## Where things live
 
 | Path | What |
 |---|---|
-| `commands/*.md` | The canonical slash commands. **Edit these.** |
+| `skills/*/SKILL.md` | The canonical slash commands. **Edit these.** |
 | `docs/*.md` | Human-facing references (spec format, review contract, concepts). |
 | `docs/examples/*.md` | Filled-in specs, test plans, review commands. |
 | `.claude-plugin/plugin.json` | Plugin manifest (name, version, description). |
@@ -31,7 +31,7 @@ Commands are Markdown, so "testing" means running them:
 
 ## Proposing a command change
 
-1. Fork, branch, edit the command file under `commands/`.
+1. Fork, branch, edit the command file under `skills/`.
 2. If the change affects a shared contract (spec fields, review/QA output format), update the matching doc in `docs/` in the same PR — the two must stay in sync.
 3. Describe in the PR *what workflow problem* the change solves, not just what it does.
 

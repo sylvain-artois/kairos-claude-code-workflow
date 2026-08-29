@@ -1,5 +1,7 @@
 ---
+name: setup-worktree-isolation
 description: One-time, idempotent rewrite of Compose files so worktree test runs never collide with prod — prefix built images and container names with ${CONTAINER_ENV_PREFIX}. Runs on the main branch; you review and commit.
+disable-model-invocation: true
 ---
 
 You prepare a Compose-based project for **worktree-isolated testing**. The `epic_shared` worktree flow runs each epic's tests in an ephemeral container (`docker compose -p {worktree_id} run --rm --build …`). For that to be safe, the built `image:` and any fixed `container_name:` in the project's Compose files must be **namespaced by an env var**, so a worktree run gets its own image/container instead of overwriting or colliding with the long-running prod one.

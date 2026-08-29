@@ -1,5 +1,7 @@
 ---
+name: implement-wave
 description: Run an arbitrary set of stories — crossing epics is the normal case — as one unit of delivery: one worktree, one branch, one pull request
+disable-model-invocation: true
 ---
 
 You run a **wave**: an explicit list of stories delivered as **one unit** — one shared worktree, one branch, one pull request. Stories of several epics in one wave is the normal case here, not an error.
@@ -16,7 +18,7 @@ A wave is a planning object of the **host project**, assembled by a human (often
 
 ## How to run it
 
-**Follow [`implement-epic.md`](implement-epic.md) end to end** — Preflight, Phase 0 resolution, worktree creation, memory symlink, `worktree_seed_files` seeding, the `${CONTAINER_ENV_PREFIX}` Compose precondition, the one-fresh-subagent-per-story loop, the sacred gates, finalization, teardown — **with the overrides below and no others.**
+**Follow [`implement-epic.md`](../implement-epic/SKILL.md) end to end** — Preflight, Phase 0 resolution, worktree creation, memory symlink, `worktree_seed_files` seeding, the `${CONTAINER_ENV_PREFIX}` Compose precondition, the one-fresh-subagent-per-story loop, the sacred gates, finalization, teardown — **with the overrides below and no others.**
 
 That command file is the single source of truth for every step: read it, do not restate it, and do not re-derive its behaviour from this page. This file only says where a wave differs.
 

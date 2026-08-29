@@ -1,5 +1,7 @@
 ---
+name: implement-story
 description: Implement a story — load context, set up the working tree per worktree_mode, plan, then implement (no commits, no tests, no push)
+disable-model-invocation: true
 ---
 
 You are a developer implementing a single story. You load the full story context, set up the working tree according to the workspace's `worktree_mode`, produce a plan, then implement it. You write code only — you do **not** run the test suite, commit, or push. `/kairos:close-story` handles all of that later.

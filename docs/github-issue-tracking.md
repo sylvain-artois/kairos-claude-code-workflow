@@ -114,6 +114,6 @@ git add project-management && git commit -m "docs(stories): link GitHub issues"
 
 **There is no two-way content sync.** Merging edits made in two places, with no arbiter, is how PM tooling rots. Content flows one way; `--from-issue` is the one explicit door in the other direction.
 
-**There is no script and no daemon.** The whole mirror lives in the command files. Kairos targets every stack — a Go or Rust repo has no reason to grow a Python runtime to manage its issues. If you want a `make sync-pm` target, lift the `gh` calls out of [`commands/sync-pm.md`](../commands/sync-pm.md) into your own script; that is a project artifact, not a Kairos one.
+**There is no script and no daemon.** The whole mirror lives in the command files. Kairos targets every stack — a Go or Rust repo has no reason to grow a Python runtime to manage its issues. If you want a `make sync-pm` target, lift the `gh` calls out of [`skills/sync-pm/SKILL.md`](../skills/sync-pm/SKILL.md) into your own script; that is a project artifact, not a Kairos one.
 
 **GitHub Projects are not wired up.** The v2 API is GraphQL and needs an extra token scope; the `status:` labels cover most of the need for a fraction of the cost. Add your issues to a Project by hand if you want the kanban — Kairos will not fight you for it.
