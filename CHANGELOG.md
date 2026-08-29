@@ -5,6 +5,47 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-08-29
+
+### Added
+
+- **Gate receipts, in observation mode.** A gate that ran and found nothing, and a gate that
+  never ran, produce the same artefact: an empty report. Nothing distinguishes them, which
+  is why "stop and ask" written in a command file has never been enforceable. `close-story`
+  now leaves a **receipt** when its review and security gates actually execute, keyed by a
+  digest of the exact change set they saw.
+
+  A `PreToolUse` hook reads those receipts before every `git commit` and writes one line to
+  `gate-log.jsonl` saying which were present. **It refuses nothing.** That is the whole
+  point of this release: the measurement has to come first. A hook that denies on a missing
+  receipt, shipped while a gate is still failing to fire, would kill every run at its first
+  commit.
+
+  The digest is invariant under `git add` — gates run before staging, the hook after it —
+  and excludes gitignored files. Editing a file after a gate ran invalidates that gate's
+  receipt, which is the intended behaviour: a receipt certifies content, not intent.
+
+  A legitimate skip is recorded as a skip (`review_command: skip` everywhere, nobody opted
+  into security review, empty diff), so a project that never opts in does not log a missing
+  gate forever. A deliberate bypass is recorded as `override` with its reason: a blocker
+  with no visible way out gets disabled wholesale the first time it stops something real.
+
+  State lives under `$XDG_STATE_HOME/kairos/`, **never in your repository** — `close-story`
+  commits with `git add -A`, and an untracked receipt would otherwise enter the very digest
+  it certifies.
+
+  See [docs/gate-receipts.md](docs/gate-receipts.md).
+
+### Notes
+
+- **Hooks load at session start and cannot be hot-swapped.** Restart Claude Code after
+  updating, or the hook will not run. To confirm it is live: commit anything in a Kairos
+  workspace and check that `gate-log.jsonl` gained a line.
+- The hook is registered for the whole session whenever the plugin is enabled — skill
+  frontmatter cannot scope a hook to one command. It therefore does nothing at all unless
+  the tool is `Bash`, the command is a real `git commit`, and the target tree is a Kairos
+  workspace. Non-commit `Bash` calls bail out before any JSON is parsed.
+
 ## [1.5.0] - 2026-08-29
 
 ### Added

@@ -1,0 +1,17 @@
+{
+  "description": "Kairos gate receipts — observation mode. Before each git commit in a Kairos workspace, notes which gates left a receipt for the exact change set being committed. Refuses nothing; silent everywhere else.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh\" --verify",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

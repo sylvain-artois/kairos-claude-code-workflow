@@ -48,7 +48,7 @@ Setup once with `/kairos:init` (and `/kairos:setup-worktree-isolation` if you us
 
 - **Existing projects, not greenfield.** `/kairos:init` reads your repo (services, test commands, VCS, branch) and writes a `spec.md` you'd have written by hand. No rewrite, no migration.
 - **A QA layer between unit tests and humans.** `/kairos:qa` runs per-service test plans — the pre-human check most workflows skip.
-- **A small, composable command set.** A four-command core (PRD → story → implement → close), plus opt-in commands for epics, waves, worktree isolation, QA, and releases. No hidden state, no `.kairos/` cache — everything lives in `spec.md`.
+- **A small, composable command set.** A four-command core (PRD → story → implement → close), plus opt-in commands for epics, waves, worktree isolation, QA, and releases. No `.kairos/` cache, no config anywhere but `spec.md`. The one piece of runtime state — the [gate receipts](docs/gate-receipts.md) — lives outside your repository, never in it.
 
 ## Issue tracking (opt-in)
 
@@ -97,6 +97,7 @@ Kairos's niche: **existing projects, a pre-human QA layer, and staying small.** 
 - [docs/spec-format.md](docs/spec-format.md) — the `spec.md` reference.
 - [docs/dependencies.md](docs/dependencies.md) — the dependency graph: what PRDs and stories declare, and what a third-party planner can derive from it.
 - [docs/review-contract.md](docs/review-contract.md) — pluggable code review (the default `/kairos:review`, your slash command, or a script).
+- [docs/gate-receipts.md](docs/gate-receipts.md) — why a gate that ran and a gate that didn't look identical, and the receipt that tells them apart.
 - [docs/github-issue-tracking.md](docs/github-issue-tracking.md) — the opt-in GitHub mirror: mapping, inbound path, and what it deliberately doesn't do.
 - [docs/examples/](docs/examples/) — filled-in specs, a test plan, a review command.
 

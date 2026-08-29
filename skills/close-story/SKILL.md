@@ -161,6 +161,24 @@ Subagent prompt for the parallel case (one per service):
 
 (QA and the test-plan prompt stay in the main agent — they may need user input.)
 
+**(e) Leave a receipt.** Once (a)–(c) are green for **every** service, record that the review gate actually ran on this exact change set:
+
+```bash
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate review \
+   --tree {WORK} --story STORY-{NNN} --services "{comma-separated IMPACTED}"
+```
+
+Every service opted out with `review_command: skip` → record that instead, so the log distinguishes a gate that was declined from one that vanished:
+
+```bash
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate review \
+   --tree {WORK} --story STORY-{NNN} --skipped "review_command: skip on all impacted services"
+```
+
+> **What a receipt is for.** A gate that ran and a gate that never ran produce the same artefact — an empty report. The receipt breaks that symmetry: it exists only because the gate executed, and it is bound to a digest of the exact content the gate saw, so editing a file afterwards invalidates it. A `PreToolUse` hook reads it before each commit. **In this version the hook only observes**: it writes one line to `gate-log.jsonl` saying which receipts were present and lets the commit through. It refuses nothing.
+>
+> If the script is not found, **say so in the summary** (`gate receipts: unavailable`) and continue. An absent receipt must never be readable as an absent gate when the truth is an absent script.
+
 **All gates green for all services → proceed to Phase 2.5.**
 
 ---
@@ -173,6 +191,13 @@ Trigger: `OPTED_IN` = the services in `IMPACTED` whose per-service spec sets `se
 
 - **`OPTED_IN` empty → skip this phase entirely.** No log line, no prompt.
 - **Every opted-in service has an empty scoped `git diff` → skip too** (nothing to review).
+
+Both skips are legitimate, and both must be **recorded** — otherwise every project that never opts in logs a missing security gate forever, and the signal is worth nothing:
+
+```bash
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate security \
+   --tree {WORK} --story STORY-{NNN} --skipped "{no service opted in | empty diff}"
+```
 
 **Run the skill once, not once per service.** It takes no path argument — it reviews the pending changes of the work tree it runs in — so running it per service would re-analyze the same diff N times for one filtered result each.
 
@@ -225,7 +250,14 @@ Apply the gate on the attributed findings:
 
 Run this sequentially in the agent running `/kairos:close-story` (the skill spawns its own sub-tasks, and the gate may need user input). Do not delegate it to the Phase 2 per-service subagents.
 
-**All security gates clear → proceed to Phase 3.**
+**Gate clear, or medium/low findings acknowledged → leave the receipt, then proceed to Phase 3:**
+
+```bash
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate security \
+   --tree {WORK} --story STORY-{NNN} --services "{comma-separated OPTED_IN}"
+```
+
+Write it **only** when the provenance check above passed. A gate that could not be aimed at `{WORK}` did not run, and a receipt for it would be the false green this whole phase exists to prevent — the one case where the instrumentation could launder exactly the failure it was built to detect.
 
 ---
 
@@ -402,6 +434,7 @@ In `worktree_mode: off` / `in_place` there is nothing to tear down; skip this ph
 
   Tests:     {service}: PASS ...
   Review:    {N} critical | {N} warning | {N} info
+  Receipts:  review: {passed|skipped} · security: {passed|skipped|not run}
   Commit:    {sha} {type}({scope}): {subject}
   Archived:  {pm}/done/STORY-{NNN}-*.md
   Issue:     #{N} will close on merge   ← only when issue_tracker is github
@@ -421,6 +454,7 @@ Next: run /kairos:implement-story to pick the next story of the epic.
   QA:        {service}: {plans run / none}
   Review:    {N} critical | {N} warning | {N} info
   Security:  {service}: {clean / N findings acked / skipped — opt-in only}
+  Receipts:  review: {passed|skipped} · security: {passed|skipped|not run}
   Commits:   {sha} {type}({scope}): {subject}
              {sha} docs(stories): close STORY-{NNN}
   Specs:     {service}/spec.md updated ...
@@ -457,6 +491,7 @@ Next: run /kairos:implement-story to pick the next backlog story.
 - [ ] All gates (tests, QA, review) ran for every impacted service and passed — or the flow stopped at the first failure. Review honored `review_command` (default `/kairos:review` / slash command / script / `skip`) and gated on Critical/High per the review contract.
 - [ ] Every review — whatever the mode — resolved its diff from `{WORK}`, not from the calling session's directory.
 - [ ] Security review ran once (not once per service) when at least one service opted in with a non-empty diff, aimed at `{WORK}` through its arguments and confirmed by a provenance footer matching `PENDING_FILES` (or, footer absent, by findings that all cite files in it); findings were attributed by file path and filtered to opted-in services; severity was read from `* Severity:` fields; High blocked the commit; an unavailable skill or an unverifiable report stopped, asked, or returned `BLOCKED` — it never passed, and no self-written pass was reported as the gate.
+- [ ] A gate receipt was written for **review** and for **security** — `passed` when the gate ran, `skipped` with a reason when it legitimately did not (all services on `review_command: skip`; nobody opted into security; empty diff). No receipt was written for a security gate whose provenance check failed, and a missing receipt script was reported as `gate receipts: unavailable` rather than passed over in silence.
 - [ ] No file outside the declared `Impacted Services` was committed (scope-creep gate honored).
 - [ ] Single-service story used the inline path; multi-service used parallel subagents and fired the bundled-vs-split commit prompt.
 - [ ] `push_mode: manual` printed the push command and waited; `auto` pushed.

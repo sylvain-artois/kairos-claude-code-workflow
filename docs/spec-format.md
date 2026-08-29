@@ -1,6 +1,6 @@
 # Kairos Spec Format
 
-This document defines the canonical `spec.md` format consumed by every Kairos command. It is the **single source of truth at runtime** — there is no `.kairos/`, no cache, no other config file. If a field is not in `spec.md`, Kairos does not know it.
+This document defines the canonical `spec.md` format consumed by every Kairos command. It is the **single source of truth at runtime** — there is no `.kairos/`, no cache, no other config file. If a field is not in `spec.md`, Kairos does not know it. (The [gate receipts](gate-receipts.md) are runtime state, not config, and live outside the repository.)
 
 Two specs coexist in a Kairos workspace:
 

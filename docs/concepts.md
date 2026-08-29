@@ -13,7 +13,7 @@ A **workspace** is where you run Kairos (your repo root, or the parent folder of
 | **Root** | `./spec.md` | Services + paths, VCS host, default branch, push mode, worktree mode, PM directory. Required. |
 | **Per-service** | `./{service}/spec.md` | Language, `test_command`, `review_command`, opt-in flags, and observable behavior (endpoints, events, DB tables…). Optional but recommended. |
 
-There is no other config — no `.kairos/`, no cache. If it isn't in `spec.md`, Kairos doesn't know it. Full reference: [spec-format.md](spec-format.md).
+There is no other config — no `.kairos/`, no cache. If it isn't in `spec.md`, Kairos doesn't know it. Full reference: [spec-format.md](spec-format.md). (Kairos keeps one piece of *runtime* state, the [gate receipts](gate-receipts.md), and keeps it outside your repository.)
 
 ## 3. Epic-shared worktree (opt-in)
 
