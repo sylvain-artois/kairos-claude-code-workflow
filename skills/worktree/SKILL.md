@@ -17,20 +17,24 @@ Everything downstream depends on that: a code review, a security review, a test 
 ## Usage
 
 ```
-/kairos:worktree epic-{slug}                      # create or join — the entry point of an epic run
-/kairos:worktree wave-{slug}                      # same, for a wave
-/kairos:worktree {any-slug}                       # a plain exploration worktree — no epic required
+/kairos:worktree {slug}                           # create or join an EPIC worktree — the default
+/kairos:worktree {slug} --wave                    # same, for a wave
+/kairos:worktree {slug} --raw                     # a plain exploration worktree — no epic, no wave
 /kairos:worktree {slug} --base {branch}           # branch from something other than default_branch
 /kairos:worktree {slug} --teardown                # remove it: containers, images, worktree, branch, memory link
 ```
 
-`$ARGUMENTS` is `{slug}` followed by optional flags. The slug is used **verbatim**:
+`$ARGUMENTS` is `{slug}` followed by optional flags. **You derive the `epic-` / `wave-` prefix — the operator never has to type it.**
 
-- directory `{spec.worktree_prefix}-{slug}`, sibling of the repo root;
-- branch `feature/{slug}`;
-- `{worktree_id}` = `{slug}` — the isolation slug `worktree_test_command` uses to namespace its test container and image.
+| kind | flag | `{worktree_id}` | directory | branch |
+|---|---|---|---|---|
+| epic | *(default)* | `epic-{slug}` | `{spec.worktree_prefix}-epic-{slug}` | `feature/epic-{slug}` |
+| wave | `--wave` | `wave-{slug}` | `{spec.worktree_prefix}-wave-{slug}` | `feature/wave-{slug}` |
+| raw | `--raw` | `{slug}` | `{spec.worktree_prefix}-{slug}` | `feature/{slug}` |
 
-So an epic run passes `epic-{EPIC_SLUG}` and a wave passes `wave-{WAVE_SLUG}`; the `epic-` / `wave-` prefix belongs to the caller, not to this command. A worktree that serves neither is a first-class use: `/kairos:worktree spike-pg-upgrade` is a valid thing to want.
+**Prefixing is idempotent.** A slug that already carries its kind's prefix is not prefixed twice: `17-views` and `epic-17-views` both name `{prefix}-epic-17-views` on `feature/epic-17-views`. This matters because the operator arrives with either spelling — the bare epic slug they have in mind and that every executive command prints back, or a prefixed name read off an existing directory or branch — and both must land on one tree rather than two. `{worktree_id}` is the **full prefixed name**: it is the isolation slug `worktree_test_command` uses to namespace its test container, and the prefix teardown prunes images by.
+
+A worktree that serves neither an epic nor a wave stays a first-class use — that is what `--raw` is for: `/kairos:worktree spike-pg-upgrade --raw`.
 
 ## Cardinal rules (do not break)
 
@@ -80,16 +84,26 @@ git status --porcelain -- "$PM" 2>/dev/null | head -40
 
 ## Phase 0 — Resolve the slug and the paths
 
-1. **Slug.** First token of `$ARGUMENTS`. Missing → **stop and ask**; never invent one, and never expand an empty argument into "the obvious epic".
-2. **Flags.** `--base {branch}` (default: `{spec.default_branch}`), `--teardown`. Anything else → stop and ask.
-3. **Paths.**
+1. **Slug.** `SLUG` = first token of `$ARGUMENTS`. Missing → **stop and ask**; never invent one, and never expand an empty argument into "the obvious epic".
+2. **Flags.** `--wave`, `--raw`, `--base {branch}` (default: `{spec.default_branch}`), `--teardown`. `--wave` and `--raw` together → stop and ask. Anything else → stop and ask.
+3. **Kind, and the derived name.** Default kind is `epic`; `--wave` makes it `wave`; `--raw` makes it none. Prefix the slug with the kind **unless it already starts with that prefix** — the operator may have typed either form, and both must resolve to one tree:
+   ```bash
+   KIND=epic                      # or wave, or empty for --raw
+   case "$KIND" in
+     "")  WT_ID="$SLUG" ;;
+     *)   case "$SLUG" in "$KIND-"*) WT_ID="$SLUG" ;; *) WT_ID="$KIND-$SLUG" ;; esac ;;
+   esac
+   BARE="${WT_ID#$KIND-}"         # what /kairos:implement-epic takes: the slug WITHOUT the prefix
+   ```
+   > Both failure directions produce a tree the executive commands' gate B will refuse — `epic-epic-x` from double-prefixing, `x` from not prefixing at all — and it refuses **after** creation, which is the expensive place to find out.
+4. **Paths.**
    ```bash
    REPO_ROOT=$(git rev-parse --show-toplevel)
-   WORK="$(cd "$REPO_ROOT/.." && pwd)/{spec.worktree_prefix}-{slug}"
-   BRANCH="feature/{slug}"
+   WORK="$(cd "$REPO_ROOT/.." && pwd)/{spec.worktree_prefix}-$WT_ID"
+   BRANCH="feature/$WT_ID"
    ```
    > `WORK` is built from a path that is already **absolute and resolved** — `cd … && pwd`, not `$REPO_ROOT/../…`. A `..` left in the string reaches the same directory but produces a different *name*, and the memory link (Phase 4) is keyed by name. This is not cosmetic: it is the bug that left two dead symlinks on this machine.
-4. If `--teardown` → jump to **Teardown** below.
+5. If `--teardown` → jump to **Teardown** below. Resolve the name the same way first: `--teardown` on `17-views` must find the tree `epic-17-views` created earlier, not miss it.
 
 ---
 
@@ -197,7 +211,7 @@ Print exactly this, and **stop**:
 ```
 ✓ Worktree ready — {WORK}
   Branch:       {BRANCH}   (from {base})
-  worktree_id:  {slug}
+  worktree_id:  {WT_ID}
   Memory:       linked | not linked ({reason})
   Seeded:       {n} file(s)
 
@@ -207,14 +221,14 @@ Next, from a NEW Claude Code session inside the worktree:
 
 then, in that session:
 
-    /kairos:implement-epic {slug-without-the-epic-prefix, or the story range}
+    /kairos:implement-epic {BARE}
 
 When the run is finished and pushed, tear it down FROM THE MAIN CLONE:
 
-    /kairos:worktree {slug} --teardown
+    /kairos:worktree {BARE} --teardown
 ```
 
-Adjust the middle line to the intent: `/kairos:implement-wave {name} STORY-… …` for a wave, and nothing at all for a plain exploration worktree — say "open it and work" instead of naming a command.
+Print `{BARE}`, not `{WT_ID}`, on both lines: `/kairos:implement-epic` takes the slug **without** the prefix, and re-running this command on `{BARE}` re-derives the same tree. Adjust the middle line to the kind — `/kairos:implement-wave {BARE} STORY-… …` for a wave (and add `--wave` to the teardown line), and for `--raw` name no command at all: say "open it and work".
 
 **Do not start the run.** The handoff is the deliverable.
 
@@ -227,11 +241,11 @@ Runs **from the main clone**, after the branch has been pushed and the pull requ
 1. **Confirm — this is the only safety net for unpushed work.** Show the path, the branch, `git -C "$WORK" status --porcelain`, and whether the branch is pushed (`git log --oneline {BRANCH} ^origin/{BRANCH}` — if it errors, the branch is not on the remote). **Uncommitted changes, or unpushed commits → stop and ask.** Git checks neither: it refuses a dirty tree but removes one holding unpushed commits without a word. The branch survives that, so the commits are recoverable — but the operator who did not know the tree was going away is not the one who should discover it.
 2. **Compose project.** Remove the containers and volumes this worktree's tests created:
    ```bash
-   docker compose -p "{slug}" down --volumes --remove-orphans 2>/dev/null || true
+   docker compose -p "{WT_ID}" down --volumes --remove-orphans 2>/dev/null || true
    ```
 3. **Images, prefixed only.** `run --rm` drops containers but leaves one built image per run. `down --rmi local` does **not** remove them (an `image:`-named image counts as "custom"), hence the explicit prefix match — and the match is anchored so an unprefixed prod image can never be caught by it:
    ```bash
-   docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "^{slug}-" | xargs -r docker rmi
+   docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "^{WT_ID}-" | xargs -r docker rmi
    ```
 4. **Worktree.** `git worktree remove "$WORK"`. If it refuses — it does so on modified or untracked files — print the refusal verbatim and stop. **Never** `--force`, never `rm -rf`: the refusal means there is work in there nobody has looked at.
 5. **Memory link.** Remove it **only if it is a symlink**:
@@ -263,6 +277,7 @@ Runs **from the main clone**, after the branch has been pushed and the pull requ
 - [ ] `{pm}/` was verified committed; a dirty `{pm}/` stopped the run with the file list.
 - [ ] `WORK` is absolute and resolved — no `..` reached the memory slug.
 - [ ] The memory link was reported as it happened: linked, or not linked **with the reason**. No `✓` was printed for a link that was not made.
-- [ ] A second run on the same slug **joined**: no branch reset, no lost work.
+- [ ] The kind prefix was **derived**, once: `{WT_ID}` carries exactly one `epic-` / `wave-` (or none, under `--raw`), and `{BARE}` is what the handoff printed.
+- [ ] A second run on the same slug **joined**: no branch reset, no lost work — including when the two runs spelled the slug differently (`x` then `epic-x`).
 - [ ] The handoff was printed and the run **stopped there** — no epic, wave, or story was started.
-- [ ] For `--teardown`: uncommitted or unpushed work stopped it; only `{slug}-`-prefixed images were removed; no `--force`, no `rm -rf`; the branch was left alone.
+- [ ] For `--teardown`: uncommitted or unpushed work stopped it; only `{WT_ID}-`-prefixed images were removed; no `--force`, no `rm -rf`; the branch was left alone.

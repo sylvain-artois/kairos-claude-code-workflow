@@ -213,7 +213,7 @@ Two ways to fail, both **stop the command**:
 1. **`IS_MAIN` is `yes`** — this is the main clone. Do not create the worktree here, do not work in place, do not offer to change directory:
    > ⛔ `worktree_mode: epic_shared` runs **inside** the epic worktree, and this session is in the main clone.
    > ```
-   > /kairos:worktree epic-{EPIC_SLUG}                       # here, in the main clone
+   > /kairos:worktree {EPIC_SLUG}                       # here, in the main clone
    > cd {spec.worktree_prefix}-epic-{EPIC_SLUG} && claude
    > /kairos:implement-story STORY-{NNN}                     # in that new session
    > ```
@@ -235,7 +235,7 @@ The second check is the one that catches the plausible mistake — the operator 
   > ⛔ `{service}`'s Compose (`{compose}`) isn't prefixed for worktree isolation — worktree tests would collide with prod containers. Run `/kairos:setup-worktree-isolation` on `{spec.default_branch}` in the main clone and commit it, then re-create the worktree. (Aborting.)
 
   Services without `worktree_test_command` skip this check.
-- **Seed files — warn.** For each impacted service declaring `worktree_seed_files`, `test -f "$WORK/{seed}"`. Missing → name the file and note that `/kairos:worktree epic-{EPIC_SLUG}` re-seeds on join, then continue: the story may never touch what needs it.
+- **Seed files — warn.** For each impacted service declaring `worktree_seed_files`, `test -f "$WORK/{seed}"`. Missing → name the file and note that `/kairos:worktree {EPIC_SLUG}` re-seeds on join, then continue: the story may never touch what needs it.
 
 ##### 2c. Print readiness
 ```

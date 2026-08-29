@@ -385,7 +385,7 @@ Only when `worktree_mode == epic_shared` **and** `IS_LAST == true`, after the us
 Epic {EPIC_SLUG} is published. To reclaim the worktree, from the MAIN CLONE:
 
     cd {main clone path} && claude
-    /kairos:worktree epic-{EPIC_SLUG} --teardown
+    /kairos:worktree {EPIC_SLUG} --teardown
 ```
 
 The main clone's path is `git rev-parse --git-common-dir` with the trailing `/.git` removed. `/kairos:worktree --teardown` owns the whole sequence — the isolated Compose project, the `epic-{EPIC_SLUG}-`-prefixed images and only those, `git worktree remove`, the memory symlink — and stops on uncommitted **or unpushed** work, the second of which git itself does not check. Do not reimplement a piece of it here: pruning this worktree's containers from inside it and leaving the tree behind is a teardown that reads as done and is not.

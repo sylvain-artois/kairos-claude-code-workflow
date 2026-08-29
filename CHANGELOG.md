@@ -18,11 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unpushed work. It also serves the case that had no command at all: a plain
   exploration worktree, unattached to any epic.
 
+  You pass the **bare** slug — `/kairos:worktree 17-views` — and the command derives
+  the kind prefix: `epic-` by default, `wave-` under `--wave`, none under `--raw`.
+  Deriving it rather than requiring it is what keeps the round trip honest, since
+  the executive commands hand back that same bare slug. Prefixing is idempotent, so
+  a name copied off an existing branch or directory resolves to the same tree
+  instead of a second one.
+
 ### Changed
 
 - **One session, one tree.** Under `worktree_mode: epic_shared`, an epic now runs
   from a session opened **inside** its worktree, rather than from the main clone
-  reaching in through `git -C`. Create it with `/kairos:worktree epic-{slug}`, then
+  reaching in through `git -C`. Create it with `/kairos:worktree {slug}`, then
   `cd` into it and start Claude Code there.
 
   The reason is not ergonomics. Every review, test command and tool that resolves

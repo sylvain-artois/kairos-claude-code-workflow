@@ -83,7 +83,7 @@ Run this **before Phase 0**, before reading a single story. Two gates, and both 
 > Kairos does not move a running session between trees — a working directory that changes mid-run is how a review ends up reading the wrong code.
 >
 > ```
-> /kairos:worktree epic-{EPIC_SLUG}          # here, in the main clone — creates it and hands you the path
+> /kairos:worktree {EPIC_SLUG}          # here, in the main clone — creates it and hands you the path
 > cd {worktree_prefix}-epic-{EPIC_SLUG} && claude
 > /kairos:implement-epic {arguments}         # in that new session
 > ```
@@ -93,7 +93,7 @@ That is the whole response. Do not offer to `cd`, do not offer to run it "just t
 **Gate B — and it must be the *right* worktree.** As soon as Phase 0 step 0 resolves `EPIC_SLUG`, check that the current directory's **basename** is `{worktree_prefix}-epic-{EPIC_SLUG}` and that `git rev-parse --abbrev-ref HEAD` is `feature/epic-{EPIC_SLUG}`. If either differs, **stop and say which tree you are actually in**:
 
 > ⛔ This worktree is `{actual}` on `{actual branch}`, but the run targets epic `{EPIC_SLUG}`.
-> Running here would commit one epic's work onto another epic's branch. Open a session in `{expected}` instead — or run `/kairos:worktree epic-{EPIC_SLUG}` from the main clone if it does not exist yet.
+> Running here would commit one epic's work onto another epic's branch. Open a session in `{expected}` instead — or run `/kairos:worktree {EPIC_SLUG}` from the main clone if it does not exist yet.
 
 Gate A without gate B would be half a guard: the failure it leaves open — story work landing on a neighbouring epic's branch — is silent, survives the run, and is discovered at review time by a human, if at all.
 
@@ -114,7 +114,7 @@ Gate A without gate B would be half a guard: the failure it leaves open — stor
    - **Epic slug** → `grep -l "^- \*\*Epic\*\*: {slug}$" {READ_ROOT}/{pm}/stories/*.md`, keep those still open.
    - **Explicit list** → resolve each id under `{READ_ROOT}`; an id already in `{READ_ROOT}/{pm}/done/` is treated as already closed and dropped from the run (note it).
    - **A named story that is in neither `stories/` nor `done/` → stop, and name the cause.** A worktree carries only committed content, so an absent story is almost always a story that was written in the main clone and never committed — most often one `/kairos:create-story` produced minutes ago. Say that, rather than "not found":
-     > ⛔ `STORY-{NNN}` is not in this worktree. It was most likely never committed on `{default_branch}` before the worktree was created. Commit it there, then `/kairos:worktree epic-{EPIC_SLUG}` again from the main clone to pick it up.
+     > ⛔ `STORY-{NNN}` is not in this worktree. It was most likely never committed on `{default_branch}` before the worktree was created. Commit it there, then `/kairos:worktree {EPIC_SLUG}` again from the main clone to pick it up.
 2. **Confirm the single epic** — every resolved story shares `EPIC_SLUG` (re-read the `Epic` field). If not, **stop and ask** — this command is for a single epic group.
 3. **Order by dependencies.** Read each story's `Depends on` / `Dependencies`. Topologically sort so a dependency always precedes its dependent; break ties by ascending story number. If you detect a cycle, or a dependency points **outside** the run and is not yet `done`, **stop and tell the user** which story blocks.
 4. **Print the run plan and get one upfront go-ahead** (the only routine prompt of the run — everything after is autonomous):
@@ -153,7 +153,7 @@ Three checks, all local, all cheap:
 
    Services without `worktree_test_command` skip this check.
 
-2. **Seed files present.** For every impacted service declaring `worktree_seed_files`, `test -f "{WORK}/{seed}"`. Missing → **warn, name the file, and continue**: many stories never touch what needs it, and stopping an autonomous run over a file the run may not use is worse than saying so. Point at `/kairos:worktree epic-{EPIC_SLUG}` from the main clone as the one-line fix (it re-seeds on join).
+2. **Seed files present.** For every impacted service declaring `worktree_seed_files`, `test -f "{WORK}/{seed}"`. Missing → **warn, name the file, and continue**: many stories never touch what needs it, and stopping an autonomous run over a file the run may not use is worse than saying so. Point at `/kairos:worktree {EPIC_SLUG}` from the main clone as the one-line fix (it re-seeds on join).
 
 3. **Memory link.** `test -L "$HOME/.claude/projects/-$(pwd | sed 's|^/||; s|/|-|g')"`. Absent → **warn once and continue.** The run works without it; it simply starts without the main project's memory, and that is worth knowing before eight hours of autonomous work rather than after.
 
@@ -240,7 +240,7 @@ Under `issue_tracker: github`, add one `Closes #{N}` line per story that reporte
 Epic published. To reclaim the worktree, from the MAIN CLONE:
 
     cd {main clone path} && claude
-    /kairos:worktree epic-{EPIC_SLUG} --teardown
+    /kairos:worktree {EPIC_SLUG} --teardown
 ```
 
 `/kairos:worktree --teardown` owns the whole sequence — the isolated Compose project, the `{worktree_id}-`-prefixed images (and only those), `git worktree remove`, the memory symlink — including the unpushed-work check, which is Kairos's own: git removes a worktree holding unpushed commits without complaint. Do not reimplement any of it here, and do not attempt a partial version: pruning this worktree's containers and images from inside it, then leaving the tree behind, is the kind of half-teardown that looks done in the transcript and is not.
