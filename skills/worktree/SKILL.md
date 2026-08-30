@@ -2,6 +2,7 @@
 name: worktree
 description: Create, join, or tear down a Kairos worktree from the main clone — the entry point of every epic_shared run
 disable-model-invocation: true
+allowed-tools: Bash
 ---
 
 You create, join, or tear down **one git worktree**, with everything a Kairos run needs inside it: the branch, the Claude Code memory link, and the gitignored runtime files a fresh worktree cannot inherit.
@@ -201,6 +202,69 @@ fi
 ```
 
 Every service, not only the ones some future story will touch — this command does not know the story list, seeding is an idempotent copy of files the repo already ignores, and the superset removes the "the one service I forgot" failure. Re-running overwrites with the main checkout's current version, which is the intended behaviour: the main checkout is the source of truth for runtime files.
+
+---
+
+## Phase 4.5 — Arm the security boundary
+
+Two things the tree needs before any work starts. Both are cheap, both fail loudly, and
+both exist because of something measured rather than imagined.
+
+**(a) `origin/HEAD` must resolve.** Anthropic's native `security-review` scopes itself with
+`git diff origin/HEAD...`. With no `origin/HEAD` defined, that injection exits
+`fatal: ambiguous argument` — and **a failed injection aborts the whole skill invocation,
+silently**. The gate would not run, and nothing would say so.
+
+```bash
+if git -C "$WORK" remote set-head origin -a >/dev/null 2>&1; then
+  echo "✓ origin/HEAD → $(git -C "$WORK" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)"
+else
+  echo "⚠ could not resolve origin/HEAD (no remote, or offline)."
+  echo "  The native security pass cannot scope itself until this works: git remote set-head origin -a"
+fi
+```
+
+**(b) A `pre-push` hook that belongs to this worktree alone.** The Claude Code hook covers
+a push the *agent* makes. Under `push_mode: manual` you push from your own terminal, where
+Claude Code sees nothing — and that is the normal case here, since an SSH passphrase blocks
+agent shells. A git hook does not care who pushes.
+
+```bash
+PREV=$(git -C "$WORK" config --get core.hooksPath 2>/dev/null || true)   # read BEFORE we set ours
+case "$PREV" in /*) ;; ?*) PREV="$WORK/$PREV" ;; esac                    # husky & co. are relative
+GITDIR=$(git -C "$WORK" rev-parse --git-dir)                             # .git/worktrees/<name>
+HOOKD="$GITDIR/kairos-hooks"; mkdir -p "$HOOKD"
+
+{
+  echo '#!/bin/sh'
+  echo '# Installed by /kairos:worktree. Stage 2 of the security gate — see docs/gate-receipts.md.'
+  # Chain first, and never replace: a project that already had hooks keeps them. The
+  # previous hook reads the ref list on stdin; ours does not, so this order is safe.
+  [ -n "$PREV" ] && printf '[ -x "%s/pre-push" ] && "%s/pre-push" "$@"\n' "$PREV" "$PREV"
+  printf 'sh "%s/scripts/kairos-gate-receipt.sh" --pre-push --tree "%s"\n' "${CLAUDE_PLUGIN_ROOT}" "$WORK"
+} > "$HOOKD/pre-push"
+chmod +x "$HOOKD/pre-push"
+
+git -C "$WORK" config extensions.worktreeConfig true
+git -C "$WORK" config --worktree core.hooksPath "$HOOKD"
+echo "✓ pre-push hook armed for this worktree only (main clone untouched)"
+```
+
+Three properties of that snippet, each verified on 2026-08-30 rather than assumed:
+
+- **The main clone keeps its own hooks.** `core.hooksPath` set with `--worktree` applies to
+  this worktree and nowhere else; pushing from the main clone still runs `.git/hooks`.
+- **`core.hooksPath` is a single value, so an existing one must be chained, never
+  replaced.** A project on husky would otherwise lose every hook it has inside the
+  worktree — silently, and only there, which is the worst place for a surprise.
+- **It refuses nothing today.** The hook warns on stderr and exits 0. Turning that into a
+  refusal is a separate, later change, and it waits on the measurement that proves the gate
+  now fires.
+
+> If `git config --worktree` errors (git older than 2.20), say so and continue without the
+> hook: `⚠ per-worktree hooks need git ≥ 2.20 — stage 2 will only cover agent-side pushes.`
+> Do **not** fall back to writing into the main clone's `.git/hooks`. A shared repository is
+> not this command's to modify.
 
 ---
 

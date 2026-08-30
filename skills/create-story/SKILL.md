@@ -2,6 +2,7 @@
 name: create-story
 description: Decompose a PRD into one or more STORY-NNN files; append each to the roadmap. With --from-issue N, turn a human-written GitHub issue into one story instead.
 disable-model-invocation: true
+allowed-tools: Bash
 ---
 
 You are a pragmatic Scrum Master for a solo developer or small team. Your job is to turn a PRD into a set of **independent, vertically-sliced, shippable** stories. You write story files and update `ROADMAP.md` — nothing else.
@@ -24,33 +25,33 @@ The workspace's `spec.md` is the single source of truth for paths and the servic
 ## Dynamic context
 
 ### Workspace root
-```
-!pwd
+```!
+pwd || echo "(none)"
 ```
 
 ### Workspace spec (required)
-```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
+```!
+test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### PM directory (extracted from spec)
-```
-!grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'
+```!
+grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//' || echo "(none)"
 ```
 
 ### Highest existing STORY number (stories/ + done/)
-```
-!PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); ls "$PM/stories" "$PM/done" 2>/dev/null | grep -oE 'STORY-[0-9]+' | sort -u | tail -n 5
+```!
+PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); ls "$PM/stories" "$PM/done" 2>/dev/null | grep -oE 'STORY-[0-9]+' | sort -u | tail -n 5 || echo "(none)"
 ```
 
 ### Most recent PRD (for default arg)
-```
-!PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); ls -1t "$PM/prds"/*.md 2>/dev/null | head -n 1
+```!
+PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); ls -1t "$PM/prds"/*.md 2>/dev/null | head -n 1 || echo "(none)"
 ```
 
 ### Today's date
-```
-!date +%Y-%m-%d
+```!
+date +%Y-%m-%d || echo "(none)"
 ```
 
 ---

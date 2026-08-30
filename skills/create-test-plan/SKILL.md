@@ -2,6 +2,7 @@
 name: create-test-plan
 description: Generate a runnable LITE test plan for a service from a free-form prompt
 disable-model-invocation: true
+allowed-tools: Bash
 ---
 
 You are a pragmatic QA engineer. Your job is to turn a free-form prompt ("smoke test for /healthz", "API call sequence for invoice payment", "regression check for the import pipeline") into a **runnable** LITE test plan that `/kairos:qa` can execute step by step. You write **only** the test-plan file you are asked to create — nothing else.
@@ -23,23 +24,23 @@ The workspace's `spec.md` and the target service's `{service}/spec.md` are your 
 ## Dynamic context
 
 ### Workspace root
-```
-!pwd
+```!
+pwd || echo "(none)"
 ```
 
 ### Workspace spec (required)
-```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
+```!
+test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### Declared services (name → path)
-```
-!awk '/^## 3\.6 Services|^## Services/{flag=1; next} flag && /^## /{flag=0} flag && /^\|/ && !/^\|[-: ]+\|/ && !/^\| *name */' ./spec.md 2>/dev/null
+```!
+awk '/^## 3\.6 Services|^## Services/{flag=1; next} flag && /^## /{flag=0} flag && /^\|/ && !/^\|[-: ]+\|/ && !/^\| *name */' ./spec.md 2>/dev/null || echo "(none)"
 ```
 
 ### Today's date
-```
-!date +%Y-%m-%d
+```!
+date +%Y-%m-%d || echo "(none)"
 ```
 
 ---

@@ -2,6 +2,7 @@
 name: sync-pm
 description: Reconcile the GitHub issue mirror with the story files — create missing milestones and issues, update drifted ones, close what is done. One-way, idempotent, no state file.
 disable-model-invocation: true
+allowed-tools: Bash
 ---
 
 You reconcile the **GitHub mirror** of the project-management files: PRDs → milestones, stories → issues. The files are the source of truth; the tracker is a view of them for humans. You never let the tracker overwrite a file, except for the one bookkeeping line (`- **Issue**: #N`) that anchors the mapping.
@@ -29,23 +30,23 @@ This is a **catch-up command, not a loop.** The routine path creates issues inli
 ## Dynamic context
 
 ### Workspace root
-```
-!pwd
+```!
+pwd || echo "(none)"
 ```
 
 ### Workspace spec (required)
-```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
+```!
+test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### Issue tracker config (from spec)
-```
-!for k in issue_tracker issue_repo issue_labels issue_body_mode project_management_dir default_branch; do v=$(grep -m1 -E "^\- \*\*$k\*\*:" ./spec.md 2>/dev/null | sed -E 's/.*: *//'); echo "$k: ${v:-<unset>}"; done
+```!
+for k in issue_tracker issue_repo issue_labels issue_body_mode project_management_dir default_branch; do v=$(grep -m1 -E "^\- \*\*$k\*\*:" ./spec.md 2>/dev/null | sed -E 's/.*: *//'); echo "$k: ${v:-<unset>}"; done || echo "(none)"
 ```
 
 ### gh availability
-```
-!command -v gh >/dev/null && gh auth status 2>&1 | head -n 3 || echo "gh NOT INSTALLED"
+```!
+command -v gh >/dev/null && gh auth status 2>&1 | head -n 3 || echo "gh NOT INSTALLED"
 ```
 
 ---

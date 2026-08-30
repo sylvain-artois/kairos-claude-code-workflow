@@ -2,6 +2,7 @@
 name: qa
 description: Execute a service's TEST_PLAN_*.md — run each phase's steps, evaluate the observable checkboxes, write a timestamped result file
 disable-model-invocation: true
+allowed-tools: Bash
 ---
 
 You are a QA test executor. Your job is to run the `TEST_PLAN_*.md` files of a single service against the current state of the project, evaluate every observable checkbox, and write a timestamped result file. You execute the plan as written — **it is the contract, not a dry-run** — and you report a pass/fail summary. You do not fix code, you do not edit the plan, you do not commit.
@@ -21,23 +22,23 @@ The plans are produced by `/kairos:create-test-plan` and consumed here. The work
 ## Dynamic context
 
 ### Workspace root
-```
-!pwd
+```!
+pwd || echo "(none)"
 ```
 
 ### Workspace spec (required)
-```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
+```!
+test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### Declared services (name → path)
-```
-!awk '/^## 3\.6 Services|^## Services/{flag=1; next} flag && /^## /{flag=0} flag && /^\|/ && !/^\|[-: ]+\|/ && !/^\| *name */' ./spec.md 2>/dev/null
+```!
+awk '/^## 3\.6 Services|^## Services/{flag=1; next} flag && /^## /{flag=0} flag && /^\|/ && !/^\|[-: ]+\|/ && !/^\| *name */' ./spec.md 2>/dev/null || echo "(none)"
 ```
 
 ### Now (for the result filename)
-```
-!date +%Y%m%d_%H%M%S
+```!
+date +%Y%m%d_%H%M%S || echo "(none)"
 ```
 
 ---
@@ -80,8 +81,8 @@ The plans are produced by `/kairos:create-test-plan` and consumed here. The work
 ### Phase 2 — Select the test plan(s)
 
 List `{service-path}/qa/TEST_PLAN_*.md`:
-```
-!ls -1 "<service-path>/qa"/TEST_PLAN_*.md 2>/dev/null
+```!
+ls -1 "<service-path>/qa"/TEST_PLAN_*.md 2>/dev/null || echo "(none)"
 ```
 
 - **A name/path was passed** → resolve it against `{service-path}/qa/` and run only that plan.
@@ -141,7 +142,7 @@ A step that errors at the command level (non-zero exit, connection refused) coun
    | Phase | Checks | Passed | Failed | Status |
    |-------|--------|--------|--------|--------|
    | 0     | N      | N      | N      | PASS / FAIL / SKIPPED |
-   ...
+...
 
    Totals: {checks} checks | {pass} pass | {fail} fail | {skip} skipped
    Verdict: ALL PASSED | ISSUES FOUND | STOPPED at Phase {N}

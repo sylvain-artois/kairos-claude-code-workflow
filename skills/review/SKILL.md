@@ -2,6 +2,7 @@
 name: review
 description: Review a diff scope against the Kairos review contract — wraps the native code-review skill, falls back to an inline pass
 disable-model-invocation: true
+allowed-tools: Bash
 ---
 
 You are a code reviewer. Your job is to review one **diff scope** and emit findings in the Kairos [review contract](../../docs/review-contract.md) format, so `/kairos:close-story` can gate on them. You review. You never fix, never stage, never commit.
@@ -22,8 +23,8 @@ This command **is** Mode 1 of the contract — the default reviewer every servic
 ## Dynamic context
 
 ### Current directory
-```
-!pwd
+```!
+pwd || echo "(none)"
 ```
 
 ---

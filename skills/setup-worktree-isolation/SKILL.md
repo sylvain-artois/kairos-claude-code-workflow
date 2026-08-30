@@ -2,6 +2,7 @@
 name: setup-worktree-isolation
 description: One-time, idempotent rewrite of Compose files so worktree test runs never collide with prod — prefix built images and container names with ${CONTAINER_ENV_PREFIX}. Runs on the main branch; you review and commit.
 disable-model-invocation: true
+allowed-tools: Bash
 ---
 
 You prepare a Compose-based project for **worktree-isolated testing**. The `epic_shared` worktree flow runs each epic's tests in an ephemeral container (`docker compose -p {worktree_id} run --rm --build …`). For that to be safe, the built `image:` and any fixed `container_name:` in the project's Compose files must be **namespaced by an env var**, so a worktree run gets its own image/container instead of overwriting or colliding with the long-running prod one.
@@ -35,23 +36,23 @@ No arguments. Operates on every Compose-backed service declared in `./spec.md`.
 ## Dynamic context
 
 ### Workspace root
-```
-!pwd
+```!
+pwd || echo "(none)"
 ```
 
 ### Is this the main checkout (not a worktree)?
-```
-!git rev-parse --show-toplevel >/dev/null 2>&1 && { test -d "$(git rev-parse --show-toplevel)/.git" && echo "main checkout ✓" || echo "WORKTREE — run this on the main checkout instead"; } || echo "not a git repo"
+```!
+git rev-parse --show-toplevel >/dev/null 2>&1 && { test -d "$(git rev-parse --show-toplevel)/.git" && echo "main checkout ✓" || echo "WORKTREE — run this on the main checkout instead"; } || echo "not a git repo"
 ```
 
 ### Spec present?
-```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
+```!
+test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### Compose files referenced by spec services
-```
-!grep -nE 'compose_file' ./spec.md 2>/dev/null | sed -E 's/^/  /' ; echo "---" ; ls -1 compose.yml docker-compose.yml docker-compose.yaml 2>/dev/null
+```!
+grep -nE 'compose_file' ./spec.md 2>/dev/null | sed -E 's/^/  /' ; echo "---" ; ls -1 compose.yml docker-compose.yml docker-compose.yaml 2>/dev/null || echo "(none)"
 ```
 
 ---

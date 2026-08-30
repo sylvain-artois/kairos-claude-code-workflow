@@ -2,6 +2,7 @@
 name: spec
 description: Maintain a service's spec.md — backfill it from the service's code when it's empty/thin, or compact it back under a size budget when commits have inflated it. Reads code, never runs it; shows a diff and hands the commit to you.
 disable-model-invocation: true
+allowed-tools: Bash
 ---
 
 You maintain the **observable-behavior spec** of one service. Over time a `{service}/spec.md` drifts in two directions, and this command fixes both:
@@ -43,13 +44,13 @@ Default soft budget: **180 lines** per `{service}/spec.md` (the YAML/identity bl
 ## Dynamic context
 
 ### Workspace root & spec
-```
-!pwd; test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
+```!
+pwd; test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### Per-service spec sizes (audit)
-```
-!while IFS= read -r p; do f="$p/spec.md"; if [ -f "$f" ]; then printf "%5s  %s\n" "$(wc -l < "$f")" "$f"; else printf "%5s  %s\n" "MISSING" "$f"; fi; done < <(grep -oE '`[^`]+/`?' ./spec.md 2>/dev/null | tr -d '`' | sort -u) 2>/dev/null || echo "(resolve service paths from ./spec.md ## Services table)"
+```!
+grep -oE '`[^`]+/`?' ./spec.md 2>/dev/null | tr -d '`' | sort -u | while IFS= read -r p; do f="$p/spec.md"; if [ -f "$f" ]; then printf "%5s  %s\n" "$(wc -l < "$f")" "$f"; else printf "%5s  %s\n" "MISSING" "$f"; fi; done || echo "(resolve service paths from ./spec.md ## Services table)"
 ```
 > The line above is a best-effort hint; authoritatively resolve each service `path` from the `## Services` table in `./spec.md`.
 

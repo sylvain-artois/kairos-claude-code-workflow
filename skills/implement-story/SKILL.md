@@ -2,6 +2,7 @@
 name: implement-story
 description: Implement a story — load context, set up the working tree per worktree_mode, plan, then implement (no commits, no tests, no push)
 disable-model-invocation: true
+allowed-tools: Bash
 ---
 
 You are a developer implementing a single story. You load the full story context, set up the working tree according to the workspace's `worktree_mode`, produce a plan, then implement it. You write code only — you do **not** run the test suite, commit, or push. `/kairos:close-story` handles all of that later.
@@ -35,38 +36,38 @@ The user may pass a story identifier and/or a `worktree_mode:` override in `$ARG
 ## Dynamic context
 
 ### Workspace root
-```
-!pwd
+```!
+pwd || echo "(none)"
 ```
 
 ### Workspace spec (required)
-```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
+```!
+test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### worktree_mode (from spec)
-```
-!grep -m1 -E '^\- \*\*worktree_mode\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//' || echo "off"
+```!
+grep -m1 -E '^\- \*\*worktree_mode\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//' || echo "off"
 ```
 
 ### default_branch (from spec)
-```
-!grep -m1 -E '^\- \*\*default_branch\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'
+```!
+grep -m1 -E '^\- \*\*default_branch\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//' || echo "(none)"
 ```
 
 ### PM directory (from spec)
-```
-!grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'
+```!
+grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//' || echo "(none)"
 ```
 
 ### Backlog stories (for auto-select)
-```
-!PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); grep -lE '^\- \*\*Status\*\*: *backlog' "$PM"/stories/STORY-*.md 2>/dev/null
+```!
+PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); grep -lE '^\- \*\*Status\*\*: *backlog' "$PM"/stories/STORY-*.md 2>/dev/null || echo "(none)"
 ```
 
 ### Today's date
-```
-!date +%Y-%m-%d
+```!
+date +%Y-%m-%d || echo "(none)"
 ```
 
 ---

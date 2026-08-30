@@ -168,7 +168,7 @@ All three modes MUST emit the same `## Critical` / `## High` / `## Medium` / `##
 
 ## 7. The security-review surface (adjacent, not the same contract)
 
-`security_review: true` on a service adds an **independent** phase to `/kairos:close-story`, run after the code-review gate and before the commit. It wraps Anthropic's `security-review` skill, and that skill answers to its own format, not to this contract:
+`security_review: true` on a service adds an **independent** phase to `/kairos:close-story`, run after the code-review gate and before the commit. It answers to Anthropic's report format, not to this contract:
 
 ```markdown
 # Vuln 1: xss: `foo.py:42`
@@ -182,14 +182,43 @@ Three properties decide how `/kairos:close-story` reads it:
 
 - **Level-1 headers per finding, and severity as a `* Severity:` field** — there is no `## High` section to look for. A parser written against §1 finds nothing in a report full of findings.
 - **`High` is the top level. There is no `Critical`.** The gate must fire on `High`.
-- **It reports `High` and `Medium` only, by design** — it drops anything below a high confidence bar rather than padding the report. A short report is the expected output, not a broken run.
+- **It reports `High` and `Medium` only, by design.** A short report is the expected output, not a broken run.
 
-The skill also takes no path argument: it reviews the pending changes of the work tree **it runs in**. Two consequences. `/kairos:close-story` runs it **once** per close and attributes findings to services by file path, instead of running it once per opted-in service over the same diff. And since there is no target to pass, the phase **aims it through its arguments**: the invocation names `{WORK}` and gives `git -C {WORK} diff` as the way to collect the changes. Under `worktree_mode: epic_shared` the session is opened inside the epic worktree and never leaves it, so `{WORK}` and the session's own directory agree — the explicit aim is what makes the scope auditable and reproducible, not what makes it correct. This is deliberately independent of how any given version of the skill resolves a tree on its own: `git -C {WORK}` addresses a linked worktree and a plain checkout identically, so one invocation serves every `worktree_mode`.
+### 7.1 — The amendment: analysis is Anthropic's, scope is Kairos's
 
-**Aiming it is half the mechanism; proving where it landed is the other half.** A clean report on the wrong tree is indistinguishable from a passing gate, so the invocation also requires a provenance footer — `_Reviewed N file(s): …_` — and `/kairos:close-story` checks those paths against the pending files of `{WORK}` before reading a single finding. Footer missing, or naming files that are not pending in `{WORK}` → the gate **did not run**, whatever the report says. (Findings that all cite pending files of `{WORK}` are the same evidence by another route; an *empty* report with no footer is evidence of nothing at all — and that is precisely the shape of the wrong-tree failure.) This is the same doctrine as §1.1's scope check on the native `code-review` skill: a wrapped reviewer is trusted about *findings*, never about *which tree it read*.
+This section used to say, flatly, *"Kairos does not reimplement security analysis"*, and it wrapped the built-in `security-review` skill to honour that. The rule was right and the implementation was not: **the built-in skill never once reviewed story code produced by Kairos.** It scopes itself with `git diff origin/HEAD...`, and Kairos gates *before* committing — so on an epic branch with no commits, the merge base is HEAD and that scope is empty **by construction**. Not intermittently: always, for the first story of every epic. A contract protecting a mechanism that never fired protects nothing.
 
-Unlike the code-review default, there is **no fallback**: Kairos does not reimplement security analysis, and an inline substitute would be a weaker check wearing the same name. When the skill cannot run — unavailable, or unverifiable — the phase stops and asks; a per-story subagent of `/kairos:implement-epic` or `/kairos:implement-wave`, which has nobody to ask, returns `BLOCKED` instead. Neither one reviews the diff itself and reports that as the gate.
+So the rule is **amended, not abandoned**, and the distinction is the whole design:
 
-**Its levels are reported as they are, not remapped.** The gate is unchanged from what the phase always documented — Critical or High stops the close, Medium/Low are listed for acknowledgement — it simply now fires, because it reads `* Severity:` instead of a header that is never written. Since `High` is the skill's ceiling, "Critical or High" means `High` here in practice; the Critical branch stays for a reviewer that does emit one.
+> Kairos does not rewrite the **analysis**. It takes Anthropic's analysis prompt word for word. It reserves only the **scope collection** — the single part that, measured, cannot work under `epic_shared`.
+
+`skills/gate-security/` is that fork: the objective, the anti-false-positive rules, the vulnerability families, the methodology, the output format, the severity and confidence scales and the entire `FALSE POSITIVE FILTERING` section are copied **verbatim** under the upstream MIT licence. Only the scope-collection blocks are replaced. Provenance, licence text and the exact diff are recorded in `skills/gate-security/references/UPSTREAM.md`.
+
+### 7.2 — Two stages, and neither replaces the other
+
+| | **Stage 1 — per story** | **Stage 2 — per push** |
+|---|---|---|
+| What | `kairos:gate-security` (the fork) | the built-in `security-review` |
+| Prompt | Anthropic's, scope blocks replaced | Anthropic's, untouched |
+| Scope | the story's exact diff — staged, unstaged **and untracked** | `origin/HEAD...` — everything committed, not yet pushed |
+| Sees uncommitted work | **yes — the only mechanism that can** | no |
+| When | before the commit | before `git push`, however many stories have closed |
+| Receipt | `mechanism: kairos-fork` | `mechanism: native-skill` |
+
+Stage 2 fires on the **push**, not on the end of an epic: sessions of two or three stories routinely do not finish an epic, and the push is the physical boundary — the moment code leaves the machine. Its scope is cumulative, so a third push in one session re-reads the first two stories. That cost is irreducible (the built-in skill accepts no target) and it is exactly why stage 1 exists.
+
+### 7.3 — Proving where the gate landed
+
+A clean report on the wrong tree is indistinguishable from a passing gate. The previous answer was a provenance footer — `_Reviewed N file(s): …_` — checked against the pending files of `{WORK}`. That check was doing real work, but it was still **the model attesting to its own behaviour**, and a run shipped where the gate did not run, the receipt said `passed`, and nothing caught it.
+
+Stage 1 now binds the receipt to something the model does not author: `kairos-diff.sh` mints a nonce, prints it at the head of the diff it produced, and `kairos-gate-receipt.sh --write` **refuses a `passed` receipt whose token it cannot find**. A gate that never held a Kairos artefact cannot produce a green receipt.
+
+Be exact about its strength: it is not unforgeable. A model determined to lie could copy the nonce without reading the diff. It eliminates the *measured* failure — a gate that never saw the artefact and a green receipt regardless — not deliberate deceit. A wrapped reviewer is trusted about *findings*, never about *which tree it read*.
+
+### 7.4 — Still no fallback
+
+There is **no inline substitute**. An inline pass would be a weaker check wearing the same name. When the gate cannot run — unavailable, scope error, no token — the phase stops and asks; a per-story subagent of `/kairos:implement-epic` or `/kairos:implement-wave`, which has nobody to ask, returns `BLOCKED`. Neither reviews the diff itself and reports that as the gate. What changed is that this is no longer only a rule: without a token, the receipt cannot be written at all.
+
+**Levels are reported as they are, not remapped.** Critical or High stops the close; Medium/Low are listed for acknowledgement. Since `High` is the ceiling, "Critical or High" means `High` in practice; the Critical branch stays for a reviewer that does emit one.
 
 Note the asymmetry with §1.1: this scale is **not** the code-review scale. A `Medium` from a reviewer that only reports what it is 80%+ confident is exploitable is not the same claim as a `Medium` from a general code review. Do not normalize the two.

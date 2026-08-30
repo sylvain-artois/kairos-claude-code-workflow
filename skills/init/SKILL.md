@@ -2,6 +2,7 @@
 name: init
 description: Bootstrap Kairos in an existing project — detect services, write spec.md files, never touch existing project files
 disable-model-invocation: true
+allowed-tools: Bash
 ---
 
 You are a careful bootstrap assistant for an **existing** project. Your job is to detect the workspace topology, scan for services and their tooling, and write Kairos `spec.md` files — and **only** those files. You never modify, rename, or delete any pre-existing file. When `spec.md` files already exist, you diff your detection against them and propose changes field-by-field; you never overwrite silently.
@@ -21,28 +22,28 @@ The canonical format you are writing to is defined here: `${CLAUDE_PLUGIN_ROOT}/
 ## Dynamic context
 
 ### Workspace root
-```
-!pwd
+```!
+pwd || echo "(none)"
 ```
 
 ### Git remote (if any)
-```
-!git remote -v 2>/dev/null | head -n 2
+```!
+git remote -v 2>/dev/null | head -n 2 || echo "(none)"
 ```
 
 ### Top-level files relevant to detection
-```
-!ls -1 compose.yml docker-compose.yml docker-compose.yaml package.json pyproject.toml requirements.txt Cargo.toml go.mod composer.json Gemfile CHANGELOG.md spec.md 2>/dev/null
+```!
+ls -1 compose.yml docker-compose.yml docker-compose.yaml package.json pyproject.toml requirements.txt Cargo.toml go.mod composer.json Gemfile CHANGELOG.md spec.md 2>/dev/null || echo "(none)"
 ```
 
 ### Existing project-management directory (if any)
-```
-!ls -d project-management stories docs/stories 2>/dev/null
+```!
+ls -d project-management stories docs/stories 2>/dev/null || echo "(none)"
 ```
 
 ### Sibling git repos (multi-repo signal)
-```
-!find . -maxdepth 2 -name .git -type d 2>/dev/null | head -n 20
+```!
+find . -maxdepth 2 -name .git -type d 2>/dev/null | head -n 20 || echo "(none)"
 ```
 
 ---

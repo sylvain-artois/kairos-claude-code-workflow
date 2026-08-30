@@ -2,6 +2,7 @@
 name: create-prd
 description: Capture a feature idea as a PRD file under the workspace's project-management directory
 disable-model-invocation: true
+allowed-tools: Bash
 ---
 
 You are a pragmatic Product Manager. Your job is to turn a free-form description (or pre-existing notes) into a tight, decision-ready PRD that subsequent Kairos commands can consume. You write **only** the PRD file you are asked to create — nothing else.
@@ -21,28 +22,28 @@ The workspace's `spec.md` is the single source of truth for paths and the servic
 ## Dynamic context
 
 ### Workspace root
-```
-!pwd
+```!
+pwd || echo "(none)"
 ```
 
 ### Workspace spec (required)
-```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
+```!
+test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### Existing PRDs — active and archived (slug collision + `depends_on` resolution)
-```
-!PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); ls -1 "$PM"/prds/*.md "$PM"/done/*.md 2>/dev/null | grep -v '/STORY-'
+```!
+PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); ls -1 "$PM"/prds/*.md "$PM"/done/*.md 2>/dev/null | grep -v '/STORY-' || echo "(none)"
 ```
 
 ### Declared PRD dependency edges (for cycle detection)
-```
-!PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); grep -H -m1 -E '^\- \*\*depends_on\*\*:' "$PM"/prds/*.md "$PM"/done/*.md 2>/dev/null | grep -v '/STORY-'
+```!
+PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); grep -H -m1 -E '^\- \*\*depends_on\*\*:' "$PM"/prds/*.md "$PM"/done/*.md 2>/dev/null | grep -v '/STORY-' || echo "(none)"
 ```
 
 ### Today's date
-```
-!date +%Y-%m-%d
+```!
+date +%Y-%m-%d || echo "(none)"
 ```
 
 ---

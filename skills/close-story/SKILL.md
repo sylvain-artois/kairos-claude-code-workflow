@@ -1,352 +1,182 @@
 ---
 name: close-story
-description: Close a completed story — test, QA, review, commit, push/PR, archive — driven by spec.md
+description: Close a story — gates, commit, specs, archive, push/PR — driven by spec.md
 disable-model-invocation: true
+allowed-tools: Bash
 ---
 
-You are a release assistant. Your job is to close a story that has just been implemented: run tests, QA and code review per impacted service, commit with Conventional Commits, update specs, push or print the push command (per `push_mode`), prompt for the PR/MR, and archive the story. Everything is driven by `./spec.md` — there is no hardcoded service table, no baked-in VCS, no implicit push.
+You close a story just implemented: gates per impacted service, commit, specs, archive, push/PR — all resolved against `./spec.md`, with no hardcoded service table and no implicit push.
 
 The order is deliberate: **gates first, commit second, archive last, push last of all.** A failing gate stops the flow before anything is committed.
 
 ## Cardinal rules (do not break)
 
-1. **Read `./spec.md` first.** If it is missing, stop and tell the user to run `/kairos:init`. Everything below resolves against it.
+1. **Read `./spec.md` first.** Missing → stop and tell the user to run `/kairos:init`. Everything below resolves against it.
 2. **Preserve every safety gate.** Failing tests, critical review findings, scope creep, and ambiguous story selection each mean: **stop and ask the user. Do NOT proceed to commit.**
-3. **Never widen scope.** Only the services declared in the story's `Impacted Services` (unioned with what the diff actually touches) are in play. A diff that touches a file outside those services trips the scope-creep gate.
+3. **Never widen scope.** Only the story's `Impacted Services` (unioned with what the diff touches) are in play; anything outside trips the scope-creep gate.
 4. **Never force-push, never amend existing commits, never auto-merge a PR/MR.** The developer makes the merge call.
-5. **Respect `push_mode`.** `manual` means you print the `git push` line and wait — you do not push. This covers the common SSH-passphrase case the agent shell cannot unlock.
+5. **Respect `push_mode`.** `manual` means you print the `git push` line and wait — you do not push. This covers the SSH-passphrase case the agent shell cannot unlock.
 6. **English only** in all commit messages, spec edits, and output.
 
 ---
 
 ## Dynamic context
 
-### Workspace root
-```
-!pwd
-```
-
-### Workspace spec (required)
-```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
-```
-
-### Open stories
-```
-!PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); ls "$PM/stories"/STORY-*.md 2>/dev/null
-```
-
-### Today's date
-```
-!date +%Y-%m-%d
+```!
+pwd
+test -f ./spec.md && echo "spec.md: found" || echo "spec.md: MISSING — run /kairos:init first"
+PM=$(grep -m1 -E '^- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//')
+ls "$PM/stories"/STORY-*.md 2>/dev/null || echo "(no open story files found)"
+date +%Y-%m-%d
 ```
 
 ---
 
 ## Argument (optional)
 
-`/kairos:close-story [STORY-NNN]`
-
-If a story ID is passed, use it. Otherwise infer the story from the conversation (the one just implemented). **If you cannot identify exactly one story, stop and ask** — do not guess.
+`/kairos:close-story [STORY-NNN]` — if an ID is passed, use it; otherwise infer the story just implemented. **If you cannot identify exactly one story, stop and ask** — do not guess.
 
 ---
 
 ## Phase 0 — Load context
 
-1. Read `./spec.md`. Resolve and hold:
-   - `git_host`, `default_branch`, `push_mode`, `project_management_dir` (`{pm}`), `worktree_mode`, `worktree_prefix`
-   - `issue_tracker`, `issue_repo` (absent = `none` → every issue-mirror step below is skipped silently)
-   - The `## Services` table → `name → path` (and `compose_file` in mono-repo mode).
-2. **Resolve the story file robustly** — the filename may be bare (`STORY-{NNN}.md`) or slugged (`STORY-{NNN}-{slug}.md`); never assume one form. Glob both and hold the result as `STORY_FILE`:
-   ```bash
-   # Run from {WORK} once it is resolved (0.1); ls matches across both possible name forms.
-   matches=$(ls {pm}/stories/STORY-{NNN}.md {pm}/stories/STORY-{NNN}-*.md 2>/dev/null)
-   n=$(printf '%s\n' "$matches" | grep -c .)
-   ```
-   - `n == 0` and a `{pm}/done/STORY-{NNN}*.md` exists → **already closed**: tell the user and stop (idempotent — never re-move or error).
-   - `n == 0` and nothing in `done/` either → the story doesn't exist: stop and ask.
-   - `n > 1` → ambiguous (duplicate IDs): stop and ask which to close — never guess.
-   - `n == 1` → `STORY_FILE` is that path. Continue.
-3. Read the story. Extract: title, `Size`, `Source PRD`, `Epic`, `Issue` (may be empty), and the `Impacted Services` list.
+1. Read `./spec.md`. Hold `git_host`, `default_branch`, `push_mode`, `{pm}`, `worktree_mode`, `worktree_prefix`, `issue_tracker`, `issue_repo` (absent = `none` → issue steps skipped), and the `## Services` table.
+2. **Resolve the story file robustly** — bare (`STORY-{NNN}.md`) or slugged, never assume one form. Glob both, hold `STORY_FILE`. Already under `{pm}/done/` → **already closed**: say so and stop (idempotent). No match → **stop and ask**. More than one → ambiguous IDs: **stop and ask**. **Never guess.**
+3. Read the story: title, `Size`, `Source PRD`, `Epic`, `Issue`, `Impacted Services`.
 
-### 0.1 — Resolve the working directory (`WORK`) by `worktree_mode`
+### 0.1 — Resolve the working directory (`WORK`)
 
-- **`off`** — `WORK` = workspace root, current branch. No epic deferral. `IS_LAST = true`.
-- **`in_place`** — `WORK` = workspace root, branch `feature/story-{NNN}-{slug}`. No epic deferral. `IS_LAST = true`.
-- **`epic_shared`** — resolve `EPIC_SLUG`, **confirm you are standing in that epic's worktree**, compute `REMAINING_OPEN` (see 0.2). `WORK` = `git rev-parse --show-toplevel` — the current worktree, not a path you go looking for. All `git` commands in later phases still run as `git -C {WORK}`: redundant with the working directory now, and kept for exactly that reason.
+- **`off`** / **`in_place`**: `WORK` = workspace root, `IS_LAST = true`.
+- **`epic_shared`** — `WORK` = `git rev-parse --show-toplevel`: **the tree this session stands in**, never one you go looking for. `EPIC_SLUG` from the `Epic` field, else the `Source PRD` basename, else the per-story slug **with a printed warning** — keep that chain. Then **confirm the tree**:
+  - in the **main clone** → **stop.** The work is not here; committing would put it on `{default_branch}`.
+  - basename not `{worktree_prefix}-epic-{EPIC_SLUG}`, or `HEAD` not `feature/epic-{EPIC_SLUG}` → **stop**, naming the tree and branch you are actually in. Committing one epic's story onto another's branch is silent and survives the run.
 
-**Resolve `EPIC_SLUG`** (epic_shared only) — keep this fallback chain intact:
-1. The `Epic` field from the story Meta, if present.
-2. Else the `Source PRD` basename without `.md`.
-3. Else the per-story slug — **print a warning** that no epic was detected and the story is treated as a 1:1 close.
+### 0.2 — `REMAINING_OPEN` (epic_shared only)
 
-**Confirm the worktree** (epic_shared only) — `epic_shared` work happens in a session opened inside the epic worktree by `/kairos:worktree`; this command never goes looking for one:
-```bash
-WORK=$(git rev-parse --show-toplevel)
-test "$(git rev-parse --absolute-git-dir)" = "$(cd "$(git rev-parse --git-common-dir)" && pwd)" && echo "MAIN-CLONE" || echo "LINKED-WORKTREE"
-```
-- `MAIN-CLONE` → **stop.** The story's work is not here; committing would put it on `{default_branch}`. Tell the user to close the story from the session where it was implemented (`cd {worktree_prefix}-epic-{EPIC_SLUG} && claude`).
-- Basename of `WORK` not `{worktree_prefix}-epic-{EPIC_SLUG}`, or `HEAD` not `feature/epic-{EPIC_SLUG}` → **stop**, and name the tree and branch you are actually in. Committing one epic's story onto another epic's branch is silent and survives the run.
+Count this epic's stories still `backlog`/`in_progress`, **excluding this one**. `IS_LAST = (REMAINING_OPEN == 0)`. If the count contradicts what the user expects, print the list behind it and ask.
 
-### 0.2 — Compute `REMAINING_OPEN` (epic_shared only)
 
-Count stories sharing this epic that are still open, **excluding the story being closed**:
-
-```bash
-grep -l "^- \*\*Epic\*\*: {EPIC_SLUG}$" {pm}/stories/*.md 2>/dev/null \
-  | xargs grep -l "^- \*\*Status\*\*: \(backlog\|in_progress\)" 2>/dev/null \
-  | grep -v "STORY-{NNN}" \
-  | wc -l
-```
-
-`IS_LAST = (REMAINING_OPEN == 0)`.
-
-If the count looks wrong (the user expected the epic to be done but a sibling is still open, or vice versa), print the list of stories the count is based on and ask the user to confirm before continuing.
+→ [`references/context-resolution.md`](references/context-resolution.md)
 
 ---
 
 ## Phase 1 — Detect impacted services + scope-creep gate
 
-1. List changed files: `git -C {WORK} diff --name-only` (plus `--staged`).
-2. Map each changed path to a service via the `path` column of the spec services table.
-3. `IMPACTED` = union of the story's declared `Impacted Services` and the services the diff actually touches.
-4. **Scope-creep gate:** if a changed file maps to **no** service in `IMPACTED` (i.e. it falls outside every declared service path), **stop and ask**. Show the offending files. Do NOT proceed — adding them silently would widen scope past the story's declaration. The user either amends the story's `Impacted Services` or reverts the stray change.
-   - **Exclude Kairos bookkeeping from this gate:** files under `{pm}/` (the story file itself, which `/kairos:implement-story` left edited to `Status: in_progress`, and `ROADMAP.md`) are expected and never count as scope creep. Only source files outside the declared services trip the gate.
+1. Changed files: `git -C {WORK} diff --name-only`, plus `--staged`; map each to a service via the spec table.
+2. `IMPACTED` = the story's declared `Impacted Services` ∪ what the diff actually touches.
+3. **Scope-creep gate:** a changed file mapping to **no** service in `IMPACTED` → **stop and ask**, showing the files. Do NOT proceed: committing them silently widens scope past the story's declaration. **Exempt:** files under `{pm}/`.
 
-For each service in `IMPACTED`, note from its `{path}/spec.md` (if present): `test_command`, `review_command`, `suggest_test_plan`, and whether a `{path}/qa/TEST_PLAN_*.md` exists.
+Note from each impacted `{path}/spec.md`: `test_command`, `worktree_test_command`, `review_command`, `security_review`, `suggest_test_plan`, and whether `qa/TEST_PLAN_*.md` exists.
 
 ---
 
 ## Phase 2 — Per-service gates (tests → QA → review)
 
-These are **gates**: they run before any commit. Run them for every service in `IMPACTED`.
+**Gates**, before any commit, for every service in `IMPACTED`. One → inline; **≥ 2 → one subagent each, in parallel.**
 
-- **1 service impacted** → run the block inline (no subagent overhead).
-- **≥ 2 services impacted** → launch one subagent per service in parallel (single message, multiple Agent calls), then collect results.
+**(a) Unit tests**, from `{WORK}`, preferring `worktree_test_command` over `test_command` under `epic_shared`.
+> **Fixed-container guard (`epic_shared`).** Falling back to a `test_command` attaching to a fixed container (`docker exec`, `docker compose exec`) with no `worktree_test_command` → **stop and ask**: it tests the checkout the container was started from — prod — not `{WORK}`.
 
-For each service, in order:
+A service needing an unavailable resource → **ask before skipping**, never silently.
+> **Any test fails → stop and ask.** Report service, failing tests, output excerpt. Do NOT proceed to commit. The story stays `in_progress`.
 
-**(a) Unit tests.** Run the service's test command from `{WORK}` (skip if the service declares none). **Pick the command by mode:** when `worktree_mode == epic_shared` (so `{WORK}` is a separate worktree dir) and the service declares `worktree_test_command`, run **that** — substituting `{worktree}` = `{WORK}` and `{worktree_id}` = `epic-{EPIC_SLUG}` — because the plain `test_command` (e.g. `docker exec <fixed-container>`) would test the prod checkout, not the worktree. Otherwise run `{service.test_command}`.
-> **Fixed-container guard (`epic_shared` only).** Before falling back to `{test_command}`, check it: if it attaches to a fixed container — it matches `docker exec` or `docker compose exec` — **and** the service declares no `worktree_test_command`, **stop and ask**. Such a command runs against whatever checkout the long-running container was started from (prod), **not** `{WORK}` — so a "pass" here is meaningless and could even mutate prod state. Tell the user to declare a `worktree_test_command` (and run `/kairos:setup-worktree-isolation` if the Compose isn't prefixed yet). Do not silently run it.
+**(b) QA.** Any `{service.path}/qa/TEST_PLAN_*.md` → `/kairos:qa {service}`. **`STOPPED` is a hard gate: stop and ask.** `ISSUES FOUND` is reported; the user decides.
 
-If a service needs an unavailable resource (GPU, external API, container down), **ask before skipping** — do not silently skip.
-> **If any test fails → stop and ask.** Report service, failing tests, and an output excerpt. Do NOT proceed to commit. The story stays `in_progress`.
-
-**(b) QA.** If at least one `{service.path}/qa/TEST_PLAN_*.md` exists, run `/kairos:qa {service}` for it. A `STOPPED` verdict (a gating phase failed) is a hard gate — **stop and ask**, like a failing test. An `ISSUES FOUND` verdict (non-gating failures only) is reported and the user decides whether to continue.
-
-**(c) Code review.** Run the review on the **service-scoped diff** (restricted to that service's path) per the [review contract](../../docs/review-contract.md), resolving `{service.review_command}`:
-- *unset, **or** still the `<TODO…>` placeholder `/kairos:init` wrote* → **Mode 1**: run `/kairos:review {service.path} --from {WORK}`. Both values resolve to this same default — never treat "never configured" and "configured to the placeholder" as two different behaviors.
-- `skip` → **opt-out**: bypass the review step for this service cleanly (no prompt, no log noise). The security-review phase still runs if opted in.
-- a slash-command name → **Mode 2**: invoke that project command on the diff.
-- a script path → **Mode 3**: pipe the diff on stdin, read findings from stdout.
-
-> **`--from {WORK}` is not optional.** A reviewer pointed at the wrong tree reports nothing, and an empty report is indistinguishable from a clean pass — that is the failure this argument exists to prevent. Under the one-session-one-tree doctrine `{WORK}` and your working directory agree, so the argument is now a **confirmation** rather than a correction: it makes the scope explicit, auditable, and identical in every `worktree_mode`. Pass it everywhere — including to a Mode 2 command or a Mode 3 script, whose diff must come from `git -C {WORK}`.
-
-All modes emit findings under `## Critical` / `## High` / `## Medium` / `## Low`.
-
-> **If review surfaces a Critical or High finding → stop and ask.** Do NOT proceed to commit. Medium/Low findings are reported; the user decides whether to fix before closing.
-
-**(d) Test-plan suggestion.** If `{service.suggest_test_plan} == true` **and** the service has no `TEST_PLAN_*.md`, prompt **once**: `"No test plan for {service} — generate one via /kairos:create-test-plan? [y/N]"`. Do not nag if already prompted once for this service in this run.
-
-Subagent prompt for the parallel case (one per service):
-> You are a close-out gate runner for the `{service}` service (path `{path}`).
-> 1. Run the test command from `{WORK}` (skip if none): in `epic_shared` mode prefer `{worktree_test_command}` (with `{worktree}`=`{WORK}`, `{worktree_id}`=`epic-{EPIC_SLUG}`), else `{test_command}`. **Guard:** if no `{worktree_test_command}` is set and `{test_command}` matches `docker exec`/`docker compose exec` (fixed container), do NOT run it — return `BLOCKED: {service} test_command attaches to a fixed container; it would test prod, not the worktree. Declare worktree_test_command.` Report pass/fail + last 50 lines on failure.
-> 2. Run the service-scoped code review per the review contract (`{review_command}`, or the default reviewer if unset or still the `<TODO…>` placeholder; skip entirely if `skip`) on this diff:
->    ```
->    {git diff scoped to {path}}
->    ```
->    In Mode 1 that is `/kairos:review {path} --from {WORK}` — pass `--from` even though the diff is above, so the reviewer resolves the same tree you did.
->    Return findings grouped under `## Critical` / `## High` / `## Medium` / `## Low` (omit empty sections).
-> Do not commit, do not edit files. Return only the gate results.
-
-(QA and the test-plan prompt stay in the main agent — they may need user input.)
-
-**(e) Leave a receipt.** Once (a)–(c) are green for **every** service, record that the review gate actually ran on this exact change set:
+**(c) Code review.** Collect the service-scoped diff with the Kairos collector, which mints the token the receipt needs:
 
 ```bash
-sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate review \
-   --tree {WORK} --story STORY-{NNN} --services "{comma-separated IMPACTED}"
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} {service.path}
 ```
 
-Every service opted out with `review_command: skip` → record that instead, so the log distinguishes a gate that was declined from one that vanished:
+Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-contract.md): `{service.review_command}` unset **or** still the `<TODO…>` placeholder → `/kairos:review {service.path} --from {WORK}`; `skip` → opt-out; a slash command or script path → those modes.
+> **`--from {WORK}` is not optional.** A reviewer aimed at the wrong tree reports nothing, and an empty report is indistinguishable from a clean pass.
+> **Review surfaces a Critical or High finding → stop and ask.** Do NOT proceed to commit. Medium/Low are reported; the user decides.
 
-```bash
-sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate review \
-   --tree {WORK} --story STORY-{NNN} --skipped "review_command: skip on all impacted services"
-```
+**(d)** `{service.suggest_test_plan}` and no `TEST_PLAN_*.md` → prompt **once** to make one.
 
-> **What a receipt is for.** A gate that ran and a gate that never ran produce the same artefact — an empty report. The receipt breaks that symmetry: it exists only because the gate executed, and it is bound to a digest of the exact content the gate saw, so editing a file afterwards invalidates it. A `PreToolUse` hook reads it before each commit. **In this version the hook only observes**: it writes one line to `gate-log.jsonl` saying which receipts were present and lets the commit through. It refuses nothing.
->
-> If the script is not found, **say so in the summary** (`gate receipts: unavailable`) and continue. An absent receipt must never be readable as an absent gate when the truth is an absent script.
+**(e) Leave a receipt.** (a)–(c) green for **every** service → write the `review` receipt with `--mechanism kairos-fork` and the `SCOPE-TOKEN` from (c). All services on `review_command: skip` → `--skipped "<reason>"` (no token: nothing ran). Commands: [`references/security-gate.md`](references/security-gate.md).
+
+> **Why a token.** A gate that ran and one that never ran produce the same artefact: an empty report. A run shipped where the gate did not fire and the receipt said `passed` anyway, so `--write` now **refuses** a `passed` receipt whose token it cannot find. Never work around a refusal: re-run the gate, or record `--skipped`/`--override` with a reason. **The hook still only observes.** Script missing → `gate receipts: unavailable`, and continue.
 
 **All gates green for all services → proceed to Phase 2.5.**
+
+→ Command selection, review modes, subagent prompt: [`references/gates-detail.md`](references/gates-detail.md).
 
 ---
 
 ## Phase 2.5 — Security review (opt-in, per service)
 
-Runs **after** the Phase 2 gates pass and **before** any commit, so a finding has a clean remediation path (still uncommitted, easy to fix or amend). This phase **wraps Anthropic's `security-review` skill** — it does not reimplement security analysis.
+**After** the Phase 2 gates, **before** any commit. Kairos does not reimplement security **analysis**: both stages run Anthropic's prompt, Kairos owns only the **scope**.
 
-Trigger: `OPTED_IN` = the services in `IMPACTED` whose per-service spec sets `security_review: true`.
+`OPTED_IN` = services in `IMPACTED` with `security_review: true`. Empty, or empty diff for all → **skip the phase and record the skip** (`--skipped`) — otherwise a project that never opts in logs a missing gate forever.
 
-- **`OPTED_IN` empty → skip this phase entirely.** No log line, no prompt.
-- **Every opted-in service has an empty scoped `git diff` → skip too** (nothing to review).
+### Stage 1 — this story, before the commit
 
-Both skips are legitimate, and both must be **recorded** — otherwise every project that never opts in logs a missing security gate forever, and the signal is worth nothing:
-
-```bash
-sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate security \
-   --tree {WORK} --story STORY-{NNN} --skipped "{no service opted in | empty diff}"
+```
+/kairos:gate-security {WORK} {opted-in path, or omit for the whole tree}
 ```
 
-**Run the skill once, not once per service.** It takes no path argument — it reviews the pending changes of the work tree it runs in — so running it per service would re-analyze the same diff N times for one filtered result each.
+It scopes itself via `kairos-diff.sh` (staged, unstaged **and untracked**) and ends with a `SCOPE-TOKEN`.
 
-**Aim it explicitly — do not detect the wrong tree and give up.** Having no target argument, the skill reviews whatever tree it is run in. Under the one-session-one-tree doctrine that tree is now the right one **by construction** — the session was opened inside the epic worktree and never moved — and 0.1 has just verified it. Aim it anyway: a gate that depends on an invariant holding is weaker than one that states its scope, and `git -C {WORK}` resolves **any** work tree, so the invocation below is identical in every `worktree_mode`, with no special case for `off` / `in_place` (there `{WORK}` simply *is* the workspace root).
+> **Why not the built-in skill here.** It scopes itself with `git diff origin/HEAD...`, empty **by construction** while an epic branch has no commits, and Kairos gates before committing.
 
-First hold what the gate must cover:
+**Attribute** findings by the file cited, **drop those outside `OPTED_IN` paths**, **read `* Severity:` fields, not headers** (no `## High` section, no Critical). Then:
 
-```bash
-git -C {WORK} diff --name-only
-git -C {WORK} diff --staged --name-only
-```
+- **Any High (or Critical) → stop and ask.** Do NOT commit; story stays `in_progress`.
+- **Medium / Low only → list them and prompt** before continuing.  · **Clean → continue.**
+- **`SCOPE-ERROR`, skill unavailable, or no token → the gate did not run.** Interactive → **stop and ask**. Non-interactive (subagent of an epic/wave run) → return `BLOCKED: security gate could not run — {reason}` **without committing**.
+- **Never substitute your own pass for the skill.** A false green wearing the gate's name — and now futile: without a token the receipt cannot be written ([review contract §7](../../docs/review-contract.md)).
 
-Union → `PENDING_FILES`.
+Clear, or medium/low acknowledged → receipt: `--mechanism kairos-fork --scope-token {from the report}`.
 
-Then invoke the `security-review` skill (via the `Skill` tool), passing the tree, the diff commands, and the provenance footer as its arguments:
+### Stage 2 — the whole branch, before the push
 
-> Review the pending changes of the work tree at `{WORK}` — **not** this session's current directory, which is a different checkout. Collect them with `git -C {WORK} diff` and `git -C {WORK} diff --staged`. Every path you report is relative to `{WORK}`; read a file as `{WORK}/<path>`. Do not diff or read any other tree. After the findings, end the report with exactly one line: `_Reviewed N file(s): <comma-separated paths, relative to {WORK}>_`.
+The push is where code leaves the machine, and where `origin/HEAD...` is finally the **right** scope: everything committed and not yet pushed. **Neither stage replaces the other.**
 
-It returns a markdown report and nothing else.
+**When:** in Phase 7, after the deferral rule lets you through and **before** the push. Run the built-in `security-review` from `{WORK}`, apply the same severity gate, receipt with `--mechanism native-skill` — keyed by branch tip, so the `pre-push` hook knows whether what is leaving was reviewed. **Observation mode: it warns, it does not refuse.**
 
-**Verify that footer before reading a single finding.** A report is evidence of a gate only if it demonstrably looked at `{WORK}`, and an empty report proves nothing by itself — the wrong tree yields the same empty report as clean code.
-
-- Footer present and every path in it is in `PENDING_FILES` → the gate ran on the right tree. A **subset** is fine (the skill skips what it judges irrelevant); a path **outside** `PENDING_FILES` is not.
-- Footer absent, but the report has findings and **every** file they cite is in `PENDING_FILES` → same evidence by another route; accept it and note the missing footer.
-- Anything else — no footer **and** no findings, or any cited path outside `PENDING_FILES` → **the gate did not run on `{WORK}`**, whatever it reports. An empty report with nothing tying it to `{WORK}` is the exact shape of the failure this check exists for. Treat it as *not run* — never as clean — and handle it as "the gate cannot run" below.
-
-Then **attribute** each finding to a service by the file path it cites, and **drop findings whose file falls outside `OPTED_IN` paths** — a service that did not opt in is not silently reviewed into a gate.
-
-**Parse `* Severity:` fields, not headers.** The report is one level-1 header per finding with the severity as a field:
-
-```markdown
-# Vuln 1: xss: `foo.py:42`
-* Severity: High
-* Description: …
-* Exploit Scenario: …
-* Recommendation: …
-```
-
-There is **no `## High` section, and no Critical level at all** — `High` is the skill's ceiling. Looking for the code-review contract's headers here finds nothing in a report full of vulnerabilities and passes the gate silently. Match `* Severity:` case-insensitively. A report with no findings is the expected clean result: the skill reports only `High` and `Medium` and drops anything below a high confidence bar.
-
-Apply the gate on the attributed findings:
-
-- **Any High (or Critical) finding → stop and ask.** Report them (service, severity, location). Do NOT proceed to commit — the story stays `in_progress` until the user addresses them. (Same safety-gate vocabulary as the test/review gates.)
-- **Medium / Low findings only → list them and prompt** the user to acknowledge before continuing (`"Security review found N medium/low finding(s) in {services}. Continue? [Y/n]"`). These do not block by default.
-- **Clean → continue silently** to Phase 3.
-- **The gate cannot run** — the skill is unavailable (not installed, not resolvable, errors out) **or** the provenance check above failed:
-  - *Interactive* → **stop and ask**: `"The security gate could not be verified against {WORK} — {reason}. Continue without it? [y/N]"`. Never pass silently. A code-review fallback can be inline prose; a security gate that quietly does not run is a gate the user believes in and does not have.
-  - *Non-interactive* (you are a per-story subagent of `/kairos:implement-epic` or `/kairos:implement-wave` and cannot ask) → return `BLOCKED: security gate could not be aimed at {WORK} — {reason}` **without committing**. That decision is the user's, not yours.
-  - **Never substitute your own pass for the skill**, in either case. Reviewing the diff yourself and reporting it as the security gate is a false green wearing the gate's name — the run states that a security review passed when none ran. Kairos does not reimplement security analysis ([review contract §7](../../docs/review-contract.md)): the gate either ran on `{WORK}` or it did not.
-
-Run this sequentially in the agent running `/kairos:close-story` (the skill spawns its own sub-tasks, and the gate may need user input). Do not delegate it to the Phase 2 per-service subagents.
-
-**Gate clear, or medium/low findings acknowledged → leave the receipt, then proceed to Phase 3:**
-
-```bash
-sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate security \
-   --tree {WORK} --story STORY-{NNN} --services "{comma-separated OPTED_IN}"
-```
-
-Write it **only** when the provenance check above passed. A gate that could not be aimed at `{WORK}` did not run, and a receipt for it would be the false green this whole phase exists to prevent — the one case where the instrumentation could launder exactly the failure it was built to detect.
+→ Receipt commands, fields per mechanism, what replaced the provenance footer: [`references/security-gate.md`](references/security-gate.md).
 
 ---
 
 ## Phase 3 — Commit source (Conventional Commits)
 
-Format: `<type>(<scope>): <subject>` — `<scope>` is the service name from the spec table.
-
-- Types: `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`.
-- Subject: imperative mood, no leading capital, no trailing period.
-- Footer:
-  ```
-  🤖 Generated with Claude Code
-  ```
-
-**Single service** → one bundled commit, scope = that service.
-
-**Multiple services** → ask the user:
-- **Bundled (default)** — one commit; pick the dominant service as scope (or omit scope if genuinely cross-cutting) and list the touched services in the footer.
-- **One commit per service** — stage only that service's paths and commit each with its own type/scope.
+`<type>(<scope>): <subject>` — scope = service name, subject imperative, footer `🤖 Generated with Claude Code`. **Single service** → one bundled commit. **Multiple** → **ask**: bundled (default) or one per service. Nothing to commit (already done by hand) → skip and note it.
 
 ```bash
-git -C {WORK} add -A
-git -C {WORK} status            # show what is being committed
-git -C {WORK} commit -m "<type>(<scope>): <subject>
+git -C {WORK} add -A && git -C {WORK} status && git -C {WORK} commit -m "<type>(<scope>): <subject>
 
 🤖 Generated with Claude Code"
 ```
 
-If `git status` reports nothing to commit (work was already committed manually), skip and note it in the summary.
+→ [`references/commits-and-specs.md`](references/commits-and-specs.md)
 
 ---
 
 ## Phase 4 — Update per-service `spec.md` from the diff
 
-For each service in `IMPACTED` that has a `{path}/spec.md`, update it from that service's scoped diff. **≥ 2 services → parallel subagents; 1 → inline.**
+Each service in `IMPACTED` with a `{path}/spec.md` → update it from that service's scoped diff. **≥ 2 → parallel subagents; 1 → inline.**
 
-Subagent prompt (one per service):
-> You are a spec updater for `{service}` (`{path}/spec.md`). Current content:
-> ```
-> {current spec.md}
-> ```
-> Diff scoped to this service:
-> ```
-> {git diff for {path}}
-> ```
-> Story STORY-{NNN}, date {YYYY-MM-DD}. Update the observable-behavior sections from the diff only:
-> new/changed endpoints, events, database tables, env vars, dependencies, behavioral contracts, cron/file-output/LLM-prompt sections. Set the header `**Last updated**: STORY-{NNN} ({YYYY-MM-DD})`. Keep it concise — prune stale entries rather than accumulate.
-> **Apply only additions/modifications the diff supports. Never delete user content you cannot tie to the diff — if unsure, leave it and note the uncertainty.** Return the full updated spec.md.
-
-Write the returned specs to disk.
+> **Apply only what the diff supports. Never delete user content you cannot tie to the diff** — if unsure, leave it and note the uncertainty.
 
 ---
 
 ## Phase 5 — Archive story + PRD, update ROADMAP
 
-1. Flip the story's `Status` to `done`, then move it using the `STORY_FILE` resolved in Phase 0.2 (never a bare `STORY-{NNN}-*.md` glob — it misses the un-slugged `STORY-{NNN}.md` form). Ensure the target dir exists first; the move is idempotent (skip if already under `done/`):
-   ```bash
-   mkdir -p {WORK}/{pm}/done
-   git -C {WORK} mv "$STORY_FILE" {pm}/done/
-   ```
-2. **PRD archival:** if the story has a `Source PRD`, check whether any *other* open story still references it. Anchor the status match on the frontmatter line (`^Status:`) so prose containing the word "Status" never counts; exclude the just-moved story by scanning only `stories/`:
-   ```bash
-   grep -lE "^Source PRD:.*{prd-basename}" {WORK}/{pm}/stories/*.md 2>/dev/null \
-     | xargs -r grep -lE "^Status:[[:space:]]*(backlog|in_progress)" 2>/dev/null
-   ```
-   - No other open story → `mkdir -p {WORK}/{pm}/done && git -C {WORK} mv {prd_path} {pm}/done/` (skip if already in `done/`).
-   - Others remain → leave it, note `"PRD kept — referenced by N open stories."`
-3. **ROADMAP:** in `{pm}/ROADMAP.md`, remove the story row from `In Progress` (or wherever it is found) and add it to `Done`: `| STORY-{NNN} | {Title} | {Size} | {YYYY-MM-DD} |`.
-4. **Issue mirror** — only if `issue_tracker == github` **and** the story has an `Issue` number. Which action applies depends on whether a PR will close it:
-   - **`worktree_mode: in_place` or `epic_shared`** → **do not close it here.** Phase 7.2 puts `Closes #{N}` in the PR body and GitHub closes it at merge. Closing now would close the issue before the code is reviewed. Only drop the in-progress label:
-     ```bash
-     gh issue edit {N} -R {issue_repo} --remove-label "status:in_progress" 2>/dev/null || true
-     ```
-   - **`worktree_mode: off`** → there is no PR, so nothing else ever will. Close it explicitly:
-     ```bash
-     gh issue edit {N} -R {issue_repo} --remove-label "status:in_progress" 2>/dev/null || true
-     gh issue close {N} -R {issue_repo} --comment "Closed by STORY-{NNN} ({sha})"
-     ```
-   Best-effort in both cases: a failure is a one-line warning carried into the Phase 9 summary, **never a gate**. Never reopen an issue a human closed.
+1. `Status` → `done`, `git mv` to `{pm}/done/` using `STORY_FILE` — **never a bare glob**.
+2. Archive the `Source PRD` **only if no other open story references it**; move the ROADMAP row into `Done`.
+3. **Issue mirror** (`issue_tracker: github`): close the issue explicitly **in `off` mode only** — elsewhere the PR closes it at merge, and closing now would close it before review. Best-effort: a failure is a warning, **never a gate**.
+
+→ [`references/archival.md`](references/archival.md)
 
 ---
 
 ## Phase 6 — Commit docs
 
-Stage and commit the archival + spec changes together:
+Commit the archival + spec changes together:
 
 ```bash
-git -C {WORK} add -A
-git -C {WORK} commit -m "docs(stories): close STORY-{NNN} — {title}
+git -C {WORK} add -A && git -C {WORK} commit -m "docs(stories): close STORY-{NNN} — {title}
 
 🤖 Generated with Claude Code"
 ```
@@ -355,149 +185,47 @@ git -C {WORK} commit -m "docs(stories): close STORY-{NNN} — {title}
 
 ## Phase 7 — Push + PR/MR
 
-**Deferral rule (epic_shared only):** if `worktree_mode == epic_shared` **and** `IS_LAST == false`, **stop here.** No push, no PR/MR, no cleanup — the branch stays local and the worktree stays attached for the next sibling story. Print the intermediate summary (Phase 9) and exit.
+**Deferral rule (epic_shared only):** `IS_LAST == false` → **stop here.** No push, no PR/MR, no cleanup — the branch stays local, the worktree attached for the next sibling story. Print the intermediate summary and exit.
 
-Otherwise (`off`, `in_place`, or epic_shared on its last story) continue:
+Otherwise: **stage 2 of the security gate is due first** (Phase 2.5). Then push per `push_mode` — **`manual` means you print the command and wait** — and open the PR/MR per `git_host`. **Never auto-merge.**
 
-### 7.1 — Push (per `push_mode`)
-
-Branch to push: the current branch in `off` mode, `feature/story-{NNN}-{slug}` in `in_place`, `feature/epic-{EPIC_SLUG}` in `epic_shared`.
-
-- **`push_mode: auto`** → `git -C {WORK} push -u origin {branch}`.
-- **`push_mode: manual`** → **print the command and wait.** Do not push.
-  ```
-  Push the branch yourself (the agent shell can't unlock the SSH passphrase):
-
-    git -C {WORK} push -u origin {branch}
-
-  Reply "pushed" when done, or "skip" to defer push + PR + cleanup.
-  ```
-  If the user says "skip", jump to Phase 9 noting push/PR/cleanup are pending. The user can re-run `/kairos:close-story` later (it will detect the archived files and resume here).
-
-### 7.2 — PR / MR (skip in `off` mode — there is no feature branch to open)
-
-For `in_place` / `epic_shared`, after the push is confirmed:
-
-- **`git_host: github`** → print the `gh pr create` command:
-  ```
-  gh pr create \
-    --title "<type>(<scope>): {title or epic label}" \
-    --body "Closes {STORY-NNN, plus every story of the epic in epic_shared mode}
-  {Closes #{Issue} — one line per closed story that carries an Issue number; omit the block entirely when issue_tracker is none}
-
-  ## Summary
-  {1-3 bullets from the acceptance criteria}
-
-  ## Test plan
-  {merged QA checklists}
-
-  🤖 Generated with Claude Code" \
-    --base {default_branch}
-  ```
-- **`git_host: gitlab`** → print the MR-creation URL and ask the user to confirm creation:
-  ```
-  https://<gitlab-host>/<project>/-/merge_requests/new?merge_request[source_branch]={branch}&merge_request[target_branch]={default_branch}&merge_request[title]=<url-encoded title>
-  ```
-- **`git_host: other`** → print the branch + base and ask the user to open the PR/MR in their tool.
-
-In `epic_shared` mode aggregate the epic's stories (current + every closed story under `{pm}/done/` sharing the `Epic`) into the Closes list and the Summary — including their `Issue` numbers, one `Closes #{N}` line each. The plain `Closes STORY-NNN` line stays: it is readable without GitHub, and it is the only form that survives when `issue_tracker` is `none`. **Never auto-merge.**
-
-**If the user answered "skip" at 7.1** (no push, so no PR), add to the summary — the issue stays open and nothing will close it until then:
-```
-Issue #{N}: still open — no PR opened. Close it with `gh issue close {N}`, or run /kairos:sync-pm.
-```
+→ [`references/publishing.md`](references/publishing.md)
 
 ---
 
 ## Phase 8 — Worktree teardown: print it, do not run it (epic_shared + IS_LAST only)
 
-Only when `worktree_mode == epic_shared` **and** `IS_LAST == true`, after the user confirms push (and PR/MR created or "skip PR"). **You do not remove the worktree**: it is the tree this session is standing in, and git does not protect you — `git worktree remove .` returns 0 and deletes the directory the session is running in. Print the handoff instead:
+**You do not remove the worktree.** It is the tree this session stands in, and git does not protect you: `git worktree remove .` returns 0 and deletes the directory the session runs in. Print the handoff instead: it tells the user to run `/kairos:worktree {EPIC_SLUG} --teardown` from the main clone. Do not reimplement any piece of the teardown here; in `off`/`in_place`, skip silently.
 
-```
-Epic {EPIC_SLUG} is published. To reclaim the worktree, from the MAIN CLONE:
-
-    cd {main clone path} && claude
-    /kairos:worktree {EPIC_SLUG} --teardown
-```
-
-The main clone's path is `git rev-parse --git-common-dir` with the trailing `/.git` removed. `/kairos:worktree --teardown` owns the whole sequence — the isolated Compose project, the `epic-{EPIC_SLUG}-`-prefixed images and only those, `git worktree remove`, the memory symlink — and stops on uncommitted **or unpushed** work, the second of which git itself does not check. Do not reimplement a piece of it here: pruning this worktree's containers from inside it and leaving the tree behind is a teardown that reads as done and is not.
-
-In `worktree_mode: off` / `in_place` there is nothing to tear down; skip this phase silently.
+→ [`references/publishing.md`](references/publishing.md)
 
 ---
 
 ## Phase 9 — Summary
 
-**Intermediate close** (epic_shared, not last):
-```
-✅ STORY-{NNN}: {title} — closed (epic {EPIC_SLUG} still in progress)
+One block. **Intermediate** (epic_shared, not last): tests, review, receipts, commit, archive, issue, local branch, kept worktree, `REMAINING_OPEN`. **Full close** adds QA, security, docs commit, specs, push/PR state, teardown. Receipts get a line in both, naming the mechanism: `security: passed(kairos-fork) → native pass due before push`.
 
-  Tests:     {service}: PASS ...
-  Review:    {N} critical | {N} warning | {N} info
-  Receipts:  review: {passed|skipped} · security: {passed|skipped|not run}
-  Commit:    {sha} {type}({scope}): {subject}
-  Archived:  {pm}/done/STORY-{NNN}-*.md
-  Issue:     #{N} will close on merge   ← only when issue_tracker is github
-  Branch:    feature/epic-{EPIC_SLUG} (local — push deferred to last story)
-  Worktree:  {WORK} (kept open)
-  Remaining: {REMAINING_OPEN} open stor{y|ies} on this epic
-
-Next: run /kairos:implement-story to pick the next story of the epic.
-```
-
-**Full close** (off / in_place / epic_shared last story):
-```
-✅ STORY-{NNN}: {title} — closed
-{✅ Epic {EPIC_SLUG} — complete (N stories)   ← epic_shared only}
-
-  Tests:     {service}: PASS ...
-  QA:        {service}: {plans run / none}
-  Review:    {N} critical | {N} warning | {N} info
-  Security:  {service}: {clean / N findings acked / skipped — opt-in only}
-  Receipts:  review: {passed|skipped} · security: {passed|skipped|not run}
-  Commits:   {sha} {type}({scope}): {subject}
-             {sha} docs(stories): close STORY-{NNN}
-  Specs:     {service}/spec.md updated ...
-  Archived:  {pm}/done/STORY-{NNN}-*.md  (+ PRD if archived)
-  Issue:     #{N} {closed | will close on merge | still open (no PR)}   ← only when issue_tracker is github
-  Branch:    {branch} {pushed | push pending}
-  PR/MR:     {created | command printed | n/a}
-  Worktree:  {removed | n/a}
-
-Next: run /kairos:implement-story to pick the next backlog story.
-```
+→ [`references/summary-templates.md`](references/summary-templates.md)
 
 ---
 
 ## Failure modes
 
+Each **stops the flow before any commit** unless stated otherwise:
+
 - **`spec.md` missing** → stop, point at `/kairos:init`.
-- **Story not identifiable / ambiguous** → stop and ask. Never guess.
-- **Story already in `{pm}/done/`** → report it is closed, stop.
-- **A test fails** → stop and ask; no commit; story stays `in_progress`.
-- **Review finds a Critical or High issue** → stop and ask; no commit. (`review_command: skip` bypasses this step; see the [review contract](../../docs/review-contract.md).)
-- **Security review finds High/Critical** (opt-in services) → stop and ask; no commit; story stays `in_progress`.
-- **`security-review` unavailable, or its provenance footer does not match `{WORK}`'s pending files** → the gate did not run: stop and ask (interactive) or return `BLOCKED` (as a subagent of an epic/wave run). Never skip it silently, and never stand in for it with a hand-rolled pass.
-- **Diff touches a file outside `Impacted Services`** → scope-creep gate; stop and ask.
-- **Worktree not found (epic_shared)** → ask for the path; offer to skip cleanup if already removed.
-- **Push deferred / fails** (`manual`, no remote, auth, user "skip") → note in summary, leave branch + worktree in place; re-running `/kairos:close-story` resumes at Phase 7.
-- **The user asks you to remove the worktree** → decline; it is the tree you are in, and git would let you delete it out from under the session. Print the `/kairos:worktree … --teardown` line for the main clone (Phase 8).
-- **Issue mirror fails** (`gh` missing, auth expired, network, issue deleted) → one-line warning in the summary, pointing at `/kairos:sync-pm`. **Never a gate** — a tracker outage must not block a close.
+- **Story ambiguous, missing, or already closed** → stop. Never guess.
+- **A test fails**, **QA returns `STOPPED`**, **review or security finds Critical/High** → stop and ask; no commit; story stays `in_progress`.
+- **The security gate could not run** (scope error, skill unavailable, no token) → stop and ask, or return `BLOCKED` as a subagent. Never skip it silently; **never stand in for it with a hand-rolled pass**.
+- **`--write` refuses a receipt** → re-run the gate, or record `--skipped`/`--override` with a reason. Never work around it.
+- **Diff outside `Impacted Services`** → scope-creep gate; stop and ask.
+- **In the main clone or another epic's worktree** → stop, do not commit.
+- **Push deferred or failing** → note it, leave branch and worktree in place; re-running resumes at Phase 7. **Not a gate.**
+- **Asked to remove the worktree** → decline; print the `--teardown` line.
+- **Issue mirror fails** → one-line warning pointing at `/kairos:sync-pm`. **Never a gate.**
 
 ---
 
 ## QA self-check (before declaring success)
 
-- [ ] All gates (tests, QA, review) ran for every impacted service and passed — or the flow stopped at the first failure. Review honored `review_command` (default `/kairos:review` / slash command / script / `skip`) and gated on Critical/High per the review contract.
-- [ ] Every review — whatever the mode — resolved its diff from `{WORK}`, not from the calling session's directory.
-- [ ] Security review ran once (not once per service) when at least one service opted in with a non-empty diff, aimed at `{WORK}` through its arguments and confirmed by a provenance footer matching `PENDING_FILES` (or, footer absent, by findings that all cite files in it); findings were attributed by file path and filtered to opted-in services; severity was read from `* Severity:` fields; High blocked the commit; an unavailable skill or an unverifiable report stopped, asked, or returned `BLOCKED` — it never passed, and no self-written pass was reported as the gate.
-- [ ] A gate receipt was written for **review** and for **security** — `passed` when the gate ran, `skipped` with a reason when it legitimately did not (all services on `review_command: skip`; nobody opted into security; empty diff). No receipt was written for a security gate whose provenance check failed, and a missing receipt script was reported as `gate receipts: unavailable` rather than passed over in silence.
-- [ ] No file outside the declared `Impacted Services` was committed (scope-creep gate honored).
-- [ ] Single-service story used the inline path; multi-service used parallel subagents and fired the bundled-vs-split commit prompt.
-- [ ] `push_mode: manual` printed the push command and waited; `auto` pushed.
-- [ ] `worktree_mode: epic_shared` with `IS_LAST == false` did **not** push or open a PR/MR; the story still moved to `{pm}/done/`.
-- [ ] In `epic_shared`, 0.1 confirmed this session is in **this epic's** worktree (not the main clone, not a sibling epic's) before anything was committed; no worktree was created or removed.
-- [ ] Each impacted service's `spec.md` was updated from its scoped diff, with no unexplained deletions.
-- [ ] Story `Status` is `done` and the file is under `{pm}/done/`; ROADMAP `Done` row added.
-- [ ] Issue mirror (when `issue_tracker: github`): the issue was closed **explicitly only in `off` mode**; in `in_place` / `epic_shared` it was left open with `Closes #{N}` in the PR body. No mirror failure blocked the close.
-- [ ] All output, commit messages, and spec edits are in English. No source-project names leaked.
+Walk [`references/qa-self-check.md`](references/qa-self-check.md) before declaring the story closed: every gate ran and gated; every review resolved its diff from `{WORK}`; stage 1 ran with a token and stage 2 is done or owed; a receipt exists for **review** and **security**, each naming its mechanism; no scope creep; push/PR rules; archive and issue mirror; English only.

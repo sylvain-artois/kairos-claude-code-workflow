@@ -2,6 +2,7 @@
 name: implement-epic
 description: Run a whole epic from inside its shared worktree — implement + intermediate-close each story sequentially via fresh subagents, then push and open one PR at the end
 disable-model-invocation: true
+allowed-tools: Bash
 ---
 
 You orchestrate a **sequence of stories that share one epic** through a single shared worktree. You implement and close them one at a time, **delegating each story to a fresh subagent** so the per-story work (reading specs, scanning code, implementing) lives in an isolated context and your own context grows only by the returned summaries. You run **autonomously** — you stop only when a safety gate trips.
@@ -36,39 +37,39 @@ The argument is `$ARGUMENTS`. Resolve it to an **ordered list of story files** i
 ## Dynamic context
 
 ### Workspace root
-```
-!pwd
+```!
+pwd || echo "(none)"
 ```
 
 ### Main clone or linked worktree (hard gate — see Preflight)
-```
-!test "$(git rev-parse --absolute-git-dir 2>/dev/null)" = "$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd)" && echo "MAIN-CLONE" || echo "LINKED-WORKTREE"
+```!
+test "$(git rev-parse --absolute-git-dir 2>/dev/null)" = "$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd)" && echo "MAIN-CLONE" || echo "LINKED-WORKTREE"
 ```
 
 ### Workspace spec (required)
-```
-!test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
+```!
+test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
 ```
 
 ### default_branch / worktree_prefix / push_mode / git_host (from spec)
-```
-!for k in default_branch worktree_prefix push_mode git_host; do v=$(grep -m1 -E "^\- \*\*$k\*\*:" ./spec.md 2>/dev/null | sed -E 's/.*: *//'); echo "$k: ${v:-<unset>}"; done
+```!
+for k in default_branch worktree_prefix push_mode git_host; do v=$(grep -m1 -E "^\- \*\*$k\*\*:" ./spec.md 2>/dev/null | sed -E 's/.*: *//'); echo "$k: ${v:-<unset>}"; done || echo "(none)"
 ```
 
 ### PM directory (from spec)
-```
-!grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'
+```!
+grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//' || echo "(none)"
 ```
 
 ### Uncommitted state in this worktree (informational)
-```
-!git status --porcelain | head -40
+```!
+git status --porcelain | head -40 || echo "(none)"
 ```
 > Not a gate. The "`{pm}/` must be committed" block that used to live here was about the **main clone**, and moved to `/kairos:worktree` — this session cannot see the main clone any more. What shows up here on a fresh worktree is nothing; on a resume it is the previous story's interrupted work, which is worth naming in the run plan before you add to it.
 
 ### Today's date
-```
-!date +%Y-%m-%d
+```!
+date +%Y-%m-%d || echo "(none)"
 ```
 
 ---

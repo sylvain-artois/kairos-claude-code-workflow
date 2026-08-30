@@ -1,5 +1,5 @@
 {
-  "description": "Kairos gate receipts — observation mode. Before each git commit in a Kairos workspace, notes which gates left a receipt for the exact change set being committed. Refuses nothing; silent everywhere else.",
+  "description": "Kairos gate receipts — OBSERVATION MODE. Before a git commit, notes which per-story gates left a receipt for the exact change set. Before a git push, notes whether Anthropic's native security pass has covered the branch tip about to leave the machine. After a commit, states the native pass now owed. Refuses nothing; silent in every repository that is not a Kairos workspace.",
   "hooks": {
     "PreToolUse": [
       {
@@ -8,6 +8,18 @@
           {
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh\" --verify",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh\" --after-commit",
             "timeout": 15
           }
         ]

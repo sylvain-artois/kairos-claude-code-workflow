@@ -5,6 +5,91 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-08-30
+
+### Added
+
+- **The security gate now sees the code it is supposed to review.** Anthropic's built-in
+  `security-review` scopes itself with `git diff origin/HEAD...`. On an epic branch with no
+  commits, the merge base *is* HEAD, so that diff is empty — not often, **always**, for the
+  first story of every epic. Kairos gates before committing, by design. Measured in
+  production: the gate had never once reviewed story code produced by Kairos.
+
+  `kairos:gate-security` is a fork of Anthropic's prompt under its MIT licence, with the
+  analysis kept **verbatim** — objective, anti-false-positive rules, vulnerability families,
+  methodology, output format, severity and confidence scales, and the whole
+  `FALSE POSITIVE FILTERING` section — and **only the scope collection replaced**. The new
+  scope is the story's real change set: staged, unstaged **and untracked**. Provenance and
+  the exact diff from upstream: `skills/gate-security/references/UPSTREAM.md`.
+
+  The upstream `COMMITS` block is deleted rather than re-aimed. `git log A...` is a
+  symmetric difference while `git diff A...` is `merge-base(A,B)..B` — same notation,
+  different semantics. In production that block printed a commit from `origin/main` that was
+  never on the branch, underneath an empty diff.
+
+- **A second stage, fired by the push.** The built-in skill still runs, where its scope is
+  finally the right one: before `git push`, over everything committed and not yet pushed.
+  The trigger is the push, not the end of an epic, because sessions of two or three stories
+  routinely do not finish an epic — and the push is the physical boundary where code leaves
+  the machine. Neither stage replaces the other; only stage 1 can see uncommitted work.
+
+  `/kairos:worktree` now installs a git `pre-push` hook **for that worktree alone**
+  (`core.hooksPath` set with `--worktree`), so the boundary holds even under
+  `push_mode: manual`, where the operator pushes from their own terminal and Claude Code
+  sees nothing. An existing `hooksPath` (husky and friends) is **chained, never replaced**.
+  It also runs `git remote set-head origin -a`: without `origin/HEAD`, the native skill's
+  own scope injection aborts the whole invocation, silently.
+
+### Changed
+
+- **A receipt is now evidence, not an assertion.** The previous release wrote a receipt when
+  a command said so. Then a run shipped where the security gate did not execute and the
+  receipt said `passed` anyway — the instrument built to expose a substitution certified it
+  instead. `kairos-diff.sh` now mints a nonce with every scope it collects and prints it at
+  the head of the diff; the gate must quote it back; and `--write` **refuses** a `passed`
+  receipt whose token it cannot find. Receipts also record **how** the gate ran
+  (`kairos-fork`, `native-skill`, `override`, `none`).
+
+  Stated plainly: this is not unforgeable. A model determined to lie could copy the nonce
+  without reading the diff. It eliminates the measured failure — a gate that never held the
+  artefact, and a green receipt regardless — not deliberate deceit.
+
+- **`close-story` fits in a compacted context again.** It had grown to ~12 200 tokens, and
+  Claude Code re-attaches only the first 5 000 tokens of a skill after compaction: its
+  second half — specs, archival, push, PR, teardown — was being dropped silently, on exactly
+  the long runs that need it. `SKILL.md` is now under 5 000 tokens, with the procedure moved
+  to `references/`. **Every gate stayed in `SKILL.md`**; only detail moved.
+
+- **The review gate's receipt is bound to a scope too**, collected through `kairos-diff.sh`
+  like the security gate's.
+
+- **`docs/review-contract.md` §7 is amended, not abandoned.** It said "Kairos does not
+  reimplement security analysis", assuming the wrapped skill worked. It now says: Kairos does
+  not rewrite the **analysis**, and reserves only the **scope collection**.
+
+### Fixed
+
+- **The receipt hook was silent on every commit for anyone without `jq`.** Its two payload
+  parsers disagreed: `jq` preserved newlines, the `python3` fallback replaced them with
+  spaces. The commands Kairos actually emits are two lines — `cd <worktree>` then
+  `git commit …` — and the detector requires a line start before `git`. Both backends now
+  produce one identical shape. The detection matrix in `scripts/tests/run-tests.sh` runs
+  twice, once with `jq` removed from `PATH`.
+
+- **The 59 dynamic-context blocks across the skills never executed.** They were written as
+  `!cmd` inside a plain fence, which arrives as literal text; only an opening ` ```! ` fence
+  fires. Every one is converted, and each carries a fallback so a non-zero exit cannot abort
+  the invocation — which one of them, a bash-only process substitution, would have done the
+  moment it came alive.
+
+### Notes
+
+- The hooks remain in **observation mode**: they log, they refuse nothing. Turning them into
+  refusals waits on a confirmatory measurement over a real epic.
+- `scripts/tests/run-tests.sh` runs the whole thing — detection matrix on both parser
+  backends, the proof gate, the empty-scope property, and all injected blocks — with no
+  model and no network.
+
 ## [1.6.0] - 2026-08-29
 
 ### Added
