@@ -19,6 +19,7 @@ The workspace's `spec.md` is the single source of truth for paths and the servic
 6. **English only.** All story content is in English. Status values are `backlog | in_progress | done`.
 7. **Preview before writing.** Print the slice plan and get an explicit approval (Phase 2.5) before creating any story file, roadmap row, or issue. Silence is not approval — do **not** proceed without an answer.
 8. **`Serves` is opaque — never validate it.** Every story carries a `Serves` line (possibly empty) holding ids from the host project's *own* requirement vocabulary. Unlike `Impacted Services` (rule 3), it is **never** resolved, interpreted, or checked against anything: no vocabulary file, no registry, no "unknown id" warning, no error. Empty everywhere is the normal case.
+9. **A reference names the part you mean, not the file it lives in.** `## Existing References` prescribes reading, and prescribed reading is re-read on every turn of the agent that implements the story — so a bare path to a large file is the most expensive line a story can contain. Above `story_reference_budget` (default 20 KB) a reference needs an **anchor and a pasted excerpt**, or an explicit reason why the whole file is genuinely needed. Phase 3.5 measures it; the gate asks, it never forbids ([`references/reading-budget.md`](references/reading-budget.md)).
 
 ---
 
@@ -203,9 +204,15 @@ For each validated story, write a file at `{spec.project_management_dir}/stories
 
 ## Existing References
 
-{Files, modules, or docs an implementer will need to read before touching code. One bullet per reference, each with a one-line "why". Leave the section in even if empty — it pushes authors to cite.}
+**Reading budget**: ~{N}k tokens ({n} refs, {n} unanchored)
+
+{What an implementer must read before touching code — one bullet per reference, each with a one-line "why". Leave the section in even if empty; it pushes authors to cite. Point at the part you mean: a file over `story_reference_budget` (default 20 KB) carries an **anchor** — a section id or a line range — **and** a 10–15 line excerpt pasted under the bullet, so nobody opens the file to find them. Phase 3.5 fills in the budget line and asks about anything left bare.}
 
 - [{path/to/file}](path/to/file) — {why this matters}
+- [{path/to/big.md#3-4}](path/to/big.md#3-4) — {why this matters}
+  ```
+  {the 10–15 lines that actually matter, pasted here}
+  ```
 
 ## Context
 
@@ -237,6 +244,28 @@ For each validated story, write a file at `{spec.project_management_dir}/stories
 - [ ] {Story-specific verification — e.g. "endpoint returns expected payload for the happy path"}
 - [ ] {Regression check — e.g. "existing flow X still passes"}
 ```
+
+### Phase 3.5 — Reading budget (cost gate)
+
+A story does not only describe work, it **prescribes reading**, and prescribed reading is not paid once: it sits in the implementing agent's context and is re-read on every turn it takes. Measured on an observed repository — median ~80 000 tokens ordered per story, worst case 271 000 — and almost always to reach two paragraphs of a large file.
+
+After writing the story files and **before** the roadmap, measure each one from the workspace root:
+
+```
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-refs.sh" {pm}/stories/STORY-{NNN}-{slug}.md
+```
+
+1. **Write the `REF-BUDGET` figure into the story**, on the `**Reading budget**:` line under `## Existing References` — `~24k tokens (7 refs, 1 unanchored)`. A number that is visible is a number that goes down.
+2. **Any `REF-OVER` line → stop and ask.** Do NOT proceed to Phase 4 with the question unanswered:
+   > ⛔ STORY-{NNN} orders ~{N}k tokens of reading from `{path}` — no anchor, no excerpt.
+   > An implementer loads the whole file to reach the part you meant, on every turn.
+   >   (a) anchor it and paste the 10–15 lines that matter — I rewrite the bullet
+   >   (b) it genuinely needs the whole file — say why, and I record the reason under the bullet
+3. **Any `REF-MISSING` line → fix the path or drop the reference.** A reference that does not resolve costs an implementer a search and yields nothing.
+
+**The gate asks; it does not forbid.** A reference's value is not its size, and a story that truly needs a whole spec must be able to say so — what it may not do is order it silently. Option (b) is a first-class answer: record it, move on.
+
+→ Why 20 KB, what counts as an anchor, and how the estimate is computed: [`references/reading-budget.md`](references/reading-budget.md).
 
 ### Phase 4 — Update ROADMAP.md
 
@@ -389,6 +418,7 @@ Then: `"Run /kairos:implement-story STORY-{NNN} to start implementation on the f
 
 - [ ] No file outside `{pm}/stories/STORY-NNN-*.md` and `{pm}/ROADMAP.md` was created or modified.
 - [ ] The slice plan was previewed as a table and explicitly approved before the first file was written.
+- [ ] Phase 3.5 ran on every generated story: the `**Reading budget**` line carries a real figure, every `REF-OVER` was anchored-and-excerpted or answered with a recorded reason, and no `REF-MISSING` path was left in place.
 - [ ] Every generated story has all mandatory fields: Status, Size, Priority, Depends on (possibly empty), Source PRD, Epic, Created, Branch, Serves (possibly empty), Issue (possibly empty), Objective, Existing References, Context, Acceptance Criteria, Impacted Services, Out of Scope, QA Checklist.
 - [ ] Every `Depends on` id resolves to a story in this batch or already on disk, forms no cycle, and — when it crosses epics — was either backed by the PRD's `depends_on` or surfaced as a warning.
 - [ ] Every service named in any `Impacted Services` table is declared in root `spec.md`.

@@ -35,6 +35,16 @@ _is_kairos_tree() {
   grep -q '^- \*\*project_name\*\*:' "$1/spec.md" 2>/dev/null
 }
 
+# A scalar field of the root spec, or empty. The format is fixed by docs/spec-format.md:
+#   - **project_management_dir**: project-management
+# Only the first match counts — a spec that declares a field twice has a bigger problem
+# than which one we read.
+_spec_field() {          # _spec_field <tree> <field>
+  [ -f "$1/spec.md" ] || return 1
+  sed -n "s/^- \*\*$2\*\*:[[:space:]]*//p" "$1/spec.md" 2>/dev/null \
+    | head -n1 | tr -d '\r' | sed -e 's/[[:space:]]*$//' -e 's/^`//' -e 's/`$//'
+}
+
 # Where this tree's receipts, tokens and log live. Keyed by absolute path, named for
 # readability. State lives OUTSIDE the repository: `close-story` commits with `git add -A`,
 # so in-tree state would be committed — and an untracked receipt would enter the very

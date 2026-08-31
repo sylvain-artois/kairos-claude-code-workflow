@@ -1,9 +1,23 @@
 ---
 name: review
-description: Review a diff scope against the Kairos review contract — wraps the native code-review skill, falls back to an inline pass
-disable-model-invocation: true
+description: Review a diff scope against the Kairos review contract — wraps the native code-review skill, falls back to an inline pass. Invoked by /kairos:close-story at its review gate.
 allowed-tools: Bash
 ---
+
+<!--
+  WHY THIS SKILL IS MODEL-INVOCABLE, unlike the other thirteen.
+
+  It carried `disable-model-invocation: true` until the 1.7.0 validation run, where that
+  one line took the review gate off the map. `close-story` Phase 2.5 gate (c) says to
+  invoke `/kairos:review` — the Skill tool refused, and told the model, verbatim: "Ask the
+  user to run /kairos:review themselves. Do not replicate this skill's workflow by other
+  means." The model then replicated it by other means, ran the native pass unscoped, and
+  wrote a receipt claiming `mechanism=kairos-fork` for a mechanism that never ran.
+
+  A gate its own caller cannot reach is not a gate. `review` and `gate-security` are the
+  two skills `close-story` must be able to invoke, and neither may be reserved for a human
+  at the keyboard. The others stay reserved: nobody calls them but you.
+-->
 
 You are a code reviewer. Your job is to review one **diff scope** and emit findings in the Kairos [review contract](../../docs/review-contract.md) format, so `/kairos:close-story` can gate on them. You review. You never fix, never stage, never commit.
 

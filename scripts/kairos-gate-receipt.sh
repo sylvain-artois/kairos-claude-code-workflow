@@ -21,13 +21,24 @@
 # it instead. So a `passed` receipt now REQUIRES a scope token minted by kairos-diff.sh,
 # and records HOW the gate ran. A gate that never held a Kairos artefact can no longer
 # produce a green receipt.
+#
+# WHAT STEP 5 WILL READ. The commit log line carries `classification`, and that — not
+# `commit_type`, not `subject` — is what a refusing build gates on:
+#
+#   code         every gate owes a receipt for this exact change set
+#   bookkeeping  the docs close-story derives AFTER its code commit; no receipt can
+#                cover them, because they did not exist when the gates ran
+#
+# It is computed from the changed paths (_is_bookkeeping), never from the commit message.
+# A message is something the model writes; an exemption keyed on it is a password the
+# model issues to itself. The subject is logged beside it as information only.
 
 set -u
 
 . "$(dirname "$0")/kairos-lib.sh"
 
 KAIROS_MODE="observe"
-KAIROS_VERSION="1.7.0"
+KAIROS_VERSION="1.8.0"
 
 # ---------------------------------------------------------------- modes
 
@@ -155,6 +166,98 @@ _resolve_tree() {
 
 _log() { printf '%s\n' "$2" >> "$1/gate-log.jsonl" 2>/dev/null || true; }
 
+# The subject line of the commit being made.
+#
+# Two forms reach this hook and only one used to parse. Claude Code writes commit messages
+# as a heredoc — `git commit -m "$(cat <<'EOF'` with the message on the following lines —
+# and the old one-line sed captured the literal `$(cat <<`. Measured on the 1.7.0
+# validation run: `subject` read `$(cat <<` and `commit_type` was empty on BOTH commits,
+# which is to say on every commit close-story has ever made.
+#
+# This is information, not a decision. What a commit is CALLED opens nothing here — see
+# _is_bookkeeping, which reads what a commit CONTAINS.
+_commit_subject() {      # <command> → the subject, or empty
+  # Form A — heredoc. Require the opener on the same line as the -m, so an unrelated
+  # `cat <<EOF > file` earlier in the command cannot be mistaken for the message.
+  if printf '%s' "$1" | grep -q -- '-m[[:space:]]*["'"'"']\{0,1\}\$([[:space:]]*cat[[:space:]]*<<'; then
+    printf '%s\n' "$1" \
+      | sed -n '/-m[[:space:]]*["'"'"']\{0,1\}\$([[:space:]]*cat[[:space:]]*<</,$p' | sed '1d' \
+      | awk 'NF{print; exit}'
+    return 0
+  fi
+  # Form B — a plain quoted argument, either quote style, first line only.
+  printf '%s\n' "$1" \
+    | sed -n -e 's/.*-m[[:space:]]*"\([^"]*\).*/\1/p' \
+             -e "s/.*-m[[:space:]]*'\([^']*\).*/\1/p" \
+    | awk 'NF{print; exit}'
+}
+
+# ------------------------------------------------------------ bookkeeping commits
+#
+# close-story commits TWICE, and it has to. Phase 3 commits the code; Phase 4 then derives
+# each {service}/spec.md FROM that commit's diff, and Phase 5 flips the story to `done`,
+# git-mv's it into the archive and moves its ROADMAP row. None of those files exist when
+# the gates run in Phase 2.5 — they are consequences of the commit, so no receipt can
+# cover them. Measured: line 2 of the 1.7.0 gate log, `n_files:4`, `receipts:[]`.
+#
+# A refusing build would deny that second commit and kill close-story between Phase 6 and
+# Phase 7 — after the code is committed, before the push, the PR and the archival finish.
+# The worst place in the whole workflow to stop.
+#
+# So it is exempted on WHAT IT CONTAINS, never on what it is called. An exemption keyed on
+# the commit subject would be a password the model writes for itself, and the 1.7.0 run
+# showed precisely what this model does at a closed door: it goes around it, then labels
+# the result as though it had come through the front. `_changed_paths` is not something it
+# can phrase its way past.
+#
+# Deliberately narrow — only what close-story itself writes after its code commit: the
+# project-management directory, and `spec.md` at the root or in any service directory.
+# One source file in the set and the whole commit is code again.
+_is_bookkeeping() {      # <tree> → true when EVERY pending path is close-story bookkeeping
+  _bk_pm=$(_spec_field "$1" project_management_dir) || _bk_pm=""
+  [ -n "$_bk_pm" ] || _bk_pm="project-management"
+  _bk_n=0
+  # Fed by a heredoc, not a pipe: a `while` in a pipeline runs in a subshell, where
+  # `return 1` returns from nothing at all.
+  while IFS= read -r _bk_p; do
+    [ -n "$_bk_p" ] || continue
+    _bk_n=$((_bk_n + 1))
+    case "$_bk_p" in
+      "$_bk_pm"/*)        continue ;;   # stories, PRDs, the done archive, ROADMAP.md
+      spec.md|*/spec.md)  continue ;;   # the root spec and every service spec
+      *)                  return 1 ;;
+    esac
+  done <<EOF
+$(_changed_paths "$1")
+EOF
+  [ "$_bk_n" -gt 0 ]                    # an empty change set is not a bookkeeping commit
+}
+
+# The receipts a commit consumed are not stale, they are SPENT — and leaving them in place
+# corrupts the one signal that tells those two apart. `_stale` counts every receipt whose
+# digest is not the current one, so after a commit the receipts that just covered it
+# qualify. Over an epic_shared branch of five stories that is ten phantom stale receipts by
+# the end, and a number that only ever grows is a number nobody reads.
+#
+# Archived, never deleted: a receipt is evidence, and the audit trail is the whole point.
+# The stale count uses -maxdepth 1, so a subdirectory drops out of it for free.
+_retire_receipts() {     # <state dir> <tree>
+  _rr_f="$1/last-verified"
+  [ -f "$_rr_f" ] || return 0
+  _rr_dg=$(head -n1 "$_rr_f" 2>/dev/null | tr -d ' \n')
+  rm -f "$_rr_f" 2>/dev/null || true
+  [ -n "$_rr_dg" ] || return 0
+  # Did the commit actually happen? PostToolUse fires whether or not git succeeded. If the
+  # pending set still hashes the same, nothing was consumed and nothing may be retired.
+  [ "$(_digest "$2")" != "$_rr_dg" ] || return 0
+  mkdir -p "$1/receipts/archive" 2>/dev/null || return 0
+  for _rr_r in "$1/receipts/$_rr_dg."*.json; do
+    [ -f "$_rr_r" ] || continue
+    mv "$_rr_r" "$1/receipts/archive/" 2>/dev/null || true
+  done
+  rm -f "$(_pending_dir "$2")/$_rr_dg.tokens" 2>/dev/null || true
+}
+
 # --verify — the PreToolUse hook. Observation mode: log and allow, always.
 do_verify() {
   RAW=$(cat 2>/dev/null || true)
@@ -217,13 +320,20 @@ _verify_commit() {
   fi
 
   _npaths=$(_changed_paths "$_tree" | grep -c '^..*$' || true)
-  # Commit type, for the exemption list a refusing build will need (docs, chore(release)).
-  _subject=$(printf '%s' "$_cmd" | sed -n 's/.*-m[[:space:]]*["'"'"']\([^"'"'"']*\).*/\1/p' | head -n1)
+  _subject=$(_commit_subject "$_cmd")
   _ctype=$(printf '%s' "$_subject" | sed -n 's/^\([a-z]\{1,\}\)\((.*)\)\{0,1\}!\{0,1\}:.*/\1/p')
 
-  _log "$_sd" "$(printf '{"at":"%s","mode":"%s","event":"commit","decision":"allow","tree":"%s","branch":"%s","digest":"%s","n_files":%s,"story":"%s","receipts":[%s],"mechanisms":[%s],"stale_receipts":%s,"commit_type":"%s","subject":"%s"}' \
+  # The decision input a refusing build will read. `commit_type` above sits next to it as
+  # information only: the classification is derived from the paths, never from the words.
+  if _is_bookkeeping "$_tree"; then _class="bookkeeping"; else _class="code"; fi
+
+  # What this commit is about to consume, so --after-commit can retire the receipts that
+  # covered it. Written on every commit, read once, removed on read.
+  printf '%s\n' "$_dg" > "$_sd/last-verified" 2>/dev/null || true
+
+  _log "$_sd" "$(printf '{"at":"%s","mode":"%s","event":"commit","decision":"allow","tree":"%s","branch":"%s","digest":"%s","n_files":%s,"story":"%s","receipts":[%s],"mechanisms":[%s],"stale_receipts":%s,"classification":"%s","commit_type":"%s","subject":"%s"}' \
     "$(_now)" "$KAIROS_MODE" "$(_esc "$_tree")" "$(_esc "$_branch")" "$_dg" "${_npaths:-0}" \
-    "$(_esc "$_story")" "$_found" "$_mechs" "${_stale:-0}" "$(_esc "$_ctype")" "$(_esc "$_subject")")"
+    "$(_esc "$_story")" "$_found" "$_mechs" "${_stale:-0}" "$_class" "$(_esc "$_ctype")" "$(_esc "$_subject")")"
 }
 
 # Stage 2 — before a push: has the native pass covered the tip that is about to leave?
@@ -268,6 +378,7 @@ do_after_commit() {
   _tip=$(git -C "$_tree" rev-parse --short HEAD 2>/dev/null) || exit 0
   _branch=$(git -C "$_tree" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '?')
   _sd=$(_state_dir "$_tree")
+  _retire_receipts "$_sd" "$_tree"
   [ -f "$_sd/receipts/head-$_tip.security.json" ] && exit 0
 
   _msg="Kairos: commit $_tip is now on $_branch, and Anthropic's native security-review has not covered it. That pass is owed before the next push — it is the second stage of the gate (the per-story Kairos gate does not replace it: it sees uncommitted work, this one sees the whole branch). Run the security-review skill from this tree, then record it with: sh \"\${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh\" --write --gate security --mechanism native-skill --tree $_tree"

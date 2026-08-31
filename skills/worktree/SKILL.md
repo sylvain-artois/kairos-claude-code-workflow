@@ -75,6 +75,19 @@ done
 out=$(git worktree list 2>/dev/null | tail -n +2); echo "${out:-(none)}"
 ```
 
+### Service specs that have outgrown their budget (see Phase 1d)
+```!
+BUD=$(grep -m1 -E '^\- \*\*spec_line_budget\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); BUD=${BUD:-180}
+ALERT=$((BUD * 3))
+find . -mindepth 2 -maxdepth 3 -name spec.md -not -path './.git/*' -not -path './node_modules/*' 2>/dev/null \
+  | while read -r f; do
+      n=$(wc -l < "$f" 2>/dev/null || echo 0)
+      [ "$n" -gt "$ALERT" ] && printf 'OVERSIZED %s — %s lines (budget %s, x%s)\n' "${f#./}" "$n" "$BUD" "$((n / BUD))"
+      true
+    done
+echo "budget ${BUD}/spec, alert above ${ALERT} — end of list"
+```
+
 ### project-management cleanliness (hard gate — see Phase 1)
 ```!
 PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//')
@@ -136,6 +149,26 @@ grep -q '${CONTAINER_ENV_PREFIX}' "$REPO_ROOT/{compose}" || echo "NOT PREFIXED: 
 Here this is a **warning**, listing every unprefixed file and pointing at `/kairos:setup-worktree-isolation` — this command does not know which services a future run will touch, so it cannot fairly block on a service nobody will test. The **hard gate stays where the story list is known**: `/kairos:implement-epic` Phase 1 and `/kairos:implement-story` Phase 2a-bis still refuse to run when an *impacted* service is unprefixed. Nothing is relaxed; the warning simply arrives early enough to be fixed before you open the session.
 
 Services without `worktree_test_command` skip the check.
+
+**(d) Service specs that outgrew their budget — offer compaction, block nothing.** Kairos publishes a soft budget of `spec_line_budget` lines per `{service}/spec.md` (default 180) and ships `/kairos:spec {service} compact` to get back under it without losing facts. Every `/kairos:close-story` appends to a spec from its diff, so specs only ever grow — and a command you have to *remember* to run is a command nobody runs.
+
+**Under `epic_shared`, this is the only place in the workflow that mentions it.** Here and nowhere else, for three reasons, the first decisive:
+
+- **You are at the keyboard.** `/kairos:close-story` runs at night inside a subagent that cannot answer a prompt; an offer there blocks the run, or gets auto-answered. Launching this command is the one moment of the cycle where a human just typed something.
+- **Compaction has to land before the tree exists.** A worktree materializes only committed content, so a spec compacted *after* `git worktree add` leaves the oversized one in the tree the agents will read for the whole epic.
+- **The rhythm is right.** This command is the first gesture of every epic run, so the check becomes a start-of-run rite instead of a chore.
+
+For each `OVERSIZED` line in the dynamic context above:
+
+> ⚠ `{path}` — {n} lines (budget {b}, ×{k}). Compact before starting the epic? [y/N]
+>   → y: run `/kairos:spec {service} compact`, review the diff, commit it on `{spec.default_branch}`, then re-run this command
+>   → N: continue, nothing is blocked
+
+**This is not a gate.** A refusal continues without comment, and no story, branch or tree depends on the answer. If the session cannot ask — `-p`, or a subagent — **do not ask**: print the list, note that compaction was not offered, and continue.
+
+A project whose specs are genuinely large raises `spec_line_budget` in `spec.md` rather than living with the alert. The trigger is ×3 of the budget, not ×1: it signals drift, not the normal margin.
+
+**Projects that never come through here** — `worktree_mode: in_place` or `off`, which never create a worktree — get the same offer from `/kairos:create-prd` Phase 3.6 instead. The two are **mutually exclusive by `worktree_mode`**, so no project is ever asked twice, and none is never asked. `create-prd` cannot replace this phase for `epic_shared`: only here does the compaction land on `{spec.default_branch}` *before* `git worktree add`, which is the whole point.
 
 ---
 

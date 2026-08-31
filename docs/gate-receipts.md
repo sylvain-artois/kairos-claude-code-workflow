@@ -86,9 +86,17 @@ directory named for the work tree it describes:
 
 ```
 ~/.local/state/kairos/{tree-name}-{hash}/
-├── receipts/{digest}.{gate}.json
+├── receipts/{digest}.{gate}.json          the gates that ran on the pending change set
+├── receipts/head-{tip}.security.json      stage 2, keyed by the branch tip it covered
+├── receipts/archive/                      receipts a commit has already spent
+├── pending/{digest}.tokens                scope tokens minted for that change set
 └── gate-log.jsonl
 ```
+
+A receipt a commit consumed moves into `archive/` — not deleted, because a receipt is
+evidence, but out of the live set, because it is **spent**, not stale. Leaving it in place
+would inflate `stale_receipts` on every later commit of the branch, and a number that only
+ever grows is a number nobody reads.
 
 Three reasons it is outside the tree. `/kairos:close-story` commits with `git add -A`, so
 in-tree receipts would end up in your history. Worse, an untracked receipt would enter the
@@ -109,7 +117,7 @@ One JSON object per commit:
 {"at":"…","mode":"observe","decision":"allow","tree":"…","branch":"feature/epic-checkout",
  "digest":"9fdd8c84…","n_files":12,"story":"STORY-042",
  "receipts":["review:passed","security:passed"],"mechanisms":["review:kairos-fork","security:kairos-fork"],
- "stale_receipts":0,"commit_type":"feat","subject":"feat(api): …"}
+ "stale_receipts":0,"classification":"code","commit_type":"feat","subject":"feat(api): …"}
 ```
 
 And one per push:
@@ -131,8 +139,16 @@ What to look for:
   instrumentation before suspecting the gate.
 - `security:skipped` — legitimate and recorded. Nobody opted in, or the diff was empty. A
   skip that is written down is not a gap.
-- `commit_type` of `docs` or `chore` — the documentation and release commits, which run
-  after the gates by design and are expected to carry no receipts.
+- `"classification":"bookkeeping"` — the commit carries only the files `close-story` writes
+  *after* its code commit: the project-management directory, and `spec.md`. Those are
+  derived **from** the code commit (Phase 4 rewrites each service spec from its diff, Phase 5
+  archives the story and moves its ROADMAP row), so they did not exist when the gates ran and
+  no receipt can cover them. Expected to show `"receipts":[]`, and the one commit a refusing
+  build will let through without one.
+
+  The classification is computed from the changed paths, never from the commit message.
+  `commit_type` and `subject` sit beside it as information: what a commit is *called* opens
+  nothing, because the model writes that itself.
 - `"event":"push"` with `"native_pass":"uncovered"` — commits are leaving the machine that
   Anthropic's built-in pass has not seen. Stage 1 covered them per story; stage 2 has not.
 - `mechanisms` naming `kairos-fork` where you expected `native-skill`, or the reverse —

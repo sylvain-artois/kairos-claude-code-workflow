@@ -137,8 +137,79 @@ TIP=$(git -C "$W" rev-parse --short HEAD)
 grep -q '"mechanism":"override"' "$SD"/receipts/*.security.json 2>/dev/null \
   && ok "receipt records its mechanism" || no "receipt records its mechanism" "field absent"
 
-# ================================================================ 5. the F6 red eval
-printf '\n\033[1m5. The F6 eval — the native scope is empty by construction (step 3)\033[0m\n'
+# ================================================================ 5. bookkeeping + spent receipts
+printf '\n\033[1m5. The bookkeeping exemption — decided on paths, never on the subject\033[0m\n'
+printf '   \033[2mclose-story commits twice and has to: Phase 4-5 derive spec.md and archive the\n'
+printf '   story FROM the code commit, so no receipt can ever cover that second commit.\033[0m\n'
+
+B="$BASE/bk"; mk_workspace "$B"
+mkdir -p "$B/project-management/stories" "$B/project-management/done" "$B/api"
+printf -- '- **project_name**: fixture\n- **project_management_dir**: project-management\n' > "$B/spec.md"
+printf 'x\n' > "$B/api/app.py"; printf 'x\n' > "$B/api/spec.md"
+git -C "$B" add -A; git -C "$B" commit -qm base
+BLOG=$(logfile "$B")
+
+field() { tail -n1 "$1" | sed -n "s/.*\"$2\":\"\([^\"]*\)\".*/\1/p"; }
+klass()  {          # klass <expected> <label>
+  payload "git -C $B commit -m \"x: y\"" "$B" | sh "$RECEIPT" --verify >/dev/null 2>&1
+  chk "$2" "$(field "$BLOG" classification)" "$1"
+}
+
+printf 'story\n'   > "$B/project-management/stories/STORY-1-x.md"
+printf 'roadmap\n' > "$B/project-management/ROADMAP.md"
+printf 'y\n'      >> "$B/api/spec.md"
+klass bookkeeping "pm/ + service spec.md only → bookkeeping"
+
+printf 'code\n' >> "$B/api/app.py"
+klass code       "one source file in the set → code       "
+
+# The subject and type, on the form Claude Code actually emits. Both were empty on every
+# commit of the 1.7.0 validation run: the old sed captured the literal `$(cat <<`.
+HD="git -C $B commit -m \"\$(cat <<'EOF'
+feat(api): real subject line
+
+🤖 Generated with Claude Code
+EOF
+)\""
+payload "$HD" "$B" | sh "$RECEIPT" --verify >/dev/null 2>&1
+chk "heredoc commit → subject parses" "$(field "$BLOG" subject)"     "feat(api): real subject line"
+chk "heredoc commit → type parses   " "$(field "$BLOG" commit_type)" "feat"
+
+printf '\n\033[1m   Spent receipts are retired, not left to rot in the stale count\033[0m\n'
+
+R2="$BASE/spent"; mk_workspace "$R2"
+echo "work" > "$R2/feature.py"
+SD2="$KAIROS_STATE_DIR/$(basename "$R2")-$(printf '%s' "$R2" | sha256sum | cut -d' ' -f1 | cut -c1-12)"
+live()  { find "$SD2/receipts" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d ' '; }
+arch()  { find "$SD2/receipts/archive" -name '*.json' 2>/dev/null | wc -l | tr -d ' '; }
+commit_hook() {     # commit_hook <subject> <really commit?>
+  payload "git -C $R2 commit -m \"$1\"" "$R2" | sh "$RECEIPT" --verify      >/dev/null 2>&1
+  [ "${2:-}" = "yes" ] && { git -C "$R2" add -A; git -C "$R2" commit -qm "$1"; }
+  payload "git -C $R2 commit -m \"$1\"" "$R2" | sh "$RECEIPT" --after-commit >/dev/null 2>&1
+}
+
+T2=$(sh "$DIFF" "$R2" | sed -n 's/^SCOPE-TOKEN: //p')
+sh "$RECEIPT" --write --gate security --mechanism kairos-fork --scope-token "$T2" --tree "$R2" >/dev/null 2>&1
+chk "receipt is live before the commit" "$(live)" "1"
+
+commit_hook "feat: x" yes
+chk "spent receipt leaves the live set" "$(live)" "0"
+chk "spent receipt kept in archive/   " "$(arch)" "1"
+
+echo "more" > "$R2/other.py"
+payload "git -C $R2 commit -m \"docs: y\"" "$R2" | sh "$RECEIPT" --verify >/dev/null 2>&1
+chk "so the next commit sees 0 stale  " \
+    "$(tail -n1 "$(logfile "$R2")" | sed -n 's/.*"stale_receipts":\([0-9]*\).*/\1/p')" "0"
+
+# PostToolUse fires whether or not git succeeded. A commit that never happened has consumed
+# nothing, and must retire nothing — otherwise a failed commit silently disarms its gates.
+T3=$(sh "$DIFF" "$R2" | sed -n 's/^SCOPE-TOKEN: //p')
+sh "$RECEIPT" --write --gate review --mechanism kairos-fork --scope-token "$T3" --tree "$R2" >/dev/null 2>&1
+commit_hook "feat: never ran"
+chk "a commit that failed retires none" "$(live)" "1"
+
+# ================================================================ 6. the F6 red eval
+printf '\n\033[1m6. The F6 eval — the native scope is empty by construction (step 3)\033[0m\n'
 printf '   \033[2mNo model needed: this is a property of git, and it is the whole bug.\033[0m\n'
 
 E="$BASE/eval"; mkdir -p "$E"
@@ -214,8 +285,8 @@ fi
 r=$(sh "$DIFF" /nonexistent-path-xyz >/dev/null 2>&1; printf '%s' $?)
 chk "a bad path still exits 0 (never aborts an injection)" "$r" "0"
 
-# ================================================================ 6. injected blocks
-printf '\n\033[1m6. Every injected block exits 0 — a silent failure mode\033[0m\n'
+# ================================================================ 7. injected blocks
+printf '\n\033[1m7. Every injected block exits 0 — a silent failure mode\033[0m\n'
 printf '   \033[2mA non-zero rc from an injected block aborts the ENTIRE skill invocation,\n'
 printf '   silently. This runs all of them for real against a fixture workspace.\033[0m\n'
 
@@ -267,8 +338,8 @@ for f in "$ROOT"/skills/*/SKILL.md; do
 done
 chk "no dead (plain-fence !cmd) injections remain anywhere" "$DEAD" "0"
 
-# ================================================================ 7. the fork stays a fork
-printf '\n\033[1m7. The forked security prompt is still verbatim below its scope blocks\033[0m\n'
+# ================================================================ 8. the fork stays a fork
+printf '\n\033[1m8. The forked security prompt is still verbatim below its scope blocks\033[0m\n'
 printf '   \033[2mThe value of the fork is the analysis we did NOT write. If someone edits it\n'
 printf '   by hand, that value is gone and nothing else would say so.\033[0m\n'
 
@@ -297,13 +368,84 @@ else
   no "forked prompt present" "skills/gate-security is missing"
 fi
 
-# ================================================================ 8. shipped-artefact hygiene
-printf '\n\033[1m8. Shipped artefacts: links resolve, injecting skills declare their tools\033[0m\n'
+# ================================================================ 9. the reading budget
+printf '\n\033[1m9. The reading budget — what a story ORDERS an implementer to read (C10)\033[0m\n'
+printf '   \033[2mMeasured on a real repo: a median 80k tokens prescribed per story, re-read on\n'
+printf '   every turn of a 250-turn agent. The gate asks; it never forbids.\033[0m\n'
 
+REFS="$ROOT/scripts/kairos-refs.sh"
+RW="$BASE/refs"; mkdir -p "$RW/docs" "$RW/api" "$RW/pm"
+printf -- '- **project_name**: fixture\n' > "$RW/spec.md"
+head -c 60000 /dev/urandom | base64 > "$RW/docs/architecture.md"   # ~81 KB
+printf 'small\n' > "$RW/docs/tiny.md"
+
+story() { cat > "$RW/pm/S.md"; sh "$REFS" "$RW/pm/S.md" --tree "$RW"; }
+
+out=$(story <<'MD'
+## Existing References
+
+- [docs/architecture.md](docs/architecture.md) — the whole file, named bare
+
+## Context
+
+docs/architecture.md is mentioned again here, and must NOT be counted.
+MD
+)
+printf '%s' "$out" | grep -q '^REF-OVER: docs/architecture.md' \
+  && ok "bare path to a big file      → REF-OVER" || no "bare path to a big file → REF-OVER" "$out"
+chk "and it is counted at full size " "$(printf '%s' "$out" | sed -n 's/^REF-BUDGET: ~\([0-9]*\)k.*/\1/p')" "27"
+chk "a path in ## Context is ignored" "$(printf '%s' "$out" | grep -c '^REF:')" "1"
+
+out=$(story <<'MD'
+## Existing References
+
+- [docs/architecture.md#3-4](docs/architecture.md#3-4) — only the section that matters
+MD
+)
+printf '%s' "$out" | grep -q '^REF-OVER:' \
+  && no "an anchor clears the gate" "$out" || ok "an anchor clears the gate           "
+chk "and costs its excerpt, not the file" "$(printf '%s' "$out" | sed -n 's/^REF-BUDGET: ~\([0-9]*\)k.*/\1/p')" "0"
+
+out=$(story <<'MD'
+## Existing References
+
+- [docs/architecture.md](docs/architecture.md) — the retry contract
+  ```
+  Retries are bounded at 3 and back off exponentially from 250 ms.
+  ```
+MD
+)
+printf '%s' "$out" | grep -q '^REF-OVER:' \
+  && no "an excerpt clears the gate" "$out" || ok "an excerpt clears the gate          "
+
+out=$(story <<'MD'
+## Existing References
+
+- [docs/tiny.md](docs/tiny.md) — small enough to name bare
+- [docs/gone.md](docs/gone.md) — this one does not exist
+MD
+)
+printf '%s' "$out" | grep -q '^REF-MISSING: docs/gone.md' \
+  && ok "an unresolvable path is named      " || no "an unresolvable path is named" "$out"
+printf '%s' "$out" | grep -q '^REF-OVER:' \
+  && no "a small file needs no anchor" "$out" || ok "a small file needs no anchor        "
+
+r=$(sh "$REFS" "$RW/pm/does-not-exist.md" >/dev/null 2>&1; printf '%s' $?)
+chk "a missing story still exits 0      " "$r" "0"
+r=$(story </dev/null >/dev/null 2>&1; printf '%s' $?)
+chk "a story with no refs still exits 0 " "$r" "0"
+
+# ================================================================ 10. shipped-artefact hygiene
+printf '\n\033[1m10. Shipped artefacts: links resolve, injecting skills declare their tools\033[0m\n'
+
+# Fenced blocks are stripped first: a link inside one is a SAMPLE, not a link. Story
+# templates and the reading-budget examples have to show the `[x](x.md#3-4)` form, and a
+# checker that resolved those would force every example to name a file that really exists.
 BROKEN=0
 for f in $(find "$ROOT/skills" "$ROOT/docs" -name '*.md' 2>/dev/null); do
   d=$(dirname "$f")
-  for l in $(grep -oE '\]\([^)]+\.md[^)]*\)' "$f" 2>/dev/null | sed -E 's/^\]\(//; s/[)#].*$//'); do
+  for l in $(awk '/^[[:space:]]*```/{inb=!inb; next} !inb' "$f" \
+             | grep -oE '\]\([^)]+\.md[^)]*\)' 2>/dev/null | sed -E 's/^\]\(//; s/[)#].*$//'); do
     case "$l" in http*) continue ;; esac
     [ -f "$d/$l" ] || { BROKEN=$((BROKEN+1)); printf '     broken: %s -> %s\n' "${f#$ROOT/}" "$l"; }
   done

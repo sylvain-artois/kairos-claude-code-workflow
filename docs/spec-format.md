@@ -75,6 +75,22 @@ The root spec is required. Every Kairos workspace has exactly one.
 
 Kairos enforces a single PM root. The subdirectories (`prds/`, `stories/`, `done/`) are conventions, not configurable.
 
+### 3.2-bis Context budgets (optional)
+
+Two soft budgets, both about the same thing: how much reading the workflow orders, and how much of it is re-read on every turn of a long-running agent. Neither ever blocks — each is a threshold above which a command **asks**.
+
+| Field | Required | Type | Default | Notes |
+|---|---|---|---|---|
+| `spec_line_budget` | no | int | `180` | Soft line budget for one `{service}/spec.md`. `/kairos:spec {service} compact` aims to get under it without dropping facts. One command offers compaction when a spec passes **×3** of it (540 by default), and which one depends on `worktree_mode`: `epic_shared` → `/kairos:worktree` Phase 1d, the last moment before a worktree freezes the oversized spec into the tree the agents will read; anything else → `/kairos:create-prd` Phase 3.6, on the default branch, at the moment a body of work opens. **Mutually exclusive** — no project is asked twice, and none is never asked |
+| `story_reference_budget` | no | int | `20000` | Size in **bytes** above which an entry in a story's `## Existing References` needs an anchor and a pasted excerpt rather than a bare path. `/kairos:create-story` Phase 3.5 measures each story with `scripts/kairos-refs.sh`, writes a `**Reading budget**` line into it, and stop-and-asks on anything left bare — "the whole file is genuinely needed, because …" is an accepted answer |
+
+Raise them rather than living with the alert: a project whose specs are honestly large, or whose stories honestly need whole files, should say so once in the spec instead of dismissing the same prompt every run. Lower them to tighten the workflow's appetite for context.
+
+```markdown
+- **spec_line_budget**: 180
+- **story_reference_budget**: 20000
+```
+
 ### 3.3 Release notes
 
 Exactly one of the two fields below MUST be set (XOR):
@@ -195,7 +211,7 @@ These are the fields Kairos commands actively read. All except `name` and `path`
 | `lint_command` | optional | string | Shell command, runnable from workspace root |
 | `review_command` | optional | string | Code-review command or script path. Unset — or left as the `<TODO…>` placeholder — means the default reviewer, `/kairos:review`. `skip` opts out. See the [review contract](review-contract.md) |
 | `suggest_test_plan` | optional | bool | Default `false`. When `true`, `/kairos:close-story` prompts to create a test plan if this service is impacted and has no `qa/TEST_PLAN_*.md` |
-| `security_review` | optional | bool | Default `false`. When `true`, `/kairos:close-story` runs the Anthropic `security-review` skill on the pending changes (after the code-review gate, before commit) and keeps the findings that land in this service's path. A **High** finding blocks the commit — `High` is that skill's top severity, it has no Critical — while Medium/Low are listed for acknowledgement. Reserve for sensitive services (auth, payments, PII) — the review is slow |
+| `security_review` | optional | bool | Default `false`. When `true`, `/kairos:close-story` runs `/kairos:gate-security` — Anthropic's analysis prompt aimed at the Kairos scope — on the pending changes (after the code-review gate, before commit) and keeps the findings that land in this service's path. A **High** finding blocks the commit — `High` is that skill's top severity, it has no Critical — while Medium/Low are listed for acknowledgement. Reserve for sensitive services (auth, payments, PII) — the review is slow |
 | `worktree_seed_files` | optional | list | Gitignored runtime files (e.g. `.env`) that a fresh worktree does **not** carry — `git worktree add` only materializes committed content. Listed paths are copied from the main clone into the worktree by `/kairos:worktree`, at creation and on every re-join. Paths relative to workspace root. Used only when `worktree_mode != off` |
 | `worktree_test_command` | optional | string | Replaces `test_command` when the gate runs **inside an `epic_shared` worktree**. The plain `test_command` often attaches to a long-running prod container (e.g. `docker exec api …`), which tests the *original* checkout, not the worktree. This command must instead run against the worktree's files in an **isolated** container that never clobbers prod images/containers and never clashes on ports. Tokens: `{worktree}`, `{worktree_id}`. Defaults to `test_command` |
 

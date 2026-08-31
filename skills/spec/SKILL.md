@@ -27,7 +27,9 @@ The observable-behavior section format is defined in [spec-format.md §4.2](../.
 
 ## Size budget
 
-Default soft budget: **180 lines** per `{service}/spec.md` (the YAML/identity block plus observable-behavior sections). It is a *soft* target — compaction aims to get under it without dropping facts; a spec that is genuinely large because the service is genuinely complex is fine, and you say so rather than mangling it. Override per run by appending `limit:{N}` to `$ARGUMENTS`.
+Soft budget: **`spec_line_budget` lines** per `{service}/spec.md` — read from the root `spec.md`, default **180** when unset (the YAML/identity block plus observable-behavior sections). It is a *soft* target: compaction aims to get under it without dropping facts, and a spec that is genuinely large because the service is genuinely complex is fine — you say so rather than mangling it. Override per run by appending `limit:{N}` to `$ARGUMENTS`.
+
+One budget, read from one place. `/kairos:worktree` Phase 1d offers compaction when a spec passes **×3** of this same value, so a project that raises it here raises it there too.
 
 ## Cardinal rules (do not break)
 
@@ -46,6 +48,12 @@ Default soft budget: **180 lines** per `{service}/spec.md` (the YAML/identity bl
 ### Workspace root & spec
 ```!
 pwd; test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
+```
+
+### Line budget (from the root spec)
+```!
+grep -m1 -E '^\- \*\*spec_line_budget\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//' || true
+echo "(unset above → default 180)"
 ```
 
 ### Per-service spec sizes (audit)

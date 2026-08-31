@@ -41,6 +41,24 @@ PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | s
 PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); grep -H -m1 -E '^\- \*\*depends_on\*\*:' "$PM"/prds/*.md "$PM"/done/*.md 2>/dev/null | grep -v '/STORY-' || echo "(none)"
 ```
 
+### Service specs that have outgrown their budget (see Phase 3.6)
+```!
+MODE=$(grep -m1 -E '^\- \*\*worktree_mode\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); MODE=${MODE:-off}
+if [ "$MODE" = "epic_shared" ]; then
+  echo "worktree_mode: epic_shared — /kairos:worktree Phase 1d owns this check; nothing to do here"
+else
+  BUD=$(grep -m1 -E '^\- \*\*spec_line_budget\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); BUD=${BUD:-180}
+  ALERT=$((BUD * 3))
+  find . -mindepth 2 -maxdepth 3 -name spec.md -not -path './.git/*' -not -path './node_modules/*' 2>/dev/null \
+    | while read -r f; do
+        n=$(wc -l < "$f" 2>/dev/null || echo 0)
+        [ "$n" -gt "$ALERT" ] && printf 'OVERSIZED %s — %s lines (budget %s, x%s)\n' "${f#./}" "$n" "$BUD" "$((n / BUD))"
+        true
+      done
+  echo "worktree_mode: ${MODE} — budget ${BUD}/spec, alert above ${ALERT} — end of list"
+fi
+```
+
 ### Today's date
 ```!
 date +%Y-%m-%d || echo "(none)"
@@ -175,6 +193,28 @@ Report one line — `✓ milestone {slug} created` / `✓ milestone {slug} alrea
 
 **Never blocking.** On any failure (network, auth, permissions), print `⚠ milestone not synced ({reason}) — run /kairos:sync-pm later` and continue. The PRD file is the deliverable; the milestone is a mirror.
 
+### Phase 3.6 — Oversized service specs (only when `worktree_mode != epic_shared`)
+
+Skipped entirely — no probe, no output — when `worktree_mode` is `epic_shared`: there, `/kairos:worktree` Phase 1d owns this check, and it owns it for a reason no other command can meet (compaction has to land on `{spec.default_branch}` *before* `git worktree add`, or the oversized spec is frozen into the tree the agents will read).
+
+**Everywhere else, this is the place.** Kairos publishes a soft budget of `spec_line_budget` lines per `{service}/spec.md` (default 180) and ships `/kairos:spec {service} compact` to get back under it without losing facts. Every `/kairos:close-story` appends to a spec from its diff, so specs only ever grow — and a command you have to *remember* to run is a command nobody runs.
+
+Why here and not in `close-story`, which is where the growth happens:
+
+- **You are at the keyboard.** `close-story` runs unattended, sometimes inside a subagent that cannot answer a prompt; an offer there blocks the run or gets auto-answered. Writing a PRD is a deliberate, interactive act.
+- **You are on `{spec.default_branch}`, before any work starts.** A compaction landed now is inherited by everything this PRD becomes.
+- **The rhythm is right.** A PRD opens a body of work, which is exactly the cadence this check wants — often enough to catch drift, rare enough not to nag.
+
+After the PRD is written (so nothing interrupts the drafting), for each `OVERSIZED` line in the dynamic context above:
+
+> ⚠ `{path}` — {n} lines (budget {b}, ×{k}). Compact it before decomposing this PRD? [y/N]
+>   → y: run `/kairos:spec {service} compact`, review the diff, commit it on `{spec.default_branch}`
+>   → N: continue, nothing is blocked
+
+**This is not a gate.** The PRD is already saved; a refusal ends the matter without comment, and no later command re-asks. If the session cannot ask — `-p`, or a subagent — **do not ask**: print the list and continue.
+
+A project whose specs are genuinely large raises `spec_line_budget` in `spec.md` rather than living with the alert. The trigger is ×3 of the budget, not ×1: it signals drift, not the normal margin.
+
 ---
 
 ## Guidelines
@@ -199,3 +239,4 @@ Report one line — `✓ milestone {slug} created` / `✓ milestone {slug} alrea
 - [ ] Every service named in "Impacted Services" exists in the root `spec.md` services table (or is explicitly flagged as undeclared).
 - [ ] All PRD content is in English.
 - [ ] Phase 3.5 ran only under `issue_tracker: github`, created at most one milestone titled exactly `{slug}`, and did not stop the command on failure.
+- [ ] Phase 3.6 ran when `worktree_mode != epic_shared`: every `OVERSIZED` spec was offered for compaction once, the offer blocked nothing, and a non-interactive session printed the list without asking.
