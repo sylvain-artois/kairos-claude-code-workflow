@@ -290,9 +290,10 @@ Three properties of that snippet, each verified on 2026-08-30 rather than assume
 - **`core.hooksPath` is a single value, so an existing one must be chained, never
   replaced.** A project on husky would otherwise lose every hook it has inside the
   worktree — silently, and only there, which is the worst place for a surprise.
-- **It refuses nothing today.** The hook warns on stderr and exits 0. Turning that into a
-  refusal is a separate, later change, and it waits on the measurement that proves the gate
-  now fires.
+- **It refuses nothing, and it never will.** The hook warns on stderr and exits 0, in
+  every mode. Someone who has read the warning and typed `push` again has said the one
+  thing a warning exists to hear; an `exit 1` here would add no evidence and only remove
+  the choice. Refusal is armed for **commits** (`--set-mode enforce`), never for pushes.
 
 > If `git config --worktree` errors (git older than 2.20), say so and continue without the
 > hook: `⚠ per-worktree hooks need git ≥ 2.20 — stage 2 will only cover agent-side pushes.`

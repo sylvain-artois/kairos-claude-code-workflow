@@ -20,7 +20,7 @@ to the exact content that gate saw.
 |---|---|---|---|
 | Who | the gate steps in `/kairos:close-story` | a `PreToolUse` hook on `Bash` | the same hook, plus a real git `pre-push` hook |
 | When | when a gate has actually run | before every `git commit` | before every `git push` |
-| Does what | writes a receipt for the change set | logs which receipts match the commit | logs whether a native pass covered the tip |
+| Does what | writes a receipt for the change set | logs which receipts match the commit, and under `enforce` denies an uncovered one | logs whether a native pass covered the tip; never refuses |
 
 They are separate on purpose. The producer has no mode: it behaves identically no matter
 what the verifiers do with its output. Only the verifiers have a mode.
@@ -28,6 +28,53 @@ what the verifiers do with its output. Only the verifiers have a mode.
 There is a fourth, quieter part: a `PostToolUse` hook that, after a commit lands, states
 the native pass now owed before the next push. It is an **obligation, not an execution** —
 a hook that ran a security review would be a hook that spends money unasked.
+
+## Two modes
+
+```
+observe    every hook logs and returns. Nothing is ever refused.   ← the default
+enforce    a commit classified `code` is DENIED unless every required
+           gate left a receipt for that exact change set.
+```
+
+`enforce` is armed per tree, or for the whole machine:
+
+```bash
+sh "…/kairos-gate-receipt.sh" --set-mode enforce --tree /path/to/tree
+sh "…/kairos-gate-receipt.sh" --set-mode enforce            # every Kairos tree here
+sh "…/kairos-gate-receipt.sh" --where --tree /path/to/tree  # which mode is armed, and from where
+```
+
+Resolution order, most specific first: `$KAIROS_MODE` in the environment, then that tree's
+mode file, then the machine's, then `observe`.
+
+**Not a `spec.md` field, and that is the load-bearing part.** `spec.md` lives inside the
+repository, agents edit it routinely, and the classifier below treats it as *bookkeeping* —
+so a model that hit a refusal could disarm the gate permanently in a commit that itself
+needs no receipt. Every source above sits outside the working tree.
+
+Every source also sits outside the plugin, which is the other half. `KAIROS_MODE=observe`
+in the environment restores the previous behaviour immediately, without editing an
+installed file or waiting for a release — the recourse that has to exist before a hook is
+allowed to say no to anything.
+
+### What `enforce` never does
+
+- **Refuse a push.** Not the agent's, not yours. Someone who has read the warning and typed
+  `push` again has said the one thing a warning exists to hear; an `exit 1` there would add
+  no evidence and only remove the choice — from the one participant who is accountable for
+  the code. The `pre-push` hook warns and returns 0, in every mode, permanently.
+- **Refuse a bookkeeping commit**, or a commit with nothing pending.
+- **Anything at all outside a Kairos workspace,** or under `observe`.
+
+### What counts as covered
+
+The required gates are **review** and **security**. Not `tests`: no skill in this workflow
+writes a `tests` receipt, and a requirement nothing satisfies is not a gate, it is a wall.
+
+Each is satisfied by `passed`, by `skipped` with a reason, or by `override` with a reason.
+The last two are the model's own word, deliberately — an override is named, dated and in
+the log, which is a different animal from a silent bypass. What it cannot be is unsaid.
 
 ## The proof gate — why a receipt is no longer just an assertion
 
@@ -114,7 +161,7 @@ sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --where --tree /path/t
 One JSON object per commit:
 
 ```json
-{"at":"…","mode":"observe","decision":"allow","tree":"…","branch":"feature/epic-checkout",
+{"at":"…","mode":"observe","mode_source":"default","decision":"allow","reason":"","tree":"…","branch":"feature/epic-checkout",
  "digest":"9fdd8c84…","n_files":12,"story":"STORY-042",
  "receipts":["review:passed","security:passed"],"mechanisms":["review:kairos-fork","security:kairos-fork"],
  "stale_receipts":0,"classification":"code","commit_type":"feat","subject":"feat(api): …"}
@@ -123,7 +170,7 @@ One JSON object per commit:
 And one per push:
 
 ```json
-{"at":"…","mode":"observe","event":"push","decision":"allow","tree":"…",
+{"at":"…","mode":"observe","mode_source":"default","event":"push","decision":"allow","tree":"…",
  "branch":"feature/epic-checkout","tip":"a1b2c3d","native_pass":"uncovered","result":"none"}
 ```
 
@@ -149,6 +196,10 @@ What to look for:
   The classification is computed from the changed paths, never from the commit message.
   `commit_type` and `subject` sit beside it as information: what a commit is *called* opens
   nothing, because the model writes that itself.
+- `"decision":"deny"` with `"reason":"uncovered: security"` — the gate was armed and it
+  fired. `mode_source` says where the arming came from, which is the first thing to check
+  when a refusal is a surprise. A refusal writes no `last-verified`: nothing was consumed,
+  so nothing is retired.
 - `"event":"push"` with `"native_pass":"uncovered"` — commits are leaving the machine that
   Anthropic's built-in pass has not seen. Stage 1 covered them per story; stage 2 has not.
 - `mechanisms` naming `kairos-fork` where you expected `native-skill`, or the reverse —
@@ -170,6 +221,14 @@ It appears in the log as `security:override` with its reason. This exists becaus
 with no legitimate way out gets disabled wholesale the first time it stops something real,
 and then there is no gate at all. **A visible bypass is acceptable; a silent one is what
 this is here to eliminate.**
+
+And when the gate itself is what is wrong — a refusal you cannot explain, in the middle of
+something that matters — the whole thing steps aside:
+
+```bash
+KAIROS_MODE=observe                                       # this session
+sh "…/kairos-gate-receipt.sh" --set-mode observe --tree {WORK}   # this tree, until changed
+```
 
 ## Scope, and silence
 
@@ -208,6 +267,9 @@ The main clone keeps its own hooks untouched. Since `core.hooksPath` holds a sin
 an existing one (husky and friends) is **chained, never replaced** — otherwise a project
 would silently lose every hook it has, inside the worktree only, which is the worst place
 for a surprise.
+
+**It warns and exits 0.** That is not a stage of a rollout, it is the settled answer: this
+hook will never block a push. See *What `enforce` never does* above.
 
 ## Installing and changing it
 

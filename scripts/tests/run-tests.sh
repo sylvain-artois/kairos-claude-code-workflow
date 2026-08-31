@@ -208,8 +208,123 @@ sh "$RECEIPT" --write --gate review --mechanism kairos-fork --scope-token "$T3" 
 commit_hook "feat: never ran"
 chk "a commit that failed retires none" "$(live)" "1"
 
-# ================================================================ 6. the F6 red eval
-printf '\n\033[1m6. The F6 eval — the native scope is empty by construction (step 3)\033[0m\n'
+# ================================================================ 6. refusal
+printf '\n\033[1m6. Refusal — armed only where there is evidence, and only for commits\033[0m\n'
+printf '   \033[2mobserve is the default and refuses nothing; enforce denies an uncovered `code`\n'
+printf '   commit and nothing else at all.\033[0m\n'
+
+statedir() { printf '%s/%s-%s' "$KAIROS_STATE_DIR" "$(basename "$1")" \
+               "$(printf '%s' "$1" | sha256sum | cut -d' ' -f1 | cut -c1-12)"; }
+
+verify() {          # verify <tree> <command> [mode]   → raw stdout
+  if [ -n "${3:-}" ]; then
+    payload "$2" "$1" | env KAIROS_MODE="$3" sh "$RECEIPT" --verify 2>/dev/null
+  else
+    payload "$2" "$1" | sh "$RECEIPT" --verify 2>/dev/null
+  fi
+}
+dec() { case "$1" in *'"permissionDecision":"deny"'*) printf deny ;; *) printf allow ;; esac; }
+
+F="$BASE/enf"; mk_workspace "$F"
+mkdir -p "$F/project-management/stories" "$F/api"
+printf -- '- **project_name**: fixture\n- **project_management_dir**: project-management\n' > "$F/spec.md"
+printf 'x\n' > "$F/api/app.py"
+git -C "$F" add -A; git -C "$F" commit -qm base
+FLOG=$(logfile "$F"); FSD=$(statedir "$F")
+CMD="git -C $F commit -m \"feat: x\""
+
+printf 'more\n' >> "$F/api/app.py"
+chk "code commit, no receipts, enforce → deny " "$(dec "$(verify "$F" "$CMD" enforce)")" "deny"
+chk "…and the denial names both gates        " "$(field "$FLOG" reason)" "uncovered: review security"
+chk "code commit, no receipts, observe → allow" "$(dec "$(verify "$F" "$CMD" observe)")" "allow"
+chk "…and the shipped default is observe     " "$(dec "$(verify "$F" "$CMD")")"         "allow"
+
+# The exemption C9 measured for: close-story's second commit carries files that did not
+# exist when the gates ran. Refusing it would kill the workflow between commit and push.
+git -C "$F" checkout -q -- api/app.py
+printf 'story\n' > "$F/project-management/stories/STORY-1-x.md"
+chk "bookkeeping commit, enforce → allow     " "$(dec "$(verify "$F" "$CMD" enforce)")" "allow"
+git -C "$F" add -A; git -C "$F" commit -qm bk
+
+# Nothing pending: a reword, or an amend of a clean tree. A refusal with no subject.
+chk "empty change set, enforce → allow       " "$(dec "$(verify "$F" "$CMD" enforce)")" "allow"
+chk "…and it is classified as empty         " "$(field "$FLOG" classification)" "empty"
+
+# ---- what satisfies a required gate
+G="$BASE/gates"; mk_workspace "$G"
+printf -- '- **project_name**: fixture\n' > "$G/spec.md"
+git -C "$G" add -A; git -C "$G" commit -qm base
+printf 'work\n' > "$G/feature.py"
+GCMD="git -C $G commit -m \"feat: y\""
+GLOG=$(logfile "$G")
+
+TK=$(sh "$DIFF" "$G" | sed -n 's/^SCOPE-TOKEN: //p')
+sh "$RECEIPT" --write --gate review --mechanism kairos-fork --scope-token "$TK" --tree "$G" >/dev/null 2>&1
+chk "review only → still deny               " "$(dec "$(verify "$G" "$GCMD" enforce)")" "deny"
+chk "…and it names security, not review     " "$(field "$GLOG" reason)" "uncovered: security"
+
+sh "$RECEIPT" --write --gate security --skipped "nobody opted in" --tree "$G" >/dev/null 2>&1
+chk "review passed + security skipped → allow" "$(dec "$(verify "$G" "$GCMD" enforce)")" "allow"
+
+sh "$RECEIPT" --write --gate security --override "hotfix, owner ack" --tree "$G" >/dev/null 2>&1
+chk "an override satisfies the gate too      " "$(dec "$(verify "$G" "$GCMD" enforce)")" "allow"
+chk "…and the override is in the log         " \
+    "$(tail -n1 "$GLOG" | grep -c 'security:override')" "1"
+
+# Stale is not absent. Same empty receipt set, opposite diagnosis, opposite fix — and the
+# refusal has to say which one it is or it reads as a broken hook.
+printf 'the content moves under the gates\n' >> "$G/feature.py"
+OUT=$(verify "$G" "$GCMD" enforce)
+chk "content moved after the gates → deny    " "$(dec "$OUT")" "deny"
+chk "…diagnosed as moved, not as never-ran   " \
+    "$(printf '%s' "$OUT" | grep -c 'content moved under them')" "1"
+
+# ---- what refusal must never touch
+N="$BASE/notk"; mk_workspace "$N" --not-kairos
+printf 'x\n' > "$N/f.py"
+chk "not a Kairos workspace → silent allow   " \
+    "$(dec "$(verify "$N" "git -C $N commit -m \"feat: z\"" enforce)")" "allow"
+
+chk "a push is never denied, in any mode     " \
+    "$(dec "$(verify "$G" "git -C $G push origin HEAD" enforce)")" "allow"
+
+KAIROS_MODE=enforce sh "$RECEIPT" --pre-push --tree "$G" >/dev/null 2>&1
+chk "the git pre-push hook still exits 0     " "$?" "0"
+
+# A denied commit consumes nothing, so it must arm no retirement.
+rm -f "$FSD/last-verified"
+printf 'code\n' >> "$F/api/app.py"
+verify "$F" "$CMD" enforce >/dev/null
+chk "a denied commit writes no last-verified " \
+    "$([ -f "$FSD/last-verified" ] && echo yes || echo no)" "no"
+
+# ---- where the mode comes from
+printf '\n\033[1m   Mode resolution — env, then this tree, then this machine, then observe\033[0m\n'
+printf '   \033[2mNever spec.md: the model edits it, and _is_bookkeeping exempts it — a gate\n'
+printf '   disarmed in a commit that needs no receipt is not a gate.\033[0m\n'
+
+M="$BASE/mode"; mk_workspace "$M"
+printf -- '- **project_name**: fixture\n' > "$M/spec.md"
+git -C "$M" add -A; git -C "$M" commit -qm base
+MSD=$(statedir "$M")
+mode_of() { sh "$RECEIPT" --where --tree "$M" | sed -n 's/^mode: *//p'; }
+
+chk "nothing set anywhere → observe (default)" "$(mode_of)" "observe (from default)"
+printf 'enforce\n' > "$KAIROS_STATE_DIR/mode"
+chk "the machine file arms it                " "$(mode_of)" "enforce (from machine-file)"
+sh "$RECEIPT" --set-mode observe --tree "$M" >/dev/null 2>&1
+chk "this tree overrides the machine         " "$(mode_of)" "observe (from tree-file)"
+chk "the environment overrides both          " \
+    "$(KAIROS_MODE=enforce sh "$RECEIPT" --where --tree "$M" | sed -n 's/^mode: *//p')" "enforce (from env)"
+chk "a value nobody recognises arms nothing  " \
+    "$(KAIROS_MODE=yes-please sh "$RECEIPT" --where --tree "$M" | sed -n 's/^mode: *//p')" \
+    "observe (from tree-file+bad-env)"
+sh "$RECEIPT" --set-mode default --tree "$M" >/dev/null 2>&1
+chk "--set-mode default falls back through   " "$(mode_of)" "enforce (from machine-file)"
+rm -f "$KAIROS_STATE_DIR/mode"
+
+# ================================================================ 7. the F6 red eval
+printf '\n\033[1m7. The F6 eval — the native scope is empty by construction (step 3)\033[0m\n'
 printf '   \033[2mNo model needed: this is a property of git, and it is the whole bug.\033[0m\n'
 
 E="$BASE/eval"; mkdir -p "$E"
@@ -285,8 +400,8 @@ fi
 r=$(sh "$DIFF" /nonexistent-path-xyz >/dev/null 2>&1; printf '%s' $?)
 chk "a bad path still exits 0 (never aborts an injection)" "$r" "0"
 
-# ================================================================ 7. injected blocks
-printf '\n\033[1m7. Every injected block exits 0 — a silent failure mode\033[0m\n'
+# ================================================================ 8. injected blocks
+printf '\n\033[1m8. Every injected block exits 0 — a silent failure mode\033[0m\n'
 printf '   \033[2mA non-zero rc from an injected block aborts the ENTIRE skill invocation,\n'
 printf '   silently. This runs all of them for real against a fixture workspace.\033[0m\n'
 
@@ -338,8 +453,8 @@ for f in "$ROOT"/skills/*/SKILL.md; do
 done
 chk "no dead (plain-fence !cmd) injections remain anywhere" "$DEAD" "0"
 
-# ================================================================ 8. the fork stays a fork
-printf '\n\033[1m8. The forked security prompt is still verbatim below its scope blocks\033[0m\n'
+# ================================================================ 9. the fork stays a fork
+printf '\n\033[1m9. The forked security prompt is still verbatim below its scope blocks\033[0m\n'
 printf '   \033[2mThe value of the fork is the analysis we did NOT write. If someone edits it\n'
 printf '   by hand, that value is gone and nothing else would say so.\033[0m\n'
 
@@ -368,8 +483,8 @@ else
   no "forked prompt present" "skills/gate-security is missing"
 fi
 
-# ================================================================ 9. the reading budget
-printf '\n\033[1m9. The reading budget — what a story ORDERS an implementer to read (C10)\033[0m\n'
+# ================================================================ 10. the reading budget
+printf '\n\033[1m10. The reading budget — what a story ORDERS an implementer to read (C10)\033[0m\n'
 printf '   \033[2mMeasured on a real repo: a median 80k tokens prescribed per story, re-read on\n'
 printf '   every turn of a 250-turn agent. The gate asks; it never forbids.\033[0m\n'
 
@@ -435,8 +550,8 @@ chk "a missing story still exits 0      " "$r" "0"
 r=$(story </dev/null >/dev/null 2>&1; printf '%s' $?)
 chk "a story with no refs still exits 0 " "$r" "0"
 
-# ================================================================ 10. shipped-artefact hygiene
-printf '\n\033[1m10. Shipped artefacts: links resolve, injecting skills declare their tools\033[0m\n'
+# ================================================================ 11. shipped-artefact hygiene
+printf '\n\033[1m11. Shipped artefacts: links resolve, injecting skills declare their tools\033[0m\n'
 
 # Fenced blocks are stripped first: a link inside one is a SAMPLE, not a link. Story
 # templates and the reading-budget examples have to show the `[x](x.md#3-4)` form, and a

@@ -215,6 +215,13 @@ These are the fields Kairos commands actively read. All except `name` and `path`
 | `worktree_seed_files` | optional | list | Gitignored runtime files (e.g. `.env`) that a fresh worktree does **not** carry — `git worktree add` only materializes committed content. Listed paths are copied from the main clone into the worktree by `/kairos:worktree`, at creation and on every re-join. Paths relative to workspace root. Used only when `worktree_mode != off` |
 | `worktree_test_command` | optional | string | Replaces `test_command` when the gate runs **inside an `epic_shared` worktree**. The plain `test_command` often attaches to a long-running prod container (e.g. `docker exec api …`), which tests the *original* checkout, not the worktree. This command must instead run against the worktree's files in an **isolated** container that never clobbers prod images/containers and never clashes on ports. Tokens: `{worktree}`, `{worktree_id}`. Defaults to `test_command` |
 
+> **The gate mode is not a spec field, and that is deliberate.** Whether the commit hook
+> *refuses* an ungated commit is set outside the repository — `KAIROS_MODE` in the
+> environment, or `kairos-gate-receipt.sh --set-mode`. `spec.md` is inside the tree, agents
+> edit it routinely, and the hook classifies it as bookkeeping, so a mode declared here
+> could be switched off in a commit that itself needs no receipt. See
+> [`gate-receipts.md`](gate-receipts.md).
+
 > **Worktree testing (`epic_shared`).** A worktree is a separate directory. Two things break naive test commands there: (1) gitignored files like `.env` are absent — declare them in `worktree_seed_files`; (2) a containerized `test_command` that does `docker exec <fixed-container>` runs against whatever checkout the container was started from (usually prod), **not** the worktree. The fix is an isolated ephemeral container — declare it in `worktree_test_command`. Example for a Compose service whose `image`/`container_name` are prefixed by an env var:
 > ```
 > worktree_test_command: cd {worktree}/api && CONTAINER_ENV_PREFIX={worktree_id}- docker compose -p {worktree_id} run --rm --build api pytest tests/ -v

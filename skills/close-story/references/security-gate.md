@@ -60,7 +60,7 @@ sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate securit
    --mechanism native-skill --tree {WORK}
 ```
 
-That receipt is keyed by the branch tip it covered, so the `pre-push` hook can see whether the tip about to leave has been reviewed. **Observation mode: the hook warns, it does not refuse.**
+That receipt is keyed by the branch tip it covered, so the `pre-push` hook can see whether the tip about to leave has been reviewed. **The hook warns and returns 0 — always, in every mode.** Refusing the push of someone who has read the warning and typed the command again would take away the choice without adding any evidence. Refusal is armed for commits only.
 
 → Provenance checks, report-parsing detail, and the per-mechanism receipt fields: this file.
 

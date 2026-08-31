@@ -9,36 +9,109 @@
 #   --verify                    PreToolUse hook: inspect a git commit / git push
 #   --after-commit              PostToolUse hook: state the native pass now owed
 #   --pre-push --tree DIR       git pre-push hook: is the tip covered by a native pass?
-#   --where                     print where state for this tree lives
+#   --where                     where this tree's state lives, and which mode is armed
+#   --set-mode observe|enforce  arm or disarm refusal, for one tree or the whole machine
 #
-# MODE: this build is OBSERVATION ONLY. Neither hook refuses anything; they write to the
-# log and return. Refusal is step 5, and only once the eval proves the gate fires — a
-# hook that denies while the gate is still broken kills every epic at its first commit.
+# TWO MODES, and exactly one thing separates them:
 #
-# WHAT CHANGED IN 1.7.0 (measured in production): a receipt used to be
-# written on the model's say-so. On that run the security gate did not run, and the
-# receipt said `passed` anyway — the instrument built to expose the substitution certified
-# it instead. So a `passed` receipt now REQUIRES a scope token minted by kairos-diff.sh,
-# and records HOW the gate ran. A gate that never held a Kairos artefact can no longer
-# produce a green receipt.
+#   observe   every hook logs and returns. Nothing is ever refused. (the default)
+#   enforce   a COMMIT classified `code` is DENIED unless every required gate left a
+#             receipt for that exact change set.
 #
-# WHAT STEP 5 WILL READ. The commit log line carries `classification`, and that — not
-# `commit_type`, not `subject` — is what a refusing build gates on:
+# What `enforce` does not do, in any mode, ever:
 #
-#   code         every gate owes a receipt for this exact change set
+#   - refuse a push. Not the agent's, not yours. A human who has read the warning and
+#     types push anyway has said the only thing a warning can ask to hear; the gate has
+#     not earned the right to overrule that, and a pre-push hook that exits 1 turns a
+#     diagnosis into a hostage. `do_pre_push` warns and returns 0. Permanently.
+#   - refuse a bookkeeping commit, or a commit with nothing pending.
+#   - anything at all outside a Kairos workspace.
+#
+# ---- end of usage
+#
+# WHAT THE REFUSAL READS. The commit log line carries `classification`, and that — not
+# `commit_type`, not `subject` — is what it gates on:
+#
+#   code         every required gate owes a receipt for this exact change set
 #   bookkeeping  the docs close-story derives AFTER its code commit; no receipt can
 #                cover them, because they did not exist when the gates ran
+#   empty        nothing pending — a reword, or an amend of a clean tree
 #
 # It is computed from the changed paths (_is_bookkeeping), never from the commit message.
 # A message is something the model writes; an exemption keyed on it is a password the
 # model issues to itself. The subject is logged beside it as information only.
+#
+# WHICH GATES ARE REQUIRED: review and security. Not `tests` — no skill has ever written
+# a `tests` receipt, and a requirement nothing in the workflow satisfies is not a gate,
+# it is a wall. A gate is satisfied by `passed`, by `skipped` with a reason, or by
+# `override` with a reason. The last two are the model's own word, deliberately: an
+# override is named, dated, and in the log, which is a different animal from a silent
+# bypass. What it cannot do is stay unsaid.
+#
+# WHAT A `passed` RECEIPT COSTS (1.7.0, measured in production): a receipt used to be
+# written on the model's say-so. On that run the security gate did not run and the receipt
+# said `passed` regardless — the instrument built to expose the substitution certified it
+# instead. So a `passed` receipt REQUIRES a scope token minted by kairos-diff.sh, and
+# records HOW the gate ran. The honest limit, exposed by the 1.8.0 run: a token proves
+# SCOPE, never MECHANISM.
 
 set -u
 
 . "$(dirname "$0")/kairos-lib.sh"
 
-KAIROS_MODE="observe"
-KAIROS_VERSION="1.8.0"
+KAIROS_VERSION="1.9.0"
+
+# ---------------------------------------------------------------- the mode
+#
+# Resolution order, most specific first:
+#
+#   1. $KAIROS_MODE in the environment
+#   2. <state dir for this tree>/mode      — one project
+#   3. <state root>/mode                   — every Kairos project on this machine
+#   4. KAIROS_DEFAULT_MODE below
+#
+# Deliberately NOT a spec.md field, and that is the load-bearing part. spec.md sits inside
+# the repository, the model edits it routinely, and `_is_bookkeeping` classifies it as
+# bookkeeping — so a model that hit a refusal could disarm the gate for good in a commit
+# that itself needs no receipt. Every source above is outside the working tree.
+#
+# Every source is also outside the plugin, and that is the other half. This repository is
+# its own marketplace: merging to main publishes to every installation at once, so a
+# refusal with a defect in it arrives everywhere simultaneously, in the middle of other
+# people's epics. `KAIROS_MODE=observe` gives the previous behaviour back without editing
+# an installed file or waiting for a release.
+#
+# The default stays `observe` until refusal has been through a real epic. Arming it is
+# one command; shipping it armed is a promise this has not yet earned.
+
+KAIROS_MODE_ENV="${KAIROS_MODE:-}"
+KAIROS_DEFAULT_MODE="observe"
+KAIROS_MODE="$KAIROS_DEFAULT_MODE"
+KAIROS_MODE_SOURCE="default"
+
+_read_mode_file() {      # <file> → the mode it names, if it names a real one
+  [ -f "$1" ] || return 1
+  _rm_v=$(head -n1 "$1" 2>/dev/null | tr -d ' \011\015\012')
+  case "$_rm_v" in observe|enforce) printf '%s' "$_rm_v" ;; *) return 1 ;; esac
+}
+
+_resolve_mode() {        # [<tree>] → sets KAIROS_MODE and KAIROS_MODE_SOURCE
+  KAIROS_MODE="$KAIROS_DEFAULT_MODE"; KAIROS_MODE_SOURCE="default"
+  _rm_root="${KAIROS_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/kairos}"
+  if _rm_g=$(_read_mode_file "$_rm_root/mode"); then
+    KAIROS_MODE="$_rm_g"; KAIROS_MODE_SOURCE="machine-file"
+  fi
+  if [ -n "${1:-}" ] && _rm_t=$(_read_mode_file "$(_state_dir "$1")/mode"); then
+    KAIROS_MODE="$_rm_t"; KAIROS_MODE_SOURCE="tree-file"
+  fi
+  case "$KAIROS_MODE_ENV" in
+    observe|enforce) KAIROS_MODE="$KAIROS_MODE_ENV"; KAIROS_MODE_SOURCE="env" ;;
+    "")              ;;
+    # An unreadable KAIROS_MODE must not silently arm anything. It falls through to the
+    # sources below it, and says so in every log line it touches.
+    *)               KAIROS_MODE_SOURCE="$KAIROS_MODE_SOURCE+bad-env" ;;
+  esac
+}
 
 # ---------------------------------------------------------------- modes
 
@@ -52,8 +125,42 @@ do_where() {
   _tree=$(_toplevel "${1:-$PWD}") || true
   [ -n "$_tree" ] || _die "not a git work tree: ${1:-$PWD}"
   _sd=$(_state_dir "$_tree")
-  printf 'tree:      %s\nstate:     %s\nreceipts:  %s/receipts\ntokens:    %s/pending\nlog:       %s/gate-log.jsonl\nmode:      %s\n' \
-    "$_tree" "$_sd" "$_sd" "$_sd" "$_sd" "$KAIROS_MODE"
+  _resolve_mode "$_tree"
+  _kt="no — this hook is silent here"; _is_kairos_tree "$_tree" && _kt="yes"
+  printf 'tree:      %s\nkairos:    %s\nstate:     %s\nreceipts:  %s/receipts\ntokens:    %s/pending\nlog:       %s/gate-log.jsonl\nmode:      %s (from %s)\n' \
+    "$_tree" "$_kt" "$_sd" "$_sd" "$_sd" "$_sd" "$KAIROS_MODE" "$KAIROS_MODE_SOURCE"
+}
+
+# --set-mode — arm or disarm refusal, without editing an installed plugin file.
+#
+# With --tree, for that tree alone; without, for every Kairos tree on this machine.
+# `default` removes the file and lets the next source down decide.
+do_set_mode() {
+  case "$SET_MODE" in observe|enforce|default) ;; *)
+    _die "--set-mode takes observe, enforce or default (got '$SET_MODE')" ;; esac
+
+  if [ -n "$ARG_TREE" ]; then
+    _tree=$(_toplevel "$ARG_TREE") || true
+    [ -n "$_tree" ] || _die "not a git work tree: $ARG_TREE"
+    _f="$(_state_dir "$_tree")/mode"; _scope="$_tree"
+  else
+    _f="${KAIROS_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/kairos}/mode"
+    _scope="every Kairos tree on this machine"
+  fi
+  mkdir -p "$(dirname "$_f")" 2>/dev/null || _die "cannot create $(dirname "$_f")"
+
+  if [ "$SET_MODE" = "default" ]; then
+    rm -f "$_f" 2>/dev/null || true
+    printf '✓ mode cleared for %s — the next source down decides\n' "$_scope"
+  else
+    printf '%s\n' "$SET_MODE" > "$_f" || _die "cannot write $_f"
+    printf '✓ mode: %s — %s\n  %s\n' "$SET_MODE" "$_scope" "$_f"
+  fi
+  case "$KAIROS_MODE_ENV" in
+    "") ;;
+    *)  printf '  note: KAIROS_MODE=%s is set in this environment and overrides the file.\n' \
+          "$KAIROS_MODE_ENV" ;;
+  esac
 }
 
 do_write() {
@@ -258,7 +365,8 @@ _retire_receipts() {     # <state dir> <tree>
   rm -f "$(_pending_dir "$2")/$_rr_dg.tokens" 2>/dev/null || true
 }
 
-# --verify — the PreToolUse hook. Observation mode: log and allow, always.
+# --verify — the PreToolUse hook. Logs every commit and push in a Kairos workspace, and
+# in `enforce` mode denies the one case it has evidence for: an uncovered `code` commit.
 do_verify() {
   RAW=$(cat 2>/dev/null || true)
 
@@ -291,17 +399,28 @@ do_verify() {
   mkdir -p "$_sd" 2>/dev/null || exit 0
   _branch=$(git -C "$_tree" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '?')
 
+  # Resolved here, not at load time: the per-tree file is only findable once we know
+  # which tree this is.
+  _resolve_mode "$_tree"
+
   if [ "$_is_push" -eq 1 ]; then _verify_push; else _verify_commit; fi
   exit 0
 }
 
 # Stage 1 — before a commit: which per-story gates left a receipt for this exact content?
+#
+# REQUIRED = review, security. `tests` is collected and logged, never required: no skill
+# in this workflow writes a `tests` receipt, so requiring one would deny every commit
+# there is. When a skill starts writing them, add it here and not before.
+_REQUIRED_GATES="review security"
+
 _verify_commit() {
   _dg=$(_digest "$_tree")
 
-  _found=""; _story=""; _sep=""; _mechs=""; _msep=""
+  _found=""; _story=""; _sep=""; _mechs=""; _msep=""; _missing=""; _msep2=""
   for g in review security tests; do
     _r="$_sd/receipts/$_dg.$g.json"
+    _res=""
     if [ -f "$_r" ]; then
       _res=$(sed -n 's/.*"result":"\([^"]*\)".*/\1/p' "$_r" | head -n1)
       _mec=$(sed -n 's/.*"mechanism":"\([^"]*\)".*/\1/p' "$_r" | head -n1)
@@ -309,6 +428,15 @@ _verify_commit() {
       _mechs="$_mechs$_msep\"$g:${_mec:-unknown}\""; _msep=","
       [ -n "$_story" ] || _story=$(sed -n 's/.*"story":"\([^"]*\)".*/\1/p' "$_r" | head -n1)
     fi
+    # Satisfied by `passed`, `skipped` or `override` — and by nothing else, including a
+    # receipt file that exists but says something this script never writes.
+    case " $_REQUIRED_GATES " in
+      *" $g "*)
+        case "$_res" in
+          passed|skipped|override) ;;
+          *) _missing="$_missing$_msep2$g"; _msep2=" " ;;
+        esac ;;
+    esac
   done
 
   # Receipts for a DIFFERENT digest: gates that ran, then the content moved under them.
@@ -323,23 +451,84 @@ _verify_commit() {
   _subject=$(_commit_subject "$_cmd")
   _ctype=$(printf '%s' "$_subject" | sed -n 's/^\([a-z]\{1,\}\)\((.*)\)\{0,1\}!\{0,1\}:.*/\1/p')
 
-  # The decision input a refusing build will read. `commit_type` above sits next to it as
-  # information only: the classification is derived from the paths, never from the words.
-  if _is_bookkeeping "$_tree"; then _class="bookkeeping"; else _class="code"; fi
+  # The decision input. `commit_type` above sits next to it as information only: the
+  # classification is derived from the paths, never from the words.
+  #
+  # `empty` is checked first and separately. A commit with nothing pending is a reword or
+  # an amend of a clean tree, and denying one would be a refusal with no subject — there
+  # is no change set for a gate to have covered.
+  if [ "${_npaths:-0}" -eq 0 ]; then _class="empty"
+  elif _is_bookkeeping "$_tree"; then _class="bookkeeping"
+  else _class="code"; fi
+
+  _decision="allow"; _reason=""
+  if [ "$KAIROS_MODE" = "enforce" ] && [ "$_class" = "code" ] && [ -n "$_missing" ]; then
+    _decision="deny"; _reason="uncovered: $_missing"
+  fi
 
   # What this commit is about to consume, so --after-commit can retire the receipts that
-  # covered it. Written on every commit, read once, removed on read.
-  printf '%s\n' "$_dg" > "$_sd/last-verified" 2>/dev/null || true
+  # covered it. Written on every commit it allows, read once, removed on read. Not on a
+  # denial: nothing is about to be spent.
+  [ "$_decision" = "allow" ] && { printf '%s\n' "$_dg" > "$_sd/last-verified" 2>/dev/null || true; }
 
-  _log "$_sd" "$(printf '{"at":"%s","mode":"%s","event":"commit","decision":"allow","tree":"%s","branch":"%s","digest":"%s","n_files":%s,"story":"%s","receipts":[%s],"mechanisms":[%s],"stale_receipts":%s,"classification":"%s","commit_type":"%s","subject":"%s"}' \
-    "$(_now)" "$KAIROS_MODE" "$(_esc "$_tree")" "$(_esc "$_branch")" "$_dg" "${_npaths:-0}" \
+  _log "$_sd" "$(printf '{"at":"%s","mode":"%s","mode_source":"%s","event":"commit","decision":"%s","reason":"%s","tree":"%s","branch":"%s","digest":"%s","n_files":%s,"story":"%s","receipts":[%s],"mechanisms":[%s],"stale_receipts":%s,"classification":"%s","commit_type":"%s","subject":"%s"}' \
+    "$(_now)" "$KAIROS_MODE" "$KAIROS_MODE_SOURCE" "$_decision" "$(_esc "$_reason")" \
+    "$(_esc "$_tree")" "$(_esc "$_branch")" "$_dg" "${_npaths:-0}" \
     "$(_esc "$_story")" "$_found" "$_mechs" "${_stale:-0}" "$_class" "$(_esc "$_ctype")" "$(_esc "$_subject")")"
+
+  [ "$_decision" = "deny" ] || return 0
+  _deny_commit
+}
+
+# The refusal message. It is the only thing the model will see, so it has to carry the
+# whole diagnosis and every exit — including the one that turns the gate off.
+#
+# Two diagnoses, one symptom. An empty receipt list means either "no gate ever ran" or
+# "the gates ran and then the content moved under them", and those need opposite words:
+# the first asks for a gate, the second asks for a re-run. Conflating them is how a
+# correct refusal reads as a broken hook.
+_deny_commit() {
+  if [ "${_stale:-0}" -gt 0 ]; then
+    _diag="There are $_stale receipt(s) here for a DIFFERENT change set. The gates ran, and then the content moved under them — re-run them against what is in the tree now."
+  else
+    _diag="No gate has left a receipt for this change set."
+  fi
+
+  _msg="Kairos gate: this commit is not covered, and the gate is armed.
+
+  tree        $_tree ($_branch)
+  contents    ${_npaths:-0} file(s), classified 'code'
+  uncovered   $_missing
+  $_diag
+
+/kairos:close-story runs both gates at its Phase 2.5 and records them for you; if this
+commit is part of a story, that is the path back. To do it by hand, from $_tree:
+
+  /kairos:review              then  --write --gate review   --mechanism kairos-fork --scope-token <token>
+  /kairos:gate-security       then  --write --gate security --mechanism kairos-fork --scope-token <token>
+
+The token is the SCOPE-TOKEN line each gate prints at the head of its diff.
+
+A gate that genuinely cannot run here is recorded, not skipped in silence:
+  sh $0 --write --gate <name> --skipped \"<why>\" --tree $_tree
+  sh $0 --write --gate <name> --override \"<why>\" --tree $_tree
+
+And if the gate itself is wrong, it gets out of the way:
+  sh $0 --set-mode observe --tree $_tree      (or KAIROS_MODE=observe in the environment)"
+
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' \
+    "$(_esc "$_msg")"
 }
 
 # Stage 2 — before a push: has the native pass covered the tip that is about to leave?
 # This is the physical boundary : the moment code leaves the machine.
 # `origin/HEAD...` is finally the right scope here, and stays right even with a stale
 # origin/HEAD, because the merge base absorbs the gap.
+#
+# This one logs and returns, in `enforce` as in `observe`. Refusal was armed for commits
+# only, and on purpose: a denied commit costs a re-run of a gate, a denied push strands
+# finished work on one machine. When the commit gate has been through real epics without
+# a false refusal, this is the next thing to reconsider — not before.
 _verify_push() {
   _tip=$(git -C "$_tree" rev-parse --short HEAD 2>/dev/null || printf '?')
   _r="$_sd/receipts/head-$_tip.security.json"
@@ -352,8 +541,8 @@ _verify_push() {
   # unreviewed, which is the sentence step 5 will need to write when it refuses.
   _unrev=$(find "$_sd/receipts" -maxdepth 1 -name 'head-*.security.json' 2>/dev/null | wc -l | tr -d ' ')
 
-  _log "$_sd" "$(printf '{"at":"%s","mode":"%s","event":"push","decision":"allow","tree":"%s","branch":"%s","tip":"%s","native_pass":"%s","result":"%s","native_receipts_seen":%s}' \
-    "$(_now)" "$KAIROS_MODE" "$(_esc "$_tree")" "$(_esc "$_branch")" "$_tip" "$_cov" "$(_esc "$_res")" "${_unrev:-0}")"
+  _log "$_sd" "$(printf '{"at":"%s","mode":"%s","mode_source":"%s","event":"push","decision":"allow","tree":"%s","branch":"%s","tip":"%s","native_pass":"%s","result":"%s","native_receipts_seen":%s}' \
+    "$(_now)" "$KAIROS_MODE" "$KAIROS_MODE_SOURCE" "$(_esc "$_tree")" "$(_esc "$_branch")" "$_tip" "$_cov" "$(_esc "$_res")" "${_unrev:-0}")"
 }
 
 # --after-commit — the PostToolUse hook. States the obligation; executes nothing.
@@ -394,7 +583,14 @@ do_after_commit() {
 # `pre-push` hook does not care who pushes or from where. V9 established that a linked
 # worktree can carry its own hooks directory without touching the main clone's.
 #
-# Observation mode: it warns on stderr and exits 0. Step 5 makes it exit 1.
+# It warns on stderr and exits 0. It will keep doing that, in every mode, permanently —
+# this is a settled question and not a stage of a rollout.
+#
+# Refusing the push of a human who has already read the warning is a larger promise than
+# this gate has earned. They read a diagnosis and typed the command again; that is the
+# entire thing a warning exists to ask for. An exit 1 here would not add evidence, it
+# would only take away the choice — from the one participant in this workflow who is
+# actually accountable for the code.
 do_pre_push() {
   _tree=$(_toplevel "${ARG_TREE:-$PWD}") || true
   [ -n "$_tree" ] || exit 0
@@ -404,12 +600,13 @@ do_pre_push() {
   _branch=$(git -C "$_tree" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '?')
   _sd=$(_state_dir "$_tree")
   mkdir -p "$_sd" 2>/dev/null || true
+  _resolve_mode "$_tree"
 
   if [ -f "$_sd/receipts/head-$_tip.security.json" ]; then
     _cov="covered"
   else
     _cov="uncovered"
-    printf '\n\033[33m⚠ Kairos (observation mode — this push is NOT blocked)\033[0m\n' >&2
+    printf '\n\033[33m⚠ Kairos — this push is NOT blocked, and will not be\033[0m\n' >&2
     printf '  Commit %s on %s is about to leave this machine, and\n' "$_tip" "$_branch" >&2
     printf "  Anthropic's native security-review has not covered it.\n" >&2
     printf '  The per-story Kairos gate does not replace it: that one sees uncommitted\n' >&2
@@ -417,15 +614,15 @@ do_pre_push() {
     printf '  To cover it: run the security-review skill from %s, then\n' "$_tree" >&2
     printf '    sh %s --write --gate security --mechanism native-skill --tree %s\n\n' "$0" "$_tree" >&2
   fi
-  _log "$_sd" "$(printf '{"at":"%s","mode":"%s","event":"pre-push-hook","decision":"allow","tree":"%s","branch":"%s","tip":"%s","native_pass":"%s"}' \
-    "$(_now)" "$KAIROS_MODE" "$(_esc "$_tree")" "$(_esc "$_branch")" "$_tip" "$_cov")"
+  _log "$_sd" "$(printf '{"at":"%s","mode":"%s","mode_source":"%s","event":"pre-push-hook","decision":"allow","tree":"%s","branch":"%s","tip":"%s","native_pass":"%s"}' \
+    "$(_now)" "$KAIROS_MODE" "$KAIROS_MODE_SOURCE" "$(_esc "$_tree")" "$(_esc "$_branch")" "$_tip" "$_cov")"
   exit 0
 }
 
 # ---------------------------------------------------------------- argv
 
 MODE=""; W_TREE=""; W_GATE=""; W_STORY=""; W_SERVICES=""; W_REASON=""; W_RESULT="passed"
-W_MECH=""; W_TOKEN=""; W_SCOPE_CMD=""; ARG_TREE=""
+W_MECH=""; W_TOKEN=""; W_SCOPE_CMD=""; ARG_TREE=""; SET_MODE=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -435,6 +632,8 @@ while [ $# -gt 0 ]; do
     --after-commit) MODE="after-commit" ;;
     --pre-push)     MODE="pre-push" ;;
     --where)        MODE="where" ;;
+    --set-mode)     shift; [ $# -gt 0 ] || _die "--set-mode needs observe, enforce or default"
+                    MODE="set-mode"; SET_MODE="$1" ;;
     --tree)         shift; [ $# -gt 0 ] || _die "--tree needs a value"; W_TREE="$1"; ARG_TREE="$1" ;;
     --gate)         shift; [ $# -gt 0 ] || _die "--gate needs a value"; W_GATE="$1" ;;
     --mechanism)    shift; [ $# -gt 0 ] || _die "--mechanism needs a value"; W_MECH="$1" ;;
@@ -444,7 +643,8 @@ while [ $# -gt 0 ]; do
     --services)     shift; [ $# -gt 0 ] || _die "--services needs a value"; W_SERVICES="$1" ;;
     --skipped)      shift; [ $# -gt 0 ] || _die "--skipped needs a reason"; W_RESULT="skipped"; W_REASON="$1" ;;
     --override)     shift; [ $# -gt 0 ] || _die "--override needs a reason"; W_RESULT="override"; W_REASON="$1" ;;
-    -h|--help)      sed -n '2,25p' "$0"; exit 0 ;;
+    -h|--help)      sed -n '2,/^# ---- end of usage/p' "$0" | sed -e 's/^# \{0,1\}//' -e '$d'
+                    exit 0 ;;
     *)              _die "unknown argument: $1" ;;
   esac
   shift
@@ -457,5 +657,6 @@ case "$MODE" in
   after-commit) do_after_commit ;;
   pre-push)     do_pre_push ;;
   where)        do_where "${ARG_TREE:-$PWD}" ;;
-  *)            _die "one of --digest, --write, --verify, --after-commit, --pre-push, --where is required" ;;
+  set-mode)     do_set_mode ;;
+  *)            _die "one of --digest, --write, --verify, --after-commit, --pre-push, --where, --set-mode is required" ;;
 esac

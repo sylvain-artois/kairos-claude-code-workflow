@@ -96,7 +96,7 @@ Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-co
 
 **(e) Leave a receipt.** (a)–(c) green for **every** service → write the `review` receipt with `--mechanism kairos-fork` and the `SCOPE-TOKEN` from (c). All services on `review_command: skip` → `--skipped "<reason>"` (no token: nothing ran). Commands: [`references/security-gate.md`](references/security-gate.md).
 
-> **Why a token.** A gate that ran and one that never ran produce the same artefact: an empty report. A run shipped where the gate did not fire and the receipt said `passed` anyway, so `--write` now **refuses** a `passed` receipt whose token it cannot find. Never work around a refusal: re-run the gate, or record `--skipped`/`--override` with a reason. **The hook still only observes.** Script missing → `gate receipts: unavailable`, and continue.
+> **Why a token.** A gate that ran and one that never ran produce the same artefact: an empty report. A run shipped where the receipt said `passed` and the gate had not fired — so `--write` **refuses** a `passed` receipt whose token it cannot find, and in `enforce` mode the hook **denies** the commit itself. Never work around either: re-run the gate, or record `--skipped`/`--override` with a reason. Script missing → `gate receipts: unavailable`, and continue.
 
 **All gates green for all services → proceed to Phase 2.5.**
 
@@ -125,7 +125,7 @@ It scopes itself via `kairos-diff.sh` (staged, unstaged **and untracked**) and e
 - **Any High (or Critical) → stop and ask.** Do NOT commit; story stays `in_progress`.
 - **Medium / Low only → list them and prompt** before continuing.  · **Clean → continue.**
 - **`SCOPE-ERROR`, skill unavailable, or no token → the gate did not run.** Interactive → **stop and ask**. Non-interactive (subagent of an epic/wave run) → return `BLOCKED: security gate could not run — {reason}` **without committing**.
-- **Never substitute your own pass for the skill.** A false green wearing the gate's name — and now futile: without a token the receipt cannot be written ([review contract §7](../../docs/review-contract.md)).
+- **Never substitute your own pass for the skill.** A false green wearing the gate's name — and futile: no token, no receipt ([review contract §7](../../docs/review-contract.md)).
 
 Clear, or medium/low acknowledged → receipt: `--mechanism kairos-fork --scope-token {from the report}`.
 
@@ -133,7 +133,7 @@ Clear, or medium/low acknowledged → receipt: `--mechanism kairos-fork --scope-
 
 The push is where code leaves the machine, and where `origin/HEAD...` is finally the **right** scope: everything committed and not yet pushed. **Neither stage replaces the other.**
 
-**When:** in Phase 7, after the deferral rule lets you through and **before** the push. Run the built-in `security-review` from `{WORK}`, apply the same severity gate, receipt with `--mechanism native-skill` — keyed by branch tip, so the `pre-push` hook knows whether what is leaving was reviewed. **Observation mode: it warns, it does not refuse.**
+**When:** in Phase 7, after the deferral rule lets you through and **before** the push. Run the built-in `security-review` from `{WORK}`, apply the same severity gate, receipt with `--mechanism native-skill` — keyed by branch tip, so the `pre-push` hook knows whether what is leaving was reviewed. **A push is never refused; the hook only warns.**
 
 → Receipt commands, fields per mechanism, what replaced the provenance footer: [`references/security-gate.md`](references/security-gate.md).
 

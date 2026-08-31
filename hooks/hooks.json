@@ -1,5 +1,5 @@
 {
-  "description": "Kairos gate receipts — OBSERVATION MODE. Before a git commit, notes which per-story gates left a receipt for the exact change set. Before a git push, notes whether Anthropic's native security pass has covered the branch tip about to leave the machine. After a commit, states the native pass now owed. Refuses nothing; silent in every repository that is not a Kairos workspace.",
+  "description": "Kairos gate receipts. Before a git commit, notes which per-story gates left a receipt for the exact change set — and, once armed with --set-mode enforce, denies a code commit no gate has covered. Before a git push, notes whether Anthropic's native security pass has covered the branch tip about to leave the machine; a push is never refused. After a commit, states the native pass now owed. Observation is the default, and it refuses nothing; silent in every repository that is not a Kairos workspace.",
   "hooks": {
     "PreToolUse": [
       {
