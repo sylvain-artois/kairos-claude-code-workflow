@@ -5,6 +5,75 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-08-31
+
+### Added
+
+- **The gate can now say no.** Two modes, and exactly one thing separates them:
+
+  ```
+  observe    every hook logs and returns. Nothing is ever refused.   ← still the default
+  enforce    a commit classified `code` is DENIED unless `review` and `security` each
+             left a receipt for that exact change set.
+  ```
+
+  Everything the previous four releases built was an instrument: it measured, it recorded,
+  and a run that ignored it paid nothing. This is the release where the measurement is
+  allowed to have a consequence — and it is scoped as narrowly as the evidence permits.
+  Commits only. `code` commits only. Two gates, not three. Nothing outside a Kairos
+  workspace, and nothing at all under `observe`.
+
+  A refusal names what is missing, distinguishes *no gate ran* from *the gates ran and the
+  content moved under them* — same empty receipt list, opposite fix — and prints every way
+  out, including the one that turns the gate off. A denied commit consumes nothing, so it
+  retires nothing.
+
+- **`--set-mode` and a mode resolution order that the model cannot reach.** `$KAIROS_MODE`
+  in the environment, then this tree's mode file, then this machine's, then `observe`.
+
+  Deliberately **not** a `spec.md` field. `spec.md` sits inside the repository, agents edit
+  it routinely, and `_is_bookkeeping` classifies it as bookkeeping — so a model that hit a
+  refusal could disarm the gate for good in a commit that itself needs no receipt. Every
+  source is outside the working tree.
+
+  Every source is also outside the plugin, and that is the other half. This repository is
+  its own marketplace: merging to main reaches every installation at once, so a refusal
+  with a defect in it arrives everywhere simultaneously, in the middle of other people's
+  epics. `KAIROS_MODE=observe` gives the old behaviour back without editing an installed
+  file or waiting for a release. A hook is not allowed to say no until that recourse
+  exists.
+
+- **`--where` now reports which mode is armed and where the arming came from**, and whether
+  the tree is a Kairos workspace at all. `mode_source` is on every log line for the same
+  reason: it is the first thing to check when a refusal is a surprise.
+
+### Changed
+
+- **The required gates are `review` and `security`. Not `tests`.** No skill in this
+  workflow has ever written a `tests` receipt, so requiring one would have denied every
+  commit there is. A requirement nothing satisfies is not a gate, it is a wall.
+
+- **A gate is satisfied by `passed`, by `skipped` with a reason, or by `override` with a
+  reason.** The last two are the model's own word, and that is the decision rather than an
+  oversight: an override is named, dated and in the log, which is a different animal from a
+  silent bypass. What it cannot be is unsaid. The alternative — refusing to accept a
+  model-written override — buys nothing a determined bypass could not get another way, and
+  costs the one thing that makes a blocker survivable.
+
+- **A push is never refused, in either mode.** The `pre-push` hook warns on stderr and
+  exits 0, permanently; this is a settled answer and not a stage of a rollout. Someone who
+  has read the warning and typed `push` again has said the one thing a warning exists to
+  hear. An `exit 1` there would add no evidence and only remove the choice — from the one
+  participant in this workflow who is accountable for the code.
+
+- **`empty` joins `code` and `bookkeeping` as a classification.** A commit with nothing
+  pending is a reword, or an amend of a clean tree. Denying one would be a refusal with no
+  subject: there is no change set for a gate to have covered.
+
+- The shipped default stays `observe`. Arming refusal is one command; shipping it armed is
+  a promise this has not yet earned — it earns it over a real epic, not over a test suite.
+  24 new assertions cover the refusal, the exemptions, and the resolution order.
+
 ## [1.8.0] - 2026-08-31
 
 ### Fixed
