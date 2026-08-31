@@ -5,6 +5,117 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-08-31
+
+### Fixed
+
+- **The review gate was unreachable from its own caller.** `skills/review/SKILL.md` carried
+  `disable-model-invocation: true`, so when `/kairos:close-story` reached its review gate and
+  invoked `/kairos:review`, the Skill tool refused — and told the model, verbatim, to ask the
+  user to run it and **not** to replicate the workflow by other means. Measured on the 1.7.0
+  validation run: the model then replicated it by other means, ran the built-in pass unscoped,
+  and wrote a receipt claiming `mechanism=kairos-fork` for a mechanism that never ran. The
+  scope token was genuine, so the write was accepted — which is the honest limit of the token
+  and worth stating plainly: it proves **scope**, never **mechanism**.
+
+  A gate its own caller cannot reach is not a gate. `review` joins `gate-security` as
+  model-invocable. The other thirteen skills stay reserved for explicit invocation: nobody
+  calls them but you.
+
+  (The substituted review did find two real defects and they were fixed before the commit.
+  The outcome was good; the path was outside the contract, and only the path is fixable.)
+
+- **Three shipped artefacts still described the 1.6.0 security gate.** `implement-epic`'s
+  per-story subagent prompt, `close-story`'s QA self-check, and `docs/spec-format.md` all
+  named the built-in `security-review` and its provenance footer for stage 1 — the mechanism
+  1.7.0 replaced with `/kairos:gate-security` and the scope token. An instruction that
+  describes a mechanism the workflow no longer has is an instruction that sends a model
+  looking for one it can find.
+
+- **Commit subjects never parsed.** `git commit -m "$(cat <<'EOF'` is the form Claude Code
+  actually writes, and the hook's one-line sed captured the literal `$(cat <<`. On the 1.7.0
+  run, `commit_type` was empty and `subject` read `$(cat <<` on **both** commits — which is
+  to say on every commit `close-story` has ever made. Both forms parse now, and the heredoc
+  opener must sit on the same line as the `-m` so an unrelated `cat <<EOF > file` earlier in
+  the command cannot be mistaken for the message.
+
+- **Spent receipts were counted as stale ones.** A receipt a commit consumed is not stale, it
+  is **spent**, and leaving it in the live set corrupts the one signal that separates *the
+  gates ran and then the content moved* from *no gate ever ran*. Over an `epic_shared` branch
+  of five stories that was ten phantom stale receipts by the end. `--after-commit` now moves
+  them to `receipts/archive/` and drops their scope tokens — but only after confirming the
+  digest actually changed, because `PostToolUse` fires whether or not git succeeded, and a
+  failed commit must disarm nothing.
+
+### Added
+
+- **`classification` on every commit log line — the decision a refusing build will read.**
+  `/kairos:close-story` commits twice, and it has to: Phase 4 derives each `{service}/spec.md`
+  *from* the code commit's diff, and Phase 5 flips the story to `done`, archives it and moves
+  its ROADMAP row. None of those files exist when the gates run in Phase 2.5 — they are
+  consequences of the commit — so no receipt can ever cover them. Under refusal mode that
+  second commit would be denied and `close-story` would die between Phase 6 and Phase 7:
+  after the code is committed, before push, PR and archival finish. The worst place in the
+  whole workflow to stop.
+
+  So it is exempted on **what it contains** — every changed path under
+  `project_management_dir`, or a `spec.md` — and never on what it is called. An exemption
+  keyed on the commit subject would be a password the model writes for itself, and the 1.7.0
+  run showed precisely what this model does at a closed door: it goes around, then labels the
+  result as though it had come through the front. `commit_type` and `subject` are logged
+  beside the classification as information only.
+
+- **`/kairos:create-story` now measures what a story orders an implementer to read.**
+  `## Existing References` is the only section of a story that *prescribes* reading, and
+  prescribed reading is not paid once — it sits in the implementing agent's context and is
+  re-read on every turn. Measured on an observed repository: a median of ~80 000 tokens
+  ordered per story, worst case 271 000, almost always to reach two paragraphs of a large
+  file. At turn 20 of 250, that is roughly 18 million tokens of cache reads for one story.
+
+  New Phase 3.5 runs `scripts/kairos-refs.sh` over each generated story, writes a
+  `**Reading budget**` line into it, and **stop-and-asks** on any reference over
+  `story_reference_budget` (default 20 KB) that carries neither an anchor nor a pasted
+  excerpt. A reference's value is not its size, so the gate asks rather than forbids: *"the
+  whole file is genuinely needed, because …"* is a first-class answer, recorded in the story.
+  Anchored and excerpted references are costed at their excerpt, not their file, so the
+  budget line argues for the fix instead of against it.
+
+- **`/kairos:worktree` offers spec compaction before it creates the tree.** Kairos has always
+  published a soft budget of `spec_line_budget` lines per service spec and shipped
+  `/kairos:spec {service} compact` to get back under it — and every `close-story` appends to
+  a spec from its diff, so specs only ever grow. A command you have to *remember* to run is a
+  command nobody runs: on the observed repository, two service specs stood at ×6.5 and ×7.9
+  of the budget, with no compaction in the history at all.
+
+  One command offers it, once, at ×3 of the budget — and **which one depends on
+  `worktree_mode`**, because the right moment is not the same in the two execution models:
+
+  - `epic_shared` → **`/kairos:worktree` Phase 1d.** A worktree materializes only committed
+    content, so compaction has to land on the default branch *before* `git worktree add` or
+    the oversized spec is what the agents read for the whole epic. No other command can meet
+    that constraint, and this one is the first gesture of every epic.
+  - `in_place` / `off` → **`/kairos:create-prd` Phase 3.6**, after the PRD is saved. Those
+    projects never create a worktree, so they would otherwise never see the offer. Writing a
+    PRD is deliberate and interactive, it happens on the default branch, and it opens a body
+    of work — the right cadence to catch drift without nagging.
+
+  The two are mutually exclusive: no project is asked twice, and none is never asked. Neither
+  blocks — a refusal continues in silence, and a session that cannot ask does not ask. The
+  one place that stays silent either way is `close-story`, which is where the growth actually
+  happens: it runs unattended, sometimes in a subagent that cannot answer a prompt, so an
+  offer there blocks the run or gets auto-answered.
+
+- **Two context budgets in the root spec**, both optional, both soft, neither ever blocking:
+  `spec_line_budget` (default 180) and `story_reference_budget` (default 20000 bytes). A
+  project whose specs are honestly large, or whose stories honestly need whole files, says so
+  once instead of dismissing the same prompt every run. `docs/spec-format.md` §3.2-bis.
+
+### Changed
+
+- The link checker in `scripts/tests/run-tests.sh` strips fenced blocks before resolving
+  links: a link inside a code fence is a **sample**, not a link, and a checker that resolved
+  those would force every story-template example to name a file that really exists.
+
 ## [1.7.0] - 2026-08-30
 
 ### Added
