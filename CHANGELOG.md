@@ -5,6 +5,47 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-09-01
+
+### Added
+
+- **`agents/kairos-story.md` (C5)** — the per-story unit `/kairos:implement-epic` delegates
+  to, replacing the "Follow `${CLAUDE_PLUGIN_ROOT}/skills/implement-story/SKILL.md`" prose
+  that had stood in for the still-unreachable-by-fresh-subagent Skill call since 1.4.0.
+  `skills: [implement-story, close-story]` preloads both bodies at spawn instead of a
+  `Read`; `tools:` drops `Agent` (no longer needed — see Phase 2/4 below) and `Artifact`'s
+  28.5 KB unused schema; `disallowedTools: AskUserQuestion` makes the existing "non-
+  interactive → return BLOCKED" prose a mechanism instead of a rule the model has to
+  remember; `memory: project` lets sequential story subagents of one epic stop re-reading
+  what an earlier sibling already read. `implement-epic` Phase 2 now spawns it by name
+  (`subagent_type: kairos:kairos-story`) instead of `general-purpose`.
+
+- **`skills/gate-tests` and `skills/spec-update` (C2)** — the last two of the four gates
+  `close-story` ran inline now exist as their own `context: fork` + `background: false`
+  skills, extracted from Phase 2(a) and Phase 4 respectively. Neither declares
+  `arguments:`, matching `gate-security`/`qa`/`review`. `spec-update` is deliberately not
+  merged into `/kairos:spec`: it reads only the story's scoped diff and writes directly
+  (`close-story` commits it later); `/kairos:spec` reads the whole service and hands the
+  commit to the user — different jobs, kept separate.
+
+### Changed
+
+- **`review` and `qa` are now `context: fork` + `background: false` (C2)**, completing the
+  4-gate conversion `gate-security` started in 1.10.0. `qa` gained an explicit `--from
+  <dir>` argument in the same pass (mirroring `review`'s, and for the same reason: nothing
+  a fork runs may trust its own cwd for `./spec.md`) — `close-story` now passes `--from
+  {WORK}` to both.
+
+- **`close-story` Phase 2 and Phase 4 no longer wrap per-service gates in an `Agent`
+  subagent.** Each gate — `gate-tests`, `qa`, `review`, `spec-update` — is its own fork now,
+  so a multi-service story fires one `Skill` call per service per gate, in parallel,
+  directly; the subagent layer that used to exist only to parallelize inline Bash/prose
+  logic is gone. `references/gates-detail.md` and `references/commits-and-specs.md` shrank
+  to match — procedure lives in the extracted skills now, not in `close-story`'s
+  references. Net effect on `close-story` itself: 14 452 → 14 256 bytes, more headroom
+  under the 14 500-byte compaction ceiling than before this pass, despite two new
+  `--from`-carrying call sites.
+
 ## [1.10.0] - 2026-09-01
 
 ### Fixed
