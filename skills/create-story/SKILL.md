@@ -1,7 +1,6 @@
 ---
 name: create-story
 description: Decompose a PRD into one or more STORY-NNN files; append each to the roadmap. With --from-issue N, turn a human-written GitHub issue into one story instead.
-disable-model-invocation: true
 allowed-tools: Bash
 ---
 

@@ -1,7 +1,6 @@
 ---
 name: spec
 description: Maintain a service's spec.md — backfill it from the service's code when it's empty/thin, or compact it back under a size budget when commits have inflated it. Reads code, never runs it; shows a diff and hands the commit to you.
-disable-model-invocation: true
 allowed-tools: Bash
 ---
 

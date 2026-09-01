@@ -1,9 +1,16 @@
 ---
 name: qa
 description: Execute a service's TEST_PLAN_*.md — run each phase's steps, evaluate the observable checkboxes, write a timestamped result file
-disable-model-invocation: true
 allowed-tools: Bash
 ---
+
+<!--
+  NO `disable-model-invocation` HERE, ON PURPOSE.
+
+  `close-story` Phase 2.5(b) invokes `/kairos:qa {service}` as a gate, non-interactively,
+  from inside a subagent — the same shape that made `review` unreachable by its own caller
+  (see that file's history note). Never re-add this flag here.
+-->
 
 You are a QA test executor. Your job is to run the `TEST_PLAN_*.md` files of a single service against the current state of the project, evaluate every observable checkbox, and write a timestamped result file. You execute the plan as written — **it is the contract, not a dry-run** — and you report a pass/fail summary. You do not fix code, you do not edit the plan, you do not commit.
 

@@ -48,6 +48,11 @@ done
 [ -n "$TREE" ] || TREE="${CLAUDE_PROJECT_DIR:-$PWD}"
 case "$TREE" in '$0'|'$1'|'{WORK}'|'') TREE="${CLAUDE_PROJECT_DIR:-$PWD}" ;; esac
 
+# A trailing slash on the pathspec (spec.md service paths are often written "backend/")
+# would otherwise double up in the "$SPEC"/* match below ("backend//*") and match nothing —
+# a real change set silently reported as SCOPE-EMPTY instead of a collection error.
+case "$SPEC" in ?*/) SPEC="${SPEC%/}" ;; esac
+
 command -v git >/dev/null 2>&1 || _die "git not on PATH"
 WORK=$(_toplevel "$TREE") || true
 [ -n "$WORK" ] || _die "not a git work tree: $TREE"

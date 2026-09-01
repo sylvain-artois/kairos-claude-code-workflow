@@ -1,7 +1,6 @@
 ---
 name: implement-wave
 description: Run an arbitrary set of stories — crossing epics is the normal case — as one unit of delivery: one worktree, one branch, one pull request
-disable-model-invocation: true
 ---
 
 You run a **wave**: an explicit list of stories delivered as **one unit** — one shared worktree, one branch, one pull request. Stories of several epics in one wave is the normal case here, not an error.

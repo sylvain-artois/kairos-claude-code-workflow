@@ -1,7 +1,6 @@
 ---
 name: implement-epic
 description: Run a whole epic from inside its shared worktree — implement + intermediate-close each story sequentially via fresh subagents, then push and open one PR at the end
-disable-model-invocation: true
 allowed-tools: Bash
 ---
 

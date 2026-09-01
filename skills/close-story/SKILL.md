@@ -1,7 +1,6 @@
 ---
 name: close-story
 description: Close a story — gates, commit, specs, archive, push/PR — driven by spec.md
-disable-model-invocation: true
 allowed-tools: Bash
 ---
 

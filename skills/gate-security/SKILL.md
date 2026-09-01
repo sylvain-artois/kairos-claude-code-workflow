@@ -2,9 +2,18 @@
 name: gate-security
 description: Security-review one story's pending changes — Anthropic's analysis prompt, aimed at the Kairos scope
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh *), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Read, Glob, Grep, LS, Task, Agent
+context: fork
+background: false
 ---
 
 <!--
+  `context: fork` + `background: false` (C2, first gate converted). No `arguments:` block —
+  V1 in notes/plan-refactoring-skills-api.md §6.2 measured that declaring one breaks the
+  positional `$0`/`$1` substitution inside the `!` injection blocks below, silently (empty
+  reply, rc 0). The caller keeps passing `{work-tree} [pathspec]` as the Skill tool's `args`
+  string, exactly as before — that path was never `arguments:`-based, so fork changes
+  nothing about how this skill is invoked, only where it runs.
+
   PROVENANCE — read references/UPSTREAM.md before editing a single line below.
 
   The analysis below is Anthropic's, copied verbatim from anthropics/claude-code-security-review
@@ -36,7 +45,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh "$0" "$1" --names || echo "SCOPE-ER
 GIT STATUS:
 
 ```!
-git -C "${0:-.}" status --short --branch || echo "SCOPE-ERROR: not a work tree"
+git -C "$0" status --short --branch 2>/dev/null || echo "SCOPE-ERROR: not a work tree"
 ```
 
 DIFF CONTENT:

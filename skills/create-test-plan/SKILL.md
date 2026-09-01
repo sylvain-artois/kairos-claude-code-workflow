@@ -1,7 +1,6 @@
 ---
 name: create-test-plan
 description: Generate a runnable LITE test plan for a service from a free-form prompt
-disable-model-invocation: true
 allowed-tools: Bash
 ---
 

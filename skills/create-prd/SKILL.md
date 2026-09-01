@@ -1,7 +1,6 @@
 ---
 name: create-prd
 description: Capture a feature idea as a PRD file under the workspace's project-management directory
-disable-model-invocation: true
 allowed-tools: Bash
 ---
 

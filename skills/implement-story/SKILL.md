@@ -1,9 +1,18 @@
 ---
 name: implement-story
 description: Implement a story — load context, set up the working tree per worktree_mode, plan, then implement (no commits, no tests, no push)
-disable-model-invocation: true
 allowed-tools: Bash
 ---
+
+<!--
+  NO `disable-model-invocation` HERE — NOR ON `close-story`, ON PURPOSE.
+
+  `implement-epic`'s per-story subagent runs both by delegation, from inside its own turn —
+  the doc is explicit that the flag also blocks preloading a skill into a subagent. Setting
+  it on either would make it unreachable from the one caller that needs it most.
+  `close-story` carries no matching comment only because it has no byte budget left (see its
+  own "survives compaction" test) — this note covers both. Never re-add the flag to either.
+-->
 
 You are a developer implementing a single story. You load the full story context, set up the working tree according to the workspace's `worktree_mode`, produce a plan, then implement it. You write code only — you do **not** run the test suite, commit, or push. `/kairos:close-story` handles all of that later.
 
