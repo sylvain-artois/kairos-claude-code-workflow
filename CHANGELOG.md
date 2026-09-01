@@ -5,6 +5,58 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-09-01
+
+### Fixed
+
+- **`qa` carried the same `disable-model-invocation` bug that made `review` unreachable
+  before 1.8.0 — just never triggered.** `close-story` Phase 2.5(b) invokes `/kairos:qa
+  {service}` as a gate, non-interactively, from a subagent — the exact shape that made
+  `review`'s own caller unable to reach it. No captured run had ever hit it because none of
+  the stories measured so far had a `{service}/qa/TEST_PLAN_*.md`: the gate was skipped, not
+  exercised. The flag is removed; the file now carries the same "why not" note `review`
+  does.
+
+- **`disable-model-invocation` was set on 14 of 15 skills — 10 more than the plan ever
+  called for.** Reported by a user whose agents could only see `gate-security` and `review`
+  when asked what Kairos skills existed: not an install problem, the field strips a skill's
+  description from the model's context by design. The plan's own C8 named exactly 4 skills
+  that should carry it (`release`, `sync-pm`, `setup-worktree-isolation`, `init`); step 1
+  had applied it to all 14 in one pass and nobody had gone back to narrow it. Removed from
+  `create-prd`, `create-story`, `create-test-plan`, `implement-wave`, `spec`, `qa`,
+  `implement-story`, `close-story`, `implement-epic`. Kept on the 4 plus `worktree`, which
+  has its own explicit reason on file (the one moment of the epic cycle a human is actually
+  at the keyboard).
+
+- **`kairos-diff.sh` silently reported a real change set as empty when the pathspec had a
+  trailing slash.** The file-name filter matched `"$SPEC"` or `"$SPEC"/*` — with
+  `SPEC="skills/"` that means a `skills//` prefix, which matches nothing. Verified: `skills/`
+  → `SCOPE-FILES: 0`, reported as *"a real, verified empty scope"*; `skills` (no slash) →
+  all 10 changed files, correct. This is a gate-integrity bug, not a cosmetic one: any
+  `spec.md` service path written with a trailing slash — a common convention — would make
+  `gate-security` report nothing to review, every time, for that service. A trailing slash
+  is now stripped from the pathspec right after argument parsing.
+
+- **`gate-security`'s GIT STATUS block never substituted `$0`.** Kairos's `!`-injection
+  engine replaces the literal token `$0`/`$1` wherever it appears verbatim — which is why
+  the two `kairos-diff.sh "$0" "$1"` blocks in the same file have always worked. `${0:-.}`
+  does not contain that literal substring, so it reached the shell unsubstituted, where `$0`
+  natively resolves to the interpreter's own name. Every invocation, forked or not, printed
+  `fatal: cannot change to '/bin/bash': Not a directory` instead of real git status — since
+  the file was first written this way. Informational only (the scope token comes from the
+  other two blocks), but wrong in its report regardless. Fixed to the bare `"$0"` the rest
+  of the file already uses correctly.
+
+### Changed
+
+- **`gate-security` is the first gate to run `context: fork` + `background: false`** — the
+  first concrete piece of the plan's C2 (forking each gate out of `close-story`'s own,
+  ever-growing conversation). Deliberately no `arguments:` block: an earlier probe found that
+  declaring one silently breaks the positional `$0`/`$1` substitution this skill's injection
+  blocks depend on. The caller is unaffected — it already passed `{work-tree} [pathspec]` as
+  the Skill tool's `args` string, never as a named argument. `gate-review`, `gate-tests` and
+  `spec-update` are not converted yet.
+
 ## [1.9.0] - 2026-08-31
 
 ### Added
