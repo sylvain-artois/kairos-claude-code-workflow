@@ -35,21 +35,8 @@ If `git status` reports nothing to commit (work was already committed manually),
 
 ## Phase 4 — Update per-service `spec.md` from the diff
 
-For each service in `IMPACTED` that has a `{path}/spec.md`, update it from that service's scoped diff. **≥ 2 services → parallel subagents; 1 → inline.**
-
-Subagent prompt (one per service):
-> You are a spec updater for `{service}` (`{path}/spec.md`). Current content:
-> ```
-> {current spec.md}
-> ```
-> Diff scoped to this service:
-> ```
-> {git diff for {path}}
-> ```
-> Story STORY-{NNN}, date {YYYY-MM-DD}. Update the observable-behavior sections from the diff only:
-> new/changed endpoints, events, database tables, env vars, dependencies, behavioral contracts, cron/file-output/LLM-prompt sections. Set the header `**Last updated**: STORY-{NNN} ({YYYY-MM-DD})`. Keep it concise — prune stale entries rather than accumulate.
-> **Apply only additions/modifications the diff supports. Never delete user content you cannot tie to the diff — if unsure, leave it and note the uncertainty.** Return the full updated spec.md.
-
-Write the returned specs to disk.
+Since C2 (§M.12), this phase is `/kairos:spec-update {service} --from {WORK} --story
+STORY-{NNN}` — its own forked skill, one call per service in `IMPACTED` that has a
+`{path}/spec.md`. Procedure lives in that file now, not here.
 
 ---

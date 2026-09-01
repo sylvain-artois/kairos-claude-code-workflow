@@ -2,6 +2,8 @@
 name: qa
 description: Execute a service's TEST_PLAN_*.md — run each phase's steps, evaluate the observable checkboxes, write a timestamped result file
 allowed-tools: Bash
+context: fork
+background: false
 ---
 
 <!--
@@ -10,6 +12,11 @@ allowed-tools: Bash
   `close-story` Phase 2.5(b) invokes `/kairos:qa {service}` as a gate, non-interactively,
   from inside a subagent — the same shape that made `review` unreachable by its own caller
   (see that file's history note). Never re-add this flag here.
+
+  `context: fork` + `background: false` (C2). No `arguments:` block, matching
+  `gate-security`/`review` — none of this file's injected blocks below need it. `--from`
+  is new in this pass: added so a fork never has to trust its cwd for `./spec.md`, the same
+  reasoning `review` already documents for its own `--from`.
 -->
 
 You are a QA test executor. Your job is to run the `TEST_PLAN_*.md` files of a single service against the current state of the project, evaluate every observable checkbox, and write a timestamped result file. You execute the plan as written — **it is the contract, not a dry-run** — and you report a pass/fail summary. You do not fix code, you do not edit the plan, you do not commit.
@@ -28,17 +35,21 @@ The plans are produced by `/kairos:create-test-plan` and consumed here. The work
 
 ## Dynamic context
 
+Informational only — a cheap ping at the cwd this fork happened to start in. **Not
+authoritative**: Phase 1 resolves `DIR` from `--from` (or this cwd) and re-reads everything
+against it explicitly. Never substitute a value below for that resolution.
+
 ### Workspace root
 ```!
 pwd || echo "(none)"
 ```
 
-### Workspace spec (required)
+### Workspace spec at cwd (informational)
 ```!
-test -f ./spec.md && echo "spec.md found" || echo "MISSING: run /kairos:init first"
+test -f ./spec.md && echo "spec.md found" || echo "MISSING here — may still be found under --from"
 ```
 
-### Declared services (name → path)
+### Declared services at cwd (informational)
 ```!
 awk '/^## 3\.6 Services|^## Services/{flag=1; next} flag && /^## /{flag=0} flag && /^\|/ && !/^\|[-: ]+\|/ && !/^\| *name */' ./spec.md 2>/dev/null || echo "(none)"
 ```
@@ -53,12 +64,13 @@ date +%Y%m%d_%H%M%S || echo "(none)"
 ## Argument
 
 ```
-/kairos:qa <service> [test-plan-name|all]
+/kairos:qa <service> [test-plan-name|all] [--from <dir>]
 ```
 
 - `<service>` — required, first token. Must exist in the root spec services table.
 - `[test-plan-name]` — optional. A topic, a filename (`TEST_PLAN_SMOKE_LITE.md`), or a full path. If omitted, list the plans and prompt.
 - `all` — run every `TEST_PLAN_*.md` of the service sequentially.
+- `--from <dir>` — the work tree to run against. Default: current directory. `/kairos:close-story` passes `{WORK}` here — a fork should never have to trust its cwd for `./spec.md`, the same reason `/kairos:review` already takes `--from`.
 
 ---
 
@@ -66,13 +78,15 @@ date +%Y%m%d_%H%M%S || echo "(none)"
 
 ### Phase 1 — Load specs and execution context
 
-1. Read `./spec.md`. Resolve `<service>` → `<service-path>` from the services table. If absent, print:
+1. `DIR` = `--from` if passed, else the current directory. Resolve every path below against `{DIR}`, not a bare relative one — this is the value the Dynamic Context block above only guesses at. Read `{DIR}/spec.md`. Resolve `<service>` → `<service-path>` (relative to `{DIR}`) from the services table. If absent, print:
    ```
    Service `<service>` is not declared in spec.md.
    Declared services: <comma-separated names>.
    Run /kairos:init to register it, or pick one of the above.
    ```
    Stop.
+
+   **From here on, `{service-path}` means `{DIR}/<service-path>` — every read and write in this file is anchored to `{DIR}`, never to a bare relative path.**
 2. Read `{service-path}/spec.md` (if present). Extract the **execution context** the plans will need:
    - **HTTP base URL** — from the Overview/Endpoints section (host + `port`), or the env vars. Used to turn `http` step blocks (`POST /api/...`) into runnable `curl`.
    - **SQL client** — how this service's database is reached (a documented command, or derived from `compose_file` + env vars). Used to wrap bare `sql` step blocks.
@@ -87,10 +101,7 @@ date +%Y%m%d_%H%M%S || echo "(none)"
 
 ### Phase 2 — Select the test plan(s)
 
-List `{service-path}/qa/TEST_PLAN_*.md`:
-```!
-ls -1 "<service-path>/qa"/TEST_PLAN_*.md 2>/dev/null || echo "(none)"
-```
+List `{service-path}/qa/TEST_PLAN_*.md` (a plain `ls`, run with your own Bash tool against the resolved `{service-path}` — not an injected block, since it depends on `{DIR}`).
 
 - **A name/path was passed** → resolve it against `{service-path}/qa/` and run only that plan.
 - **`all`** → run every plan, sequentially (one result file each).
@@ -161,7 +172,7 @@ A step that errors at the command level (non-zero exit, connection refused) coun
 
 ## Integration note
 
-`/kairos:close-story` calls `/kairos:qa <service>` for each impacted service that has at least one test plan. When invoked from `/kairos:close-story`, a **STOPPED** or **ISSUES FOUND** verdict is a gate: the caller treats it like a failing test (stop and ask, do not commit).
+`/kairos:close-story` calls `/kairos:qa {service} --from {WORK}` for each impacted service that has at least one test plan — `--from` always passed, same reasoning as `/kairos:review`. When invoked from `/kairos:close-story`, a **STOPPED** or **ISSUES FOUND** verdict is a gate: the caller treats it like a failing test (stop and ask, do not commit).
 
 ## Note on gating (format reconciliation)
 
@@ -182,6 +193,7 @@ A step that errors at the command level (non-zero exit, connection refused) coun
 
 ## QA self-check (before declaring success)
 
+- [ ] `DIR` was resolved from `--from` (or cwd) in Phase 1 and used for every read/write — the Dynamic Context block above was treated as informational only, never authoritative.
 - [ ] `<service>` was validated against the root spec services table.
 - [ ] No file outside `{service-path}/qa/results/` was created or modified; the source plan is untouched.
 - [ ] Every step ran in declared order; no step was silently skipped.

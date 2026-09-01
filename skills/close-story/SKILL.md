@@ -71,15 +71,11 @@ Note from each impacted `{path}/spec.md`: `test_command`, `worktree_test_command
 
 ## Phase 2 — Per-service gates (tests → QA → review)
 
-**Gates**, before any commit, for every service in `IMPACTED`. One → inline; **≥ 2 → one subagent each, in parallel.**
+**Gates**, before any commit, for every service in `IMPACTED`. Each gate below is its own forked skill call (C2) — **1 service → inline; ≥ 2 → fire every service's calls in parallel** (multiple `Skill` tool calls in one message). No subagent wrapper needed: the fork already isolates each call's context.
 
-**(a) Unit tests**, from `{WORK}`, preferring `worktree_test_command` over `test_command` under `epic_shared`.
-> **Fixed-container guard (`epic_shared`).** Falling back to a `test_command` attaching to a fixed container (`docker exec`, `docker compose exec`) with no `worktree_test_command` → **stop and ask**: it tests the checkout the container was started from — prod — not `{WORK}`.
+**(a) Unit tests.** `/kairos:gate-tests {service} --from {WORK}`, adding `--worktree-id epic-{EPIC_SLUG}` under `worktree_mode: epic_shared`. **A `FAIL` or `BLOCKED` verdict → stop and ask.** Do NOT proceed to commit. The story stays `in_progress`.
 
-A service needing an unavailable resource → **ask before skipping**, never silently.
-> **Any test fails → stop and ask.** Report service, failing tests, output excerpt. Do NOT proceed to commit. The story stays `in_progress`.
-
-**(b) QA.** Any `{service.path}/qa/TEST_PLAN_*.md` → `/kairos:qa {service}`. **`STOPPED` is a hard gate: stop and ask.** `ISSUES FOUND` is reported; the user decides.
+**(b) QA.** Any `{service.path}/qa/TEST_PLAN_*.md` → `/kairos:qa {service} --from {WORK}`. **`STOPPED` is a hard gate: stop and ask.** `ISSUES FOUND` is reported; the user decides.
 
 **(c) Code review.** Collect the service-scoped diff with the Kairos collector, which mints the token the receipt needs:
 
@@ -99,7 +95,7 @@ Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-co
 
 **All gates green for all services → proceed to Phase 2.5.**
 
-→ Command selection, review modes, subagent prompt: [`references/gates-detail.md`](references/gates-detail.md).
+→ Review command-mode selection (1/2/3): [`references/gates-detail.md`](references/gates-detail.md).
 
 ---
 
@@ -154,9 +150,7 @@ git -C {WORK} add -A && git -C {WORK} status && git -C {WORK} commit -m "<type>(
 
 ## Phase 4 — Update per-service `spec.md` from the diff
 
-Each service in `IMPACTED` with a `{path}/spec.md` → update it from that service's scoped diff. **≥ 2 → parallel subagents; 1 → inline.**
-
-> **Apply only what the diff supports. Never delete user content you cannot tie to the diff** — if unsure, leave it and note the uncertainty.
+Each service in `IMPACTED` with a `{path}/spec.md` → `/kairos:spec-update {service} --from {WORK} --story STORY-{NNN}`. **≥ 2 → fire every service's call in parallel; 1 → inline.** No subagent wrapper — the fork already isolates each call's context, same as Phase 2.
 
 ---
 

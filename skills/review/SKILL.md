@@ -2,9 +2,17 @@
 name: review
 description: Review a diff scope against the Kairos review contract — wraps the native code-review skill, falls back to an inline pass. Invoked by /kairos:close-story at its review gate.
 allowed-tools: Bash
+context: fork
+background: false
 ---
 
 <!--
+  `context: fork` + `background: false` (C2). No `arguments:` block — this file fires no
+  injected `!` block that needs `$0`/`$1` substitution (its one Dynamic Context block below
+  is a bare `pwd`), so the V1 pitfall (§M.11) does not even apply here, but the pattern is
+  kept for consistency with `gate-security`/`qa`. `--from` already existed before this pass —
+  it is what makes this fork safe: nothing here trusts its own cwd.
+
   WHY THIS SKILL IS MODEL-INVOCABLE, unlike the other thirteen.
 
   It carried `disable-model-invocation: true` until the 1.7.0 validation run, where that

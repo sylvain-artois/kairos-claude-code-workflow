@@ -167,20 +167,17 @@ Hold `WORK` (Phase 0 step 0), `BRANCH` (the checked-out branch, verified by gate
 
 ---
 
-## Phase 2 — Per-story loop (one fresh subagent each)
+## Phase 2 — Per-story loop (one fresh agent each)
 
-For each story in order, spawn **one** subagent (not `isolation: worktree`) with the prompt below. Wait for it to return before starting the next — the loop is strictly sequential.
+For each story in order, spawn **one** `kairos:kairos-story` agent — `subagent_type: kairos:kairos-story` on the `Agent` tool, not `general-purpose`, not `isolation: worktree` — with the prompt below. Wait for it to return before starting the next — the loop is strictly sequential.
 
-> **Subagent prompt — implement + intermediate-close STORY-{NNN}**
+> **Agent prompt — implement + intermediate-close STORY-{NNN}**
 >
-> You implement and close exactly one story, **non-interactively**, inside the shared epic worktree. **Your working directory already *is* that worktree** — `WORK={WORK}`, branch `{BRANCH}` — and every tool you run, including the ones that read the working directory on their own, therefore sees this epic's code. Keep running git as `git -C {WORK} …` anyway: it is now redundant with your cwd, and redundancy is what makes a wrong tree impossible rather than merely unlikely. Do **not** create a worktree or a branch, and do **not** change directory.
+> `implement-story` and `close-story` were preloaded into you (C5) — follow them as your own instructions for **STORY-{NNN}**, as if invoked `worktree_mode:epic_shared`. **Your working directory already *is* the shared epic worktree** — `WORK={WORK}`, branch `{BRANCH}` — keep running git as `git -C {WORK} …` anyway: redundant with your cwd, and redundancy is what makes a wrong tree impossible rather than merely unlikely. Do **not** create a worktree or a branch, and do **not** change directory. You cannot ask the user (`AskUserQuestion` is unavailable to you): **auto-approve the implementation plan**, and for the bundled-vs-split commit choice (multi-service), **default to one bundled commit**.
 >
-> 1. **Implement.** Follow `${CLAUDE_PLUGIN_ROOT}/skills/implement-story/SKILL.md` for **STORY-{NNN}** as if invoked `worktree_mode:epic_shared`. Since you cannot ask the user: **auto-approve the plan** (`Proceed? → Y`) and proceed. Honour every other rule of that command — especially scope (touch only the story's `Impacted Services`) and the dependency check.
-> 2. **Intermediate-close.** Then follow `${CLAUDE_PLUGIN_ROOT}/skills/close-story/SKILL.md` for **STORY-{NNN}**, with two overrides:
->    - Run **Phases 0–6 only** (gates → commit source → update specs → archive + ROADMAP → commit docs). **Do NOT run Phase 7/8** (push, PR/MR, worktree cleanup) even if this is the last open story — the orchestrator handles those. Treat this as an intermediate close.
->    - For the bundled-vs-split commit choice (multi-service), **default to one bundled commit**.
-> 3. **Gates are sacred.** If any gate is blocking — a failing test, a Critical/High code-review or security finding, scope creep (a changed file outside the declared services), an unmet dependency, or an ambiguous selection — **stop immediately, do not commit, leave the story `in_progress`**, and return `BLOCKED`. Never work around a red gate.
-> 4. **A gate you cannot run is not a gate you may replace.** Both reviewers stay aimed at `{WORK}` explicitly — code review through `/kairos:review {path} --from {WORK}`, the security gate through `/kairos:gate-security {WORK} {path}` (`close-story` Phase 2.5, stage 1). Both are model-invocable: invoke them, do not reimplement them. The explicit aim is no longer there to correct a wrong working directory (it is now right by construction); it is there because an explicit scope is what makes a gate **reproducible and auditable**. Each gate ends with a `SCOPE-TOKEN`, and that token is what lets its receipt be written — **no token, no receipt, and no receipt means the gate did not run**. If a gate skill is unavailable, or its report carries no token, return `BLOCKED: {gate} could not be aimed at {WORK} — {reason}`. Do **not** run an equivalent pass of your own over `git -C {WORK} diff` and report it as the gate: the run log would state that a review passed when none ran. `security skipped` means *no service opted in* — nothing else.
+> **Run close-story's Phases 0–6 only** (gates → commit source → update specs → archive + ROADMAP → commit docs). **Do NOT run Phase 7/8** (push, PR/MR, worktree cleanup) even if this is the last open story — the orchestrator handles those. Treat this as an intermediate close.
+>
+> **Gates are sacred.** A failing test, a Critical/High code-review or security finding, scope creep, an unmet dependency, or an ambiguous selection → **stop immediately, do not commit, leave the story `in_progress`**, and return `BLOCKED`. Never work around a red gate, and never reimplement one of your own in place of a gate skill that is unavailable or reports no `SCOPE-TOKEN` — return `BLOCKED: {gate} could not be aimed at {WORK} — {reason}` instead. Each gate you call (`gate-tests`, `qa`, `review`, `gate-security`, `spec-update`) is already aimed at `{WORK}` explicitly by `close-story` itself — you do not need to restate that.
 >
 > Return **only** this structured report (no narration):
 > ```
