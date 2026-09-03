@@ -38,7 +38,7 @@ Findings as Markdown, grouped under these exact level-2 headers (omit a section 
 
 Findings should be specific — cite `file:line` — and focus on correctness, security, and maintainability over style.
 
-These four levels are **Kairos's own vocabulary**, not one borrowed from a reviewer. No reviewer Kairos wraps speaks it natively: the native `code-review` skill emits categories and a confidence verdict with no severity at all, and the `security-review` skill of the opt-in phase emits `High` / `Medium` / `Low` with **no Critical**. Every adapter therefore *derives* the level (§1.1 for code review, §7 for security review), and a reviewer that emits some other vocabulary must be adapted before its output reaches the gate — not parsed hopefully. A gate that finds no header it recognizes reports nothing and blocks nothing, which reads exactly like a clean review.
+These four levels are **Kairos's own vocabulary**, not one borrowed from a reviewer. No external reviewer speaks it natively: the native `code-review` skill emits categories and a confidence verdict with no severity at all, and the `security-review` skill of the opt-in phase emits `High` / `Medium` / `Low` with **no Critical**. Mode 1 assigns the level directly, so it needs no translation; any adapter around an external reviewer must *derive* it (§1.1 for code review, §7 for security review), and a reviewer that emits some other vocabulary must be adapted before its output reaches the gate — not parsed hopefully. A gate that finds no header it recognizes reports nothing and blocks nothing, which reads exactly like a clean review.
 
 | Level | Meaning | `/kairos:close-story` behavior |
 |---|---|---|
@@ -47,9 +47,11 @@ These four levels are **Kairos's own vocabulary**, not one borrowed from a revie
 | **Medium** | Should fix soon (missing error handling at boundaries, smell) | Reported; user decides |
 | **Low** | Optional (naming, minor optimization) | Reported; user decides |
 
-### 1.1 Severity derivation (native `code-review` findings)
+### 1.1 Severity derivation (for adapters that wrap the native `code-review` skill)
 
-The native skill the default reviewer wraps reports through the `ReportFindings` tool, not as text. A finding carries `file`, `line`, `summary`, `failure_scenario`, `category` (`correctness`, `simplification`, `efficiency`, `test-coverage`, …) and — only when a verify pass ran — `verdict` (`CONFIRMED` / `PLAUSIBLE`). **No severity field exists.** This table derives one. It is normative; [`skills/review/SKILL.md`](../skills/review/SKILL.md) carries the executable copy — keep the two in sync.
+> **Mode 1 no longer uses this table** — it assigns severity directly, per Phase 2 of [`skills/review/SKILL.md`](../skills/review/SKILL.md); see §2, *Why there is no native `code-review` step*. The table is kept because a **Mode 2** command may legitimately wrap the built-in (a human-driven reviewer can await it, a gate cannot), and such an adapter still has to derive a severity from findings that carry none.
+
+The native skill reports through the `ReportFindings` tool, not as text. A finding carries `file`, `line`, `summary`, `failure_scenario`, `category` (`correctness`, `simplification`, `efficiency`, `test-coverage`, …) and — only when a verify pass ran — `verdict` (`CONFIRMED` / `PLAUSIBLE`). **No severity field exists.** This table derives one.
 
 | `category` | `verdict` | Severity |
 |---|---|---|
@@ -92,12 +94,9 @@ Unset and the `<TODO…>` placeholder `/kairos:init` writes resolve to the **sam
 /kairos:review {service.path} --from {WORK}
 ```
 
-That command is a two-layer default:
+That command is **one pass over one scope**: it collects the diff with `scripts/kairos-diff.sh` and reviews it. It depends on nothing external and works on any language, so the default reviewer is available wherever Kairos is.
 
-1. **Preferred — the native `code-review` skill.** A Claude Code built-in, invoked read-only (never `ultra`, `--fix`, `--comment`, or `--post`) at effort `medium`, scoped to the service path in the work tree the caller named. Its findings are translated to contract severities by §1.1.
-2. **Fallback — an inline pass on the raw diff**, using the prompt template below. It runs whenever the skill is unavailable (older CLI, headless/SDK context, a host that resolves the name to a different skill) or when its findings fail the scope check. It depends on nothing external and works on any language, so the default reviewer never simply stops being available.
-
-**Fallback prompt template** (used verbatim):
+**Prompt template** (used verbatim):
 
 ```
 Review this diff. Emit findings grouped under `## Critical`, `## High`,
@@ -110,9 +109,19 @@ each finding. A finding is Critical/High only if it should block the commit.
 </diff>
 ```
 
-**Why the scope check exists.** The native skill resolves the diff itself from a target, while `worktree_mode: epic_shared` puts the changes in a worktree the calling session is not sitting in. A reviewer pointed at the wrong tree finds nothing and returns green — a silent pass on unreviewed code, the one failure worse than an error. So `/kairos:review` verifies every reported file against the scoped diff's own file list and discards the whole result on mismatch rather than trusting the target it passed.
+**Why the collector, and not `git diff`.** Mode 1 used to resolve its own diff with `git diff` / `git diff --staged`. Neither carries **untracked** files, and a new story is mostly untracked files. Measured on run 103a1d8b: 7 of the 11 changed paths of one story were untracked, the diff looked nearly empty, and the reviewer compensated by reviewing the whole work tree — reporting findings on the story's own Markdown file and on code committed by the previous story, which then got "fixed", which produced a new diff. `scripts/kairos-diff.sh` collects `HEAD` + staged + unstaged + untracked under a pathspec and distinguishes a *verified empty* scope (`SCOPE-EMPTY`) from a *failed* one (`SCOPE-ERROR`) — a distinction `git diff` cannot make, and the one that keeps an uncollectable scope from reading as a clean review.
 
-**Effort is pinned, not inherited.** Left to itself the skill reuses the last level the *user* typed, which would make a gate's strictness depend on unrelated session history. Mode 1 pins `medium` — fewer, higher-confidence findings, which is what a blocking gate wants. For more depth, Mode 2 with a one-line command: `/kairos:review api/ --from {WORK} --effort high`.
+**Why there is no native `code-review` step.** Mode 1 used to prefer Claude Code's built-in `code-review` skill and fall back to an inline pass "when it was unavailable". It was never available: the built-in is itself forked to the **background**, so `Skill(code-review)` returns a launch stub and its findings arrive later as a task notification, after the gate has returned. Measured: 16 of 18 invocations across two stories, and the same stub in a capture predating `context: fork` — so the preferred path had never once run. The fallback always did. Removing the step removes both the ambiguity about which pass produced a finding and the cost of background agents nobody reads (37.6% of that run). The built-in remains a fine thing for a human to run as `/code-review`; it is not a gate mechanism.
+
+**Effort is pinned, not inherited.** `--effort` sets the confidence floor of the pass: `low`/`medium` report only findings traced to a concrete failure path, `high` and above also report unconfirmed suspicions, capped at Medium. Mode 1 pins `medium` — a blocking gate wants fewer, higher-confidence findings, and an uncertain finding costs a stop-and-ask on a diff the user already understands. For more depth, Mode 2 with a one-line command: `/kairos:review api/ --from {WORK} --effort high`.
+
+### 2.1 The iteration budget
+
+**A reviewer reports; the caller decides how many times it may be asked.** `/kairos:close-story` runs the resolved reviewer **once** per service. If it returns Critical or High findings, those — and only those — may be fixed inside the gate, after which the reviewer runs **one** more time with `--recheck`, which reports Critical and High only. A Critical or High surviving that second pass stops the close; there is no third pass.
+
+**Medium and Low findings are recorded, never fixed inside the gate.** This is the load-bearing half of the rule. A review pass re-derives its findings from the diff each time, so fixing anything produces a *different* set rather than a shorter one — re-running until it comes back clean does not converge. Measured on the same run: 18 review passes for two stories, returning 7, 8, 8, 4, 6, 3, 5 findings on the first story alone, consuming about half the run's total cost before the epic orchestrator stopped it by hand.
+
+Modes 2 and 3 inherit the budget — it belongs to the caller, not to the reviewer. A Mode 2 command or Mode 3 script that wants a recheck pass should accept `--recheck` and honor it the same way; one that does not is simply run once.
 
 ### Mode 2 — Project slash command
 
@@ -156,7 +165,7 @@ This keeps the core promise intact: Kairos works on an existing project on day o
 
 Claude Code plugins **do not manage third-party skill installation**. If a user wants to drive review through a published skill (e.g. a `code-reviewer` skill from another source), they must install that skill themselves; Kairos can reference it by name in `review_command` but cannot install or vendor it. Modes 2 and 3 are framed around artifacts the user already controls (their own `.claude/commands/`, their own scripts) for the same reason.
 
-The native `code-review` skill Mode 1 prefers is **not** a third-party skill — it ships with Claude Code, so there is nothing to install. But "ships with Claude Code" is not "present in every context": CLI version, headless and SDK sessions, and hosts that bind the same name to a different skill all break the assumption. That is why Mode 1 keeps the inline pass underneath it rather than depending on the skill. The default reviewer degrades; it never disappears.
+This is also why Mode 1 depends on **no** skill but itself — not even a Claude Code built-in. "Ships with Claude Code" is not "present in every context" (CLI version, headless and SDK sessions, hosts that bind a name to a different skill), and the built-in `code-review` turned out to be unusable as a gate step for a different reason entirely: it runs in the background and returns nothing in-band (§2). A default reviewer that a gate depends on has to be one Kairos can guarantee. Mode 1 is that; depth is what Modes 2 and 3 add.
 
 ---
 

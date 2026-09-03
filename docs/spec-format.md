@@ -229,6 +229,12 @@ These are the fields Kairos commands actively read. All except `name` and `path`
 > `run --rm` publishes no ports (no clash with the live service); `CONTAINER_ENV_PREFIX={worktree_id}-` passed **on the shell** (not via the compose `env_file`, which does not feed `${...}` interpolation) gives the image/container a distinct name so the prod image is never overwritten.
 >
 > **Prerequisite — run `/kairos:setup-worktree-isolation` once.** The example above only isolates if the Compose file already wraps the built `image:`/`container_name:` in `${CONTAINER_ENV_PREFIX}`. The `/kairos:setup-worktree-isolation` command does this rewrite idempotently on the main branch (safe by construction: the prefix is empty in prod). `/kairos:implement-story` and `/kairos:implement-epic` **refuse to create a worktree** for a service that declares `worktree_test_command` whose Compose isn't prefixed — they point you to run it first.
+>
+> **Allow the test command in your project's permissions.** A `worktree_test_command` is long, contains env assignments, and builds a container — the shape Claude Code's permission classifier is most likely to stop, and a stopped test command makes the tests gate report `BLOCKED` on a healthy tree. Measured on one overnight run: the classifier blocked the command once mid-epic, and the gate reported `BLOCKED` rather than a pass. Add a matching entry to your project's `.claude/settings.json`:
+> ```json
+> { "permissions": { "allow": ["Bash(cd */api && CONTAINER_ENV_PREFIX=* docker compose *)"] } }
+> ```
+> Match the command you actually declared, not this example. An unattended run cannot answer a prompt, and every gate it blocks reads as a failure.
 
 ### 4.2 Observable-behavior sections
 

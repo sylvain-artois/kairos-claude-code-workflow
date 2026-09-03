@@ -85,7 +85,7 @@ sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} {service.path}
 
 Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-contract.md): `{service.review_command}` unset **or** still the `<TODO…>` placeholder → `/kairos:review {service.path} --from {WORK}`; `skip` → opt-out; a slash command or script path → those modes.
 > **`--from {WORK}` is not optional.** A reviewer aimed at the wrong tree reports nothing, and an empty report is indistinguishable from a clean pass.
-> **Review surfaces a Critical or High finding → stop and ask.** Do NOT proceed to commit. Medium/Low are reported; the user decides.
+> **Budget per service: one review, then one `--recheck` at most.** Only Critical/High may be fixed here; re-run **once** with `--recheck`. Still Critical/High → **stop and ask**. No third pass. **Medium/Low go in the summary, never fixed here** — fixing them changes the diff, so the next pass finds a different set: that is the loop ([why](references/gates-detail.md)).
 
 **(d)** `{service.suggest_test_plan}` and no `TEST_PLAN_*.md` → prompt **once** to make one.
 
