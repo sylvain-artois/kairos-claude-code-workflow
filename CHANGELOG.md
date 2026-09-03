@@ -5,6 +5,89 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2026-09-03
+
+Everything in this release comes from one measurement: a full API-body capture of a real
+two-story epic run under 1.11.0 (2 732 calls, ~11 h wall clock). Writing the code took 47
+minutes and 10.5% of the run's cost; closing it took 4 h 43 and 89%. The three changes below
+are what that 89% turned out to be.
+
+### Fixed
+
+- **The review gate never ran the reviewer it claimed to prefer.** `/kairos:review` Phase 1
+  invoked Claude Code's built-in `code-review` skill and fell back to an inline pass "when
+  the skill was unavailable". The built-in is itself forked to the **background**: a `Skill`
+  call returns a launch stub and its findings arrive later as a task notification, after the
+  gate has already returned. Measured at 16 of 18 invocations across two stories — and the
+  same stub appears in a capture predating `context: fork`, so the preferred path had never
+  once run since it was written. The fallback always did. Nobody noticed because it degraded
+  cleanly, which is the failure mode this project keeps finding in itself.
+
+  Phase 1 is **removed**. `/kairos:review` is now one deterministic pass over one scope.
+  Beyond the ambiguity about which pass produced a finding, this deletes the background
+  agents nobody read: **37.6% of the measured run's total cost**, spent reviewing code whose
+  findings no gate ever saw. The built-in remains a good thing for a human to run as
+  `/code-review`; it is not a gate mechanism.
+
+- **The review gate collected a scope that could not see a new story.** Phase 0 resolved its
+  own diff with `git diff` / `git diff --staged`, neither of which carries **untracked**
+  files — and a new story is mostly untracked files. Measured: 7 of the 11 changed paths of
+  one story were untracked, the diff looked nearly empty, and every pass compensated by
+  reviewing the whole work tree, reporting findings on the story's own Markdown file and on
+  code committed by the previous story. Those out-of-scope findings then got fixed, which
+  produced a new diff, which fed the next pass. `/kairos:review` now collects with
+  `scripts/kairos-diff.sh` (`HEAD` + staged + unstaged + untracked, under the pathspec) and
+  honors `SCOPE-EMPTY` / `SCOPE-ERROR` / `SCOPE-TRUNCATED` explicitly — the distinction
+  between a *verified empty* scope and a *failed* one that `git diff` cannot make, and the
+  one that keeps an uncollectable scope from reading as a clean review. This is what C3b of
+  the refactoring plan specified and had never been implemented.
+
+- **`gate-tests` interrupted unattended runs by probing for secrets.** Starting cold in a
+  fork, it would verify the worktree seeding itself with `ls -la .env …` — which trips both
+  a host project's own `Read(./.env)` deny rules and Claude Code's permission classifier.
+  Measured: six permission prompts in one overnight run, all from this gate, all at the start
+  of the gate phase; one of them left the classifier guarded enough to block the *test
+  command itself*, and the gate reported `BLOCKED` on a healthy tree. The check was always
+  redundant — `implement-epic` Preflight and `implement-story` both verify
+  `worktree_seed_files` with `test -f` before the gate is ever invoked. `gate-tests` is now
+  told not to list, read, or `cat` any seed, key, or dotenv path, and given the one permitted
+  form if it genuinely needs existence.
+
+### Added
+
+- **An iteration budget on the review gate: one review, then one `--recheck` at most, per
+  service.** Only Critical/High findings may be fixed inside the gate; the reviewer then runs
+  once more with the new `--recheck` flag, which reports Critical and High only. A blocker
+  surviving that stops the close. **Medium and Low are recorded in the close summary and
+  never fixed inside the gate** — this is the load-bearing half. A review pass re-derives its
+  findings each time, so fixing something produces a *different* set rather than a shorter
+  one, and re-running until it comes back clean does not converge. Measured: 18 review passes
+  for two stories, returning 7, 8, 8, 4, 6, 3, 5 findings on the first story alone, about half
+  the run's total cost, ended only by the epic orchestrator messaging its own subagent to stop.
+  The rule is written in `close-story` Phase 2(c), in `agents/kairos-story.md`, and as
+  §2.1 of the review contract, where it belongs to the **caller** — Modes 2 and 3 inherit it.
+
+### Changed
+
+- **`/kairos:review` — `--effort` changes meaning, `allowed-tools` narrows.** With no external
+  skill to hand it to, `--effort` is now the confidence floor of the pass: `low`/`medium`
+  report only findings traced to a concrete failure path, `high` and above also report
+  unconfirmed suspicions, capped at Medium. Mode 1 still pins `medium`. `allowed-tools` goes
+  from a bare `Bash` to the collector plus `git rev-parse|status|diff|log|show` and `pwd`.
+  The scope is collected by a normal Bash call rather than an injected `!` block, deliberately:
+  this command's arguments carry a flag (`--from <dir>`), and positional injection cannot
+  reorder `{scope} --from {dir}` into the `<tree> [pathspec]` order the collector expects.
+
+- **`docs/review-contract.md`** — Mode 1 is no longer "prefers the native skill"; §1.1
+  (severity derivation from `ReportFindings`) is kept but requalified for **Mode 2** adapters
+  that wrap the built-in, since a human-driven reviewer can await a background agent and a
+  gate cannot.
+
+- **`docs/spec-format.md`** — recommends adding a service's `worktree_test_command` to the
+  host project's `permissions.allow`. This is the half of the interruption problem no Kairos
+  change can fix: the classifier blocked the test command itself, mid-epic, in the measured
+  run.
+
 ## [1.11.0] - 2026-09-01
 
 ### Added
