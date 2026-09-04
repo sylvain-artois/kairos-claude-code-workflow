@@ -205,6 +205,8 @@ The two fields are XOR per the spec format. Never write both.
    - "Detected existing PM layout at `<path>`. Options: (a) keep in place and set `project_management_dir: <path>`; (b) migrate to `project-management/` (I will only create the new dir; you move the files); (c) abort and let me re-run with a chosen value."
    - Never auto-migrate. Never move user files.
 2. Else default to `project_management_dir: project-management`.
+3. **Derive callback (opt-in).** Ask once: *"Does this project generate anything from the story files — roadmap blocks, an index, a dashboard — that a command regenerates? If so, which command?"* An answer → `pm_derive_command`. Silence, "no", or no idea → **write nothing**; the field is absent and Phase 5.5 of `/kairos:close-story` skips.
+   Never guess it, and never infer it from a Makefile target that merely looks related: a wrong command runs on every close and its failure is a gate. If `worktree_mode` is later set to `epic_shared`, point the user at `worktree_pm_derive_command` — the same isolation problem as `worktree_test_command`.
 
 ### Phase 7 — Diff vs existing spec (idempotent re-run path)
 
@@ -241,6 +243,8 @@ After all prompts are resolved, write the files.
 Follow `${CLAUDE_PLUGIN_ROOT}/docs/spec-format.md` §3. Order: Identity → Project Management → Release Notes → Push Policy → Issue Tracker → Worktree → Services table. Use the marker syntax `- **field**: value`. No YAML front-matter.
 
 Omit the Issue Tracker fields entirely when the user did not opt in (Phase 4-bis) — an absent `issue_tracker` means `none`. Never write `issue_tracker: none` explicitly.
+
+Same rule for `pm_derive_command` (Phase 6.3): absent unless the user named a command. Never write an empty or placeholder value — Phase 5.5 keys off presence.
 
 Worktree default for the first run: `worktree_mode: off` (omit `worktree_prefix`). Users opt in later.
 
@@ -306,4 +310,5 @@ End the run. Do not run any other Kairos command for the user.
 - [ ] The root spec's services table matches the schema in `${CLAUDE_PLUGIN_ROOT}/docs/spec-format.md` §3.6 for the chosen topology (mono vs multi).
 - [ ] Either `release_notes_file` **or** `release_notes_dir` is set — never both, never neither.
 - [ ] `push_mode` is one of `auto` / `manual`, defaulting to `manual` on any uncertainty.
+- [ ] `pm_derive_command` is present **only** because the user named a command; never inferred from a Makefile target.
 - [ ] `issue_tracker` was written **only** when `git_host` is `github`, `gh` is installed and authenticated, and the user explicitly opted in — otherwise the field is absent. When set, `issue_repo` is a real `owner/name` the user confirmed (never guessed in multi-repo mode).

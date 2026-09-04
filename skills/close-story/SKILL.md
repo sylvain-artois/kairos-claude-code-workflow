@@ -39,7 +39,7 @@ date +%Y-%m-%d
 
 ## Phase 0 — Load context
 
-1. Read `./spec.md`. Hold `git_host`, `default_branch`, `push_mode`, `{pm}`, `worktree_mode`, `worktree_prefix`, `issue_tracker`, `issue_repo` (absent = `none` → issue steps skipped), and the `## Services` table.
+1. Read `./spec.md`. Hold `git_host`, `default_branch`, `push_mode`, `{pm}`, `worktree_mode`, `worktree_prefix`, `issue_tracker`, `issue_repo` (absent = `none` → issue steps skipped), `pm_derive_command` / `worktree_pm_derive_command` (absent → Phase 5.5 skipped), and the `## Services` table.
 2. **Resolve the story file robustly** — bare (`STORY-{NNN}.md`) or slugged, never assume one form. Glob both, hold `STORY_FILE`. Already under `{pm}/done/` → **already closed**: say so and stop (idempotent). No match → **stop and ask**. More than one → ambiguous IDs: **stop and ask**. **Never guess.**
 3. Read the story: title, `Size`, `Source PRD`, `Epic`, `Issue`, `Impacted Services`.
 
@@ -48,7 +48,7 @@ date +%Y-%m-%d
 - **`off`** / **`in_place`**: `WORK` = workspace root, `IS_LAST = true`.
 - **`epic_shared`** — `WORK` = `git rev-parse --show-toplevel`: **the tree this session stands in**, never one you go looking for. `EPIC_SLUG` from the `Epic` field, else the `Source PRD` basename, else the per-story slug **with a printed warning** — keep that chain. Then **confirm the tree**:
   - in the **main clone** → **stop.** The work is not here; committing would put it on `{default_branch}`.
-  - basename not `{worktree_prefix}-epic-{EPIC_SLUG}`, or `HEAD` not `feature/epic-{EPIC_SLUG}` → **stop**, naming the tree and branch you are actually in. Committing one epic's story onto another's branch is silent and survives the run.
+  - basename not `{worktree_prefix}-epic-{EPIC_SLUG}`, or `HEAD` not `feature/epic-{EPIC_SLUG}` → **stop**, naming the tree and branch you are actually in.
 
 ### 0.2 — `REMAINING_OPEN` (epic_shared only)
 
@@ -85,13 +85,13 @@ sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} {service.path}
 
 Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-contract.md): `{service.review_command}` unset **or** still the `<TODO…>` placeholder → `/kairos:review {service.path} --from {WORK}`; `skip` → opt-out; a slash command or script path → those modes.
 > **`--from {WORK}` is not optional.** A reviewer aimed at the wrong tree reports nothing, and an empty report is indistinguishable from a clean pass.
-> **Budget per service: one review, then one `--recheck` at most.** Only Critical/High may be fixed here; re-run **once** with `--recheck`. Still Critical/High → **stop and ask**. No third pass. **Medium/Low go in the summary, never fixed here** — fixing them changes the diff, so the next pass finds a different set: that is the loop ([why](references/gates-detail.md)).
+> **Budget per service: one review, then one `--recheck` at most.** Only Critical/High may be fixed here; re-run **once** with `--recheck`. Still Critical/High → **stop and ask**. No third pass. **Medium/Low go in the summary, never fixed here** ([why](references/gates-detail.md)).
 
 **(d)** `{service.suggest_test_plan}` and no `TEST_PLAN_*.md` → prompt **once** to make one.
 
 **(e) Leave a receipt.** (a)–(c) green for **every** service → write the `review` receipt with `--mechanism kairos-fork` and the `SCOPE-TOKEN` from (c). All services on `review_command: skip` → `--skipped "<reason>"` (no token: nothing ran). Commands: [`references/security-gate.md`](references/security-gate.md).
 
-> **Why a token.** A gate that ran and one that never ran produce the same artefact: an empty report. A run shipped where the receipt said `passed` and the gate had not fired — so `--write` **refuses** a `passed` receipt whose token it cannot find, and in `enforce` mode the hook **denies** the commit itself. Never work around either: re-run the gate, or record `--skipped`/`--override` with a reason. Script missing → `gate receipts: unavailable`, and continue.
+> **Why a token.** A gate that ran and one that never ran produce the same artefact. So `--write` **refuses** a `passed` receipt whose token it cannot find, and `enforce` mode **denies** the commit ([why](../../docs/review-contract.md)). Never work around either: re-run the gate, or record `--skipped`/`--override` with a reason. Script missing → `gate receipts: unavailable`, continue.
 
 **All gates green for all services → proceed to Phase 2.5.**
 
@@ -113,22 +113,20 @@ Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-co
 
 It scopes itself via `kairos-diff.sh` (staged, unstaged **and untracked**) and ends with a `SCOPE-TOKEN`.
 
-> **Why not the built-in skill here.** It scopes itself with `git diff origin/HEAD...`, empty **by construction** while an epic branch has no commits, and Kairos gates before committing.
-
-**Attribute** findings by the file cited, **drop those outside `OPTED_IN` paths**, **read `* Severity:` fields, not headers** (no `## High` section, no Critical). Then:
+**Attribute** findings by the file cited, **drop those outside `OPTED_IN` paths**, **read `* Severity:` fields, not headers** (no `## High` section, no Critical):
 
 - **Any High (or Critical) → stop and ask.** Do NOT commit; story stays `in_progress`.
 - **Medium / Low only → list them and prompt** before continuing.  · **Clean → continue.**
 - **`SCOPE-ERROR`, skill unavailable, or no token → the gate did not run.** Interactive → **stop and ask**. Non-interactive (subagent of an epic/wave run) → return `BLOCKED: security gate could not run — {reason}` **without committing**.
-- **Never substitute your own pass for the skill.** A false green wearing the gate's name — and futile: no token, no receipt ([review contract §7](../../docs/review-contract.md)).
+- **Never substitute your own pass for the skill** — a false green, and futile: no token, no receipt ([review contract §7](../../docs/review-contract.md)).
 
 Clear, or medium/low acknowledged → receipt: `--mechanism kairos-fork --scope-token {from the report}`.
 
 ### Stage 2 — the whole branch, before the push
 
-The push is where code leaves the machine, and where `origin/HEAD...` is finally the **right** scope: everything committed and not yet pushed. **Neither stage replaces the other.**
+`origin/HEAD...` is finally the right scope here. **Neither stage replaces the other.**
 
-**When:** in Phase 7, after the deferral rule lets you through and **before** the push. Run the built-in `security-review` from `{WORK}`, apply the same severity gate, receipt with `--mechanism native-skill` — keyed by branch tip, so the `pre-push` hook knows whether what is leaving was reviewed. **A push is never refused; the hook only warns.**
+**When:** Phase 7, after the deferral rule lets you through, **before** the push. Run the built-in `security-review` from `{WORK}`, apply the same severity gate, receipt with `--mechanism native-skill` — keyed by branch tip, so the `pre-push` hook knows whether what is leaving was reviewed. **A push is never refused; the hook only warns.**
 
 → Receipt commands, fields per mechanism, what replaced the provenance footer: [`references/security-gate.md`](references/security-gate.md).
 
@@ -164,6 +162,14 @@ Each service in `IMPACTED` with a `{path}/spec.md` → `/kairos:spec-update {ser
 
 ---
 
+## Phase 5.5 — Derive callback
+
+No `pm_derive_command` → skip. Else Phase 5 just staled what the project derives from the stories: regenerate **now**, riding the Phase 6 commit. Later = a 2nd commit, a 2nd push, a CI run.
+
+Run it from the workspace root (`worktree_pm_derive_command` under `epic_shared`), then `git -C {WORK} status -s`. **Non-zero exit is a gate: stop and ask.** Files outside `{pm}` → name, ask.
+
+---
+
 ## Phase 6 — Commit docs
 
 Commit the archival + spec changes together:
@@ -188,7 +194,7 @@ Otherwise: **stage 2 of the security gate is due first** (Phase 2.5). Then push 
 
 ## Phase 8 — Worktree teardown: print it, do not run it (epic_shared + IS_LAST only)
 
-**You do not remove the worktree.** It is the tree this session stands in, and git does not protect you: `git worktree remove .` returns 0 and deletes the directory the session runs in. Print the handoff instead: it tells the user to run `/kairos:worktree {EPIC_SLUG} --teardown` from the main clone. Do not reimplement any piece of the teardown here; in `off`/`in_place`, skip silently.
+**You do not remove the worktree** — `git worktree remove .` returns 0 and deletes the tree this session runs in. Print the handoff: the user runs `/kairos:worktree {EPIC_SLUG} --teardown` from the main clone. Reimplement no piece of it here; in `off`/`in_place`, skip silently.
 
 → [`references/publishing.md`](references/publishing.md)
 
@@ -196,7 +202,7 @@ Otherwise: **stage 2 of the security gate is due first** (Phase 2.5). Then push 
 
 ## Phase 9 — Summary
 
-One block. **Intermediate** (epic_shared, not last): tests, review, receipts, commit, archive, issue, local branch, kept worktree, `REMAINING_OPEN`. **Full close** adds QA, security, docs commit, specs, push/PR state, teardown. Receipts get a line in both, naming the mechanism: `security: passed(kairos-fork) → native pass due before push`.
+One block. **Intermediate** (epic_shared, not last): tests, review, receipts, commit, archive, derive, issue, local branch, kept worktree, `REMAINING_OPEN`. **Full close** adds QA, security, docs commit, specs, push/PR state, teardown. Receipts get a line in both, naming the mechanism: `security: passed(kairos-fork) → native pass due before push`.
 
 → [`references/summary-templates.md`](references/summary-templates.md)
 
@@ -215,6 +221,7 @@ Each **stops the flow before any commit** unless stated otherwise:
 - **In the main clone or another epic's worktree** → stop, do not commit.
 - **Push deferred or failing** → note it, leave branch and worktree in place; re-running resumes at Phase 7. **Not a gate.**
 - **Asked to remove the worktree** → decline; print the `--teardown` line.
+- **`pm_derive_command` exits non-zero** → stop and ask; no docs commit. Never commit over a broken derive.
 - **Issue mirror fails** → one-line warning pointing at `/kairos:sync-pm`. **Never a gate.**
 
 ---

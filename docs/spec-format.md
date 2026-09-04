@@ -72,8 +72,31 @@ The root spec is required. Every Kairos workspace has exactly one.
 | Field | Required | Type | Default | Notes |
 |---|---|---|---|---|
 | `project_management_dir` | yes | path | `project-management` | Holds `prds/`, `stories/`, `done/`, `roadmap.md`. Relative to workspace root |
+| `pm_derive_command` | no | string | — | Command that regenerates artifacts **your project derives** from `project_management_dir` — generated roadmap blocks, indexes, dashboards, anything whose content is computed from story fields. `/kairos:close-story` runs it from the workspace root right after it archives a story and **before** the commit that carries the archival, then folds whatever it regenerates into that same commit. Unset = no callback. See §3.2-ter |
+| `worktree_pm_derive_command` | no | string | `pm_derive_command` | Replaces it when the command runs inside an `epic_shared` worktree. Tokens `{worktree}` / `{worktree_id}` — same isolation problem as `worktree_test_command`, same remedy |
 
 Kairos enforces a single PM root. The subdirectories (`prds/`, `stories/`, `done/`) are conventions, not configurable.
+
+Not to be confused with `/kairos:sync-pm`, which pushes the story files **outward** to the GitHub issue mirror. `pm_derive_command` points **inward**: it regenerates files inside your own repo.
+
+### 3.2-ter The derive callback
+
+Closing a story moves its file to `done/` and flips its `Status`. If your project computes anything from those fields, that computed thing is stale the instant Kairos archives the story — and no Kairos gate can see it. A gate runs the impacted service's tests; a generated-docs check usually lives in a *different* service's suite. For a frontend story, the backend suite that would catch the drift is never launched, by construction and rightly so. The first judge is your CI, one full round trip later.
+
+`pm_derive_command` is the way to hand that back to you:
+
+```markdown
+- **pm_derive_command**: make gen-roadmap
+- **worktree_pm_derive_command**: COMPOSE_PROJECT_NAME={worktree_id} make gen-roadmap
+```
+
+Rules Kairos applies:
+
+- **A failure is a gate.** Non-zero exit → stop and ask. The point is to catch red before CI; committing over a broken derive reproduces exactly what the field exists to prevent. Say so, and let the operator decide.
+- **The string is literal.** Only `{worktree}` and `{worktree_id}` are substituted. No story title, no field value, nothing read from a story file ever reaches the command line — that would be an injection path into a file Kairos writes itself.
+- **Scope stays put.** The command is for artifacts derived from the PM directory. It is not a build hook, a formatter, or a linter. Changes outside `project_management_dir` and the paths the command is expected to touch are reported, not committed silently.
+- **No output, no problem.** If nothing changes, the commit is what it would have been anyway.
+- **Add it to `permissions.allow`** in the host project, like `worktree_test_command` — otherwise the classifier stops the gate on a command you declared yourself.
 
 ### 3.2-bis Context budgets (optional)
 

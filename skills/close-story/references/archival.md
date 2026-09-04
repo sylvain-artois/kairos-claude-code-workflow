@@ -31,4 +31,32 @@
      ```
    Best-effort in both cases: a failure is a one-line warning carried into the Phase 9 summary, **never a gate**. Never reopen an issue a human closed.
 
+## Phase 5.5 — The derive callback
+
+Only when the root spec sets `pm_derive_command`. Under `worktree_mode: epic_shared`, `worktree_pm_derive_command` replaces it when set.
+
+**Why it sits here and nowhere else.** Phase 5's `git mv` to `done/` and the `Status` flip are what make a host's generated artefacts stale — a roadmap whose blocks are computed from the stories' `Serves` and `Status` fields, an index, a dashboard. Running the callback *after* Phase 5 and *before* Phase 6 means Phase 6's `git add -A` folds the regenerated files into the same `docs(stories): close STORY-{NNN}` commit. Run it any later and the same fix costs a second commit, a second push, a full CI round trip — and a security receipt to justify for a commit the native pass never covered.
+
+No Kairos gate can catch this drift on its own: the gates run the **impacted** service's tests, and a generated-docs check usually lives in another service's suite. For a frontend story the backend suite is never launched, by construction and rightly so. The first judge is CI, one round trip too late.
+
+```bash
+# epic_shared → worktree_pm_derive_command, substituting {worktree} / {worktree_id}
+cd {WORK} && <command>
+git -C {WORK} status -s
+```
+
+**Substitution.** `{worktree}` → the absolute worktree path, `{worktree_id}` → `epic-{EPIC_SLUG}`. **Those two and nothing else.** Never interpolate a story title, an `Epic`, a `Serves` value or any other field read from a story file into the command line: story files are written by Kairos from a PRD, and a command line built from their content is an injection path into a file the tool authors itself.
+
+**Failure is a gate, not a warning.** A non-zero exit means the project's own derivation is broken. Stop and ask; do not run Phase 6. Committing over it reproduces exactly the CI red this phase exists to prevent — the operator decides whether to fix the generator, skip the callback for this close, or abort. Record what was decided in the Phase 9 summary.
+
+**Scope.** The callback exists for artefacts derived from `{pm}`. If `git status` shows changes outside `{pm}` and outside whatever paths the command is understood to own, name those files and ask before committing — the scope-creep gate of Phase 1 does not run again here, and a build hook smuggled into this field would widen every close silently.
+
+**Summary line** (Phase 9), in all three shapes:
+
+```
+derive: make gen-roadmap → 3 files
+derive: make gen-roadmap → no change
+derive: none declared
+```
+
 ---
