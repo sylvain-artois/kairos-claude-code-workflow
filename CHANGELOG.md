@@ -5,6 +5,63 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] - 2026-09-04
+
+Both changes come from one measurement: a full API-body capture of `/kairos:implement-epic
+17-views` under 1.12.0 — one story, 370 calls, **$46**. It confirmed 1.12.0's review fix held
+(the review gate fell from 52% of a run to 11.4%, two passes per story instead of nine) and
+surfaced the two things below.
+
+### Added
+
+- **`pm_derive_command` — close-story hands the project back its own derived artifacts.**
+  Closing a story moves its file to `done/` and flips its `Status`. If your project computes
+  anything from those fields — generated roadmap blocks, an index, a dashboard — that
+  computed thing is stale the instant Kairos archives the story, and **no Kairos gate can
+  see it**: the gates run the impacted service's tests, while a generated-docs check
+  typically lives in another service's suite. For a frontend story, the backend suite that
+  would catch the drift is never launched — by construction, and rightly so. The first judge
+  is your CI, one full round trip later.
+
+  Measured, on the capture: **2.68M billed tokens over 18 calls (4.6% of the run, ~$2.10)**,
+  7.4 minutes, a wasted CI run, a second commit and a second push — plus a security receipt
+  to justify for a commit the native pass had never covered. The local fix took one second.
+
+  Set `pm_derive_command` in the root `spec.md` (`worktree_pm_derive_command` for the
+  `epic_shared` isolation case, same problem and same remedy as `worktree_test_command`) and
+  `/kairos:close-story` runs it in a new **Phase 5.5** — after the archival that causes the
+  drift, before the docs commit, so the regenerated files ride that same commit instead of
+  costing a second one. A non-zero exit is a **gate**, not a warning: committing over a
+  broken derive reproduces exactly the red the field exists to prevent. The command string is
+  literal — only `{worktree}` and `{worktree_id}` are substituted, and no story field ever
+  reaches a command line. `/kairos:init` asks for it once and writes nothing if you have no
+  answer. Not to be confused with `/kairos:sync-pm`, which pushes stories *outward* to the
+  GitHub issue mirror; this points *inward*, at your own repo.
+
+### Changed
+
+- **`agents/kairos-story.md` is split into `kairos-implement` + `kairos-close`.** In the
+  capture, **81% of the run's cost sat in one conversation**: the single agent that
+  implemented *and* closed the story, growing from 2 to 332 messages, its last turn paying
+  **357k input tokens to produce 1 551**. The forked gates (1.11.0) do work — each restarts
+  at 2 messages — but a fork returns to a mother conversation that resumes its growth: it
+  saves the descent, not the climb.
+
+  `/kairos:implement-epic` Phase 2 now runs two sequential agents per story. The handoff is
+  deliberately thin, and that is the whole design: the closer reads the **diff on disk**,
+  which is authoritative in a way no summary is, and receives from the implementer only what
+  a diff cannot say — a decision taken, a deliberate omission, a trap the gates are about to
+  hit. Its instructions forbid re-reading the implementation to understand it. Each agent
+  also preloads one skill body instead of two, halving the resident prefix both of them pay
+  on every turn.
+
+  Simulated on the measured per-turn context curve, this is worth **~$5 per story** — a
+  floor, and less than half of what a four-way split of the *implementation* would return
+  (~$11). It ships first because it is the only cut that needs no plan of slices: the handoff
+  artifacts already exist. One warning the same measurement produced: **splitting the story
+  instead of the agent is a 95% regression**, because the gate forks cost ~$10.50 per
+  *closure*, a fixed cost per story rather than per line of code.
+
 ## [1.12.0] - 2026-09-03
 
 Everything in this release comes from one measurement: a full API-body capture of a real
