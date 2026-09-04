@@ -167,35 +167,38 @@ Hold `WORK` (Phase 0 step 0), `BRANCH` (the checked-out branch, verified by gate
 
 ---
 
-## Phase 2 — Per-story loop (one fresh agent each)
+## Phase 2 — Per-story loop (two fresh agents each)
 
-For each story in order, spawn **one** `kairos:kairos-story` agent — `subagent_type: kairos:kairos-story` on the `Agent` tool, not `general-purpose`, not `isolation: worktree` — with the prompt below. Wait for it to return before starting the next — the loop is strictly sequential.
+Each story is **two** sequential agents, not one: `kairos:kairos-implement` then `kairos:kairos-close`. Use `subagent_type` on the `Agent` tool — never `general-purpose`, never `isolation: worktree`. Wait for each to return before spawning the next; the loop is strictly sequential, both within a story and across stories.
 
-> **Agent prompt — implement + intermediate-close STORY-{NNN}**
+**Why two.** One agent that implements *and* closes carries the whole implementation transcript into every gate turn — measured at 81 % of a run's cost, a context growing to 332 messages, and a last turn paying 357 k input tokens to produce 1 551. The closer needs the *diff*, which is on disk, not the reasoning that produced it. Splitting the two is the only reason this phase exists in this shape: **never collapse them back into one agent, and never let the closer inherit the implementer's transcript** — pass it the handoff block below and nothing more.
+
+### 2a — Implement
+
+> **Agent prompt — implement STORY-{NNN}** (`subagent_type: kairos:kairos-implement`)
 >
-> `implement-story` and `close-story` were preloaded into you (C5) — follow them as your own instructions for **STORY-{NNN}**, as if invoked `worktree_mode:epic_shared`. **Your working directory already *is* the shared epic worktree** — `WORK={WORK}`, branch `{BRANCH}` — keep running git as `git -C {WORK} …` anyway: redundant with your cwd, and redundancy is what makes a wrong tree impossible rather than merely unlikely. Do **not** create a worktree or a branch, and do **not** change directory. You cannot ask the user (`AskUserQuestion` is unavailable to you): **auto-approve the implementation plan**, and for the bundled-vs-split commit choice (multi-service), **default to one bundled commit**.
+> `implement-story` was preloaded into you (C5) — follow it as your own instructions for **STORY-{NNN}**, as if invoked `worktree_mode:epic_shared`. **Your working directory already *is* the shared epic worktree** — `WORK={WORK}`, branch `{BRANCH}` — keep running git as `git -C {WORK} …` anyway: redundant with your cwd, and redundancy is what makes a wrong tree impossible rather than merely unlikely. Do **not** create a worktree or a branch, and do **not** change directory. **Leave the work uncommitted** — the closer reads it with `git diff`.
+
+`STATUS: BLOCKED` from the implementer → handle it exactly as below; **do not spawn the closer** on a story that was never implemented.
+
+### 2b — Close
+
+Spawn `kairos:kairos-close` with the implementer's report pasted verbatim into the prompt — that block **is** the handoff, and it is the only thing the closer gets that is not on disk. Do not summarize it, do not expand it, and do not add your own reading of the diff: everything you would add, the closer can derive from the tree more cheaply and more accurately than you can describe it.
+
+> **Agent prompt — intermediate-close STORY-{NNN}** (`subagent_type: kairos:kairos-close`)
 >
-> **Run close-story's Phases 0–6 only** (gates → commit source → update specs → archive + ROADMAP → commit docs). **Do NOT run Phase 7/8** (push, PR/MR, worktree cleanup) even if this is the last open story — the orchestrator handles those. Treat this as an intermediate close.
+> `close-story` was preloaded into you (C5) — follow it as your own instructions for **STORY-{NNN}**, as if invoked `worktree_mode:epic_shared`. `WORK={WORK}`, branch `{BRANCH}`; run git as `git -C {WORK} …`, do not change directory. **Run Phases 0–6 only** — do NOT run Phase 7/8 (push, PR/MR, worktree cleanup) even if this is the epic's last open story; the orchestrator handles those. Treat this as an intermediate close. Each gate you call is already aimed at `{WORK}` by `close-story` itself — do not restate it.
 >
-> **Gates are sacred.** A failing test, a Critical/High code-review or security finding, scope creep, an unmet dependency, or an ambiguous selection → **stop immediately, do not commit, leave the story `in_progress`**, and return `BLOCKED`. Never work around a red gate, and never reimplement one of your own in place of a gate skill that is unavailable or reports no `SCOPE-TOKEN` — return `BLOCKED: {gate} could not be aimed at {WORK} — {reason}` instead. Each gate you call (`gate-tests`, `qa`, `review`, `gate-security`, `spec-update`) is already aimed at `{WORK}` explicitly by `close-story` itself — you do not need to restate that.
->
-> Return **only** this structured report (no narration):
+> The implementer left you this, and nothing else:
 > ```
-> STATUS: DONE | BLOCKED
-> STORY: STORY-{NNN} — {title}
-> ISSUE: #{N} | none          — the story's `Issue` field, verbatim
-> GATES: tests {pass/fail per service} | review {n crit / n high / n med / n low} | security {clean/n finding(s)/skipped}
-> COMMITS: {sha type(scope): subject} … (source + docs)   — or "none (blocked)"
-> FILES: {n changed}; services touched: {list}
-> DEVIATIONS: {short list or "none"}
-> BLOCKED_REASON: {present only when STATUS=BLOCKED — service, gate, and an output excerpt}
+> {the implementer's report, verbatim}
 > ```
 
-**On the subagent's return:**
+**On either subagent's return:**
 
-- `STATUS: DONE` → append its report to the run log and continue to the next story. Print a one-line tick:
+- `STATUS: DONE` from the implementer → go straight to 2b. From the closer → append its report to the run log and continue to the next story. Print a one-line tick:
   `✓ {i}/{N} STORY-{NNN} closed (intermediate) — {commit subjects}`.
-- `STATUS: BLOCKED` → **stop the entire run.** Do not start the next story. Surface the `BLOCKED_REASON` to the user and ask how to proceed (fix-and-resume / skip this story / abort). The completed stories stay committed on the epic branch; the blocked story stays `in_progress`. Re-running `/kairos:implement-epic` from this worktree later resumes (Phase 0 re-derives the still-open list).
+- `STATUS: BLOCKED` → **stop the entire run.** Do not start the next story, and do not spawn the other half of this one. Surface the `BLOCKED_REASON` to the user and ask how to proceed (fix-and-resume / skip this story / abort). The completed stories stay committed on the epic branch; the blocked story stays `in_progress`. Re-running `/kairos:implement-epic` from this worktree later resumes (Phase 0 re-derives the still-open list).
 
 ---
 
