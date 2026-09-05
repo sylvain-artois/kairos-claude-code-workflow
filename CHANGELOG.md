@@ -5,6 +5,59 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.2] - 2026-09-05
+
+Three fixes from one measurement: a capture of `/kairos:implement-epic` under 1.13.0 — four
+stories, 1 135 calls. It confirmed what 1.13.0 was written for (**−46% of billed tokens per
+story**; the longest conversation in a story fell from 332 messages to 110) and turned up three
+defects in the same seam: **what a fork may assume about the tree it was handed.**
+
+### Fixed
+
+- **`/kairos:spec-update` scoped an empty tree, and called it a pass.** It collected its diff
+  with `git diff` + `git diff --staged` only — but `/kairos:close-story` calls it in **Phase 4**,
+  after **Phase 3** has committed. Those two commands are empty *by construction* at that moment,
+  and the skill's answer to an empty scope was `SKIP: no changes`. A `SKIP` is not a gate: the
+  caller sails past it, and the service's `spec.md` quietly stops tracking reality.
+
+  In the capture, **all seven forks had to leave their written scope** (`git log`, then
+  `git show`) to do the job at all. Six improvised their way to the commit. The seventh obeyed
+  the letter and returned a clean `SKIP` for a diff that plainly existed — in the same story
+  where its sibling service returned a correct update, from the same tree, under the same
+  instructions.
+
+  Phase 4 now passes **`--since {SRC_SHA}`**, the sha Phase 3 just wrote. `spec-update` reads
+  that commit when the flag is present and the working tree when it is not, and **never falls
+  back between the two**. An empty scope *with* a sha given is an **`ERROR`** — the caller
+  believes the service changed, so the sha or the service mapping is wrong. It is never
+  downgraded to a `SKIP`, and never answered by re-running the fork without `--since`.
+
+- **Phases 3 and 6 committed with `git add -A`, in a tree that outlives the story.** In a
+  single-worktree run that is harmless: everything present belongs to the story. Under
+  `worktree_mode: epic_shared` the worktree is shared by the **whole epic**, so whatever a
+  previous story's agent left uncommitted is sitting there when the next close begins, and `-A`
+  cannot tell it from the diff you are meant to commit — it widens the story's scope past its
+  declaration, which is the exact guarantee the Phase 1 scope-creep gate exists to protect.
+
+  Both phases now stage **by path**: `STORY_PATHS` (the file list Phase 1 already derives) in
+  Phase 3, the archive and spec list in Phase 6. Residue is **not yours to commit and not yours
+  to delete** — it is named and handed to the caller (`BLOCKED: unrelated changes in {WORK} —
+  {paths}` for an agent, which puts the decision with the orchestrator rather than interrupting
+  an unattended run).
+
+- **`memory: project` made the agents write into your repository.** `kairos-implement` and
+  `kairos-close` carried it since 1.11.0. It resolves to `<cwd>/.claude/agent-memory/`, so the
+  agents wrote **versioned files into the host project** — and, since a closer works from a
+  service directory, under that service's path, where the scope-creep gate maps them to the
+  service and waves them through. In the capture those files landed in the host repo and needed
+  their own commits.
+
+  The signal was genuinely useful — the closer diagnosed the `spec-update` defect above on its
+  own, in writing, before we measured it. It is still the wrong trade: a project-management
+  plugin does not commit into a repository it does not own, and the writes outlived the story
+  that produced them. `memory:` is removed from both agents. The staging fix above covers the
+  **class** (any uncommitted residue in a shared worktree), not just this one cause.
+
 ## [1.13.1] - 2026-09-05
 
 A patch on 1.13.0's two changes: the agents it introduced shipped without the browser a web
