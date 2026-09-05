@@ -1,7 +1,7 @@
 ---
 name: qa
 description: Execute a service's TEST_PLAN_*.md — run each phase's steps, evaluate the observable checkboxes, write a timestamped result file
-allowed-tools: Bash
+allowed-tools: Bash, mcp__playwright__browser_navigate, mcp__playwright__browser_navigate_back, mcp__playwright__browser_snapshot, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_console_messages, mcp__playwright__browser_network_requests, mcp__playwright__browser_evaluate, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_fill_form, mcp__playwright__browser_select_option, mcp__playwright__browser_press_key, mcp__playwright__browser_file_upload, mcp__playwright__browser_wait_for, mcp__playwright__browser_handle_dialog, mcp__playwright__browser_tabs, mcp__playwright__browser_resize, mcp__playwright__browser_close
 context: fork
 background: false
 ---
@@ -89,6 +89,7 @@ date +%Y%m%d_%H%M%S || echo "(none)"
    **From here on, `{service-path}` means `{DIR}/<service-path>` — every read and write in this file is anchored to `{DIR}`, never to a bare relative path.**
 2. Read `{service-path}/spec.md` (if present). Extract the **execution context** the plans will need:
    - **HTTP base URL** — from the Overview/Endpoints section (host + `port`), or the env vars. Used to turn `http` step blocks (`POST /api/...`) into runnable `curl`.
+   - **Browser base URL** — for `ui` steps: the URL the app is actually served on in this work tree. Defaults to the HTTP base URL. Under `worktree_mode: epic_shared` it is **not** the production URL — an isolated worktree stack publishes different ports, or none; if the plan has `ui` steps and no reachable URL can be derived, skip them as above rather than testing the wrong instance.
    - **SQL client** — how this service's database is reached (a documented command, or derived from `compose_file` + env vars). Used to wrap bare `sql` step blocks.
    - **`test_command`** — for any "unit tests + logs" phase the plan includes.
    - **Log location** — for any log-grep phase.
@@ -136,6 +137,7 @@ For each phase (Phase 0 first — it is always the reachability/readiness gate),
    - `bash` → run as written.
    - `http` (e.g. `POST /api/v1/...`, with optional polling note) → issue it with `curl` against the resolved HTTP base URL; for "poll until `status: completed`" notes, poll on a sane interval until the terminal state or a timeout, then report.
    - `sql` → pipe the statement to the resolved SQL client.
+   - `ui` → drive it with the browser tools against the resolved browser base URL: navigate, act, then read the page back with `browser_snapshot` (DOM), `browser_console_messages` (errors) or `browser_network_requests` (calls fired). The block is prose, one instruction per line, because a rendered check has no shell equivalent. If the browser tools are unavailable in this workspace, mark every checkbox of the step `SKIPPED (no browser)` and carry it into the summary — a `ui` step never fails for want of a tool.
 3. For each `- [ ]` checkbox under the step, evaluate the stated observable against the captured output:
    - Pass → mark `- [x]` and keep the line.
    - Fail → keep `- [ ]`, append `  ← FAIL: {what was observed vs expected}`.

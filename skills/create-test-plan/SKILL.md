@@ -15,6 +15,7 @@ The workspace's `spec.md` and the target service's `{service}/spec.md` are your 
 3. **One file out.** The only file you may create is `{service-path}/qa/TEST_PLAN_<TOPIC>_LITE.md` (or `TEST_PLAN_<TOPIC>.md` with `--full`). Never touch other test plans, source code, or specs.
 4. **No silent overwrite.** If the target file already exists, ask before overwriting. `--force` skips the prompt.
 5. **Steps must be concrete.** Variables (Phase 0 table) may be placeholders, but every step command (SQL, curl, bash) must be runnable as-is. No `<TODO>` inside step bodies.
+6. **`ui` steps only for what has no shell equivalent.** A `ui` block is prose, one browser instruction per line (`navigate to {BASE_URL}/orders`, `click "New order"`, `fill the form …`), and `/kairos:qa` drives it with the browser tools. Reach for it when the observable is *rendered* — a component that appears, a client-side validation, a redirect after submit. When the same fact is visible over HTTP, write an `http` step instead: it is faster, deterministic, and runs where no browser exists. Never write a `ui` step whose checkbox a `curl` could evaluate.
 6. **No live calls at generation time.** You are generating *instructions for `/kairos:qa`*, not executing them. Do not curl the service, query its DB, or check process state while drafting.
 7. **English only.**
 
@@ -135,7 +136,7 @@ LITE plan template:
 
 ### 0.2 {Dependency / schema readiness}
 
-```{sql|bash|http}
+```{sql|bash|http|ui}
 {command}
 ```
 
@@ -147,7 +148,7 @@ LITE plan template:
 
 ### 1.1 {Action}
 
-```{sql|bash|http}
+```{sql|bash|http|ui}
 {command}
 ```
 
@@ -155,7 +156,7 @@ LITE plan template:
 
 ### 1.2 {Follow-up verification}
 
-```{sql|bash|http}
+```{sql|bash|http|ui}
 {command}
 ```
 
@@ -219,5 +220,6 @@ LITE plan template:
 - [ ] Phase 0 exists and contains at least one reachability/readiness check.
 - [ ] Every step ends with one or more observable `- [ ]` checkboxes.
 - [ ] No `<TODO>` markers inside step command bodies (variables are OK in the Variables block, not inside steps).
+- [ ] Every `ui` step is there because the observable is rendered — none of them could have been an `http` step.
 - [ ] Closing "Critical points" table is present.
 - [ ] Output is in English.

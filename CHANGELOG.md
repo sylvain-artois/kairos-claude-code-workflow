@@ -42,6 +42,29 @@ surfaced the two things below.
   fires on every close for everyone. Not to be confused with `/kairos:sync-pm`, which pushes stories *outward* to the
   GitHub issue mirror; this points *inward*, at your own repo.
 
+- **Browser tools, for the projects that have a rendered surface.** The agents
+  `/kairos:implement-epic` spawns had no browser, so a frontend story was implemented blind
+  and a QA plan's only real check — does the page render — had no way to be written, let
+  alone run. `kairos-implement` and `kairos-close` now declare the Playwright MCP tools, and
+  `/kairos:qa` accepts a **`ui` step**: a prose block driven with the browser against the
+  work tree's own URL, alongside the existing `bash` / `http` / `sql` blocks.
+  `/kairos:create-test-plan` can emit them, under a rule that keeps them rare — never write
+  a `ui` step whose checkbox a `curl` could evaluate.
+
+  Each agent uses it for its own job and no other: the implementer to **verify what it just
+  built** (navigate, snapshot, read the console), the closer only to run a `ui` step a test
+  plan asks for — never to open the app and look around, which is the expensive wandering
+  the split above exists to stop. `browser_run_code` is deliberately excluded;
+  `browser_evaluate` covers the legitimate need. **No browser configured degrades rather
+  than fails**: the implementer works from the code, a `ui` step is marked
+  `SKIPPED (no browser)`.
+
+  The permission is yours to grant, as always — including `additionalDirectories` for the
+  screenshot cache, the part everyone forgets. New page:
+  [`docs/permissions.md`](docs/permissions.md) gathers the three things a project must allow
+  before an epic runs unattended (test command, derive callback, browser), and why a missing
+  rule reads as a failing gate to an agent that cannot answer a prompt.
+
 ### Changed
 
 - **`agents/kairos-story.md` is split into `kairos-implement` + `kairos-close`.** In the

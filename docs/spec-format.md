@@ -110,6 +110,8 @@ Rules Kairos applies:
 > ```
 > Match the command you actually declared, not these examples.
 >
+> The full list of what a project must allow before an unattended epic works — this, the test command, and the browser — is [permissions.md](permissions.md).
+>
 > **Two files, and the difference bites here.** `.claude/settings.json` is versioned — every teammate and every agent inherits the rule. `.claude/settings.local.json` is gitignored and per-machine. Because the derive callback fires on *every* closure, a rule that lives only in the local file means each teammate's first close stops on a prompt. Prefer the versioned file for this one, even when the rest of your allow-list is local.
 
 ### 3.2-bis Context budgets (optional)
@@ -271,7 +273,7 @@ These are the fields Kairos commands actively read. All except `name` and `path`
 > ```json
 > { "permissions": { "allow": ["Bash(cd */api && CONTAINER_ENV_PREFIX=* docker compose *)"] } }
 > ```
-> Match the command you actually declared, not this example. An unattended run cannot answer a prompt, and every gate it blocks reads as a failure.
+> Match the command you actually declared, not this example. An unattended run cannot answer a prompt, and every gate it blocks reads as a failure. The rest of the list is in [permissions.md](permissions.md).
 
 ### 4.2 Observable-behavior sections
 

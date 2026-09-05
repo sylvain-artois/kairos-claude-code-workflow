@@ -97,6 +97,7 @@ Kairos's niche: **existing projects, a pre-human QA layer, and staying small.** 
 - [docs/spec-format.md](docs/spec-format.md) — the `spec.md` reference.
 - [docs/dependencies.md](docs/dependencies.md) — the dependency graph: what PRDs and stories declare, and what a third-party planner can derive from it.
 - [docs/review-contract.md](docs/review-contract.md) — pluggable code review (the default `/kairos:review`, your slash command, or a script).
+- [docs/permissions.md](docs/permissions.md) — the three things your project must allow before an epic can run unattended: the test command, the derive callback, the browser.
 - [docs/gate-receipts.md](docs/gate-receipts.md) — why a gate that ran and a gate that didn't look identical, and the receipt that tells them apart.
 - [docs/github-issue-tracking.md](docs/github-issue-tracking.md) — the opt-in GitHub mirror: mapping, inbound path, and what it deliberately doesn't do.
 - [docs/examples/](docs/examples/) — filled-in specs, a test plan, a review command.
