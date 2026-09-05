@@ -96,7 +96,21 @@ Rules Kairos applies:
 - **The string is literal.** Only `{worktree}` and `{worktree_id}` are substituted. No story title, no field value, nothing read from a story file ever reaches the command line — that would be an injection path into a file Kairos writes itself.
 - **Scope stays put.** The command is for artifacts derived from the PM directory. It is not a build hook, a formatter, or a linter. Changes outside `project_management_dir` and the paths the command is expected to touch are reported, not committed silently.
 - **No output, no problem.** If nothing changes, the commit is what it would have been anyway.
-- **Add it to `permissions.allow`** in the host project, like `worktree_test_command` — otherwise the classifier stops the gate on a command you declared yourself.
+- **You may not need the worktree variant.** It exists for the same reason as `worktree_test_command`: a derive command that starts a container under a fixed project name would collide with the live one. But some build tooling already isolates itself inside a linked worktree — a Makefile that derives a project name from `git rev-parse --git-common-dir`, for instance — and then the bare command is enough. When you *do* set it, reuse the **same** `{worktree_id}` your `worktree_test_command` uses: a different project name means a second set of containers and volumes per worktree, and teardown only knows about the ones it created.
+
+> **Allow the derive command in your project's permissions — you must do this by hand.** Kairos declares nothing on your behalf; a command you named in `spec.md` is still an unknown command to the permission classifier. And Phase 5.5 is a **gate**, so a prompt nobody is there to answer stops the closure on a perfectly healthy tree — an unattended `/kairos:implement-epic` reads that as a failure and asks you about it, one story before the end of the epic.
+>
+> ```json
+> { "permissions": { "allow": ["Bash(make gen-roadmap)"] } }
+> ```
+>
+> **The shape of the command decides the shape of the rule.** A bare command matches an exact rule and nothing else — the tightest form available, and a good reason to keep the derive command bare and push the complexity into the target it calls. A compound command (`cd … && VAR=… make …`) matches no exact rule; it needs a wildcard, and a wildcard grants more than you probably mean to:
+> ```json
+> { "permissions": { "allow": ["Bash(cd * && COMPOSE_PROJECT_NAME=* make gen-roadmap)"] } }
+> ```
+> Match the command you actually declared, not these examples.
+>
+> **Two files, and the difference bites here.** `.claude/settings.json` is versioned — every teammate and every agent inherits the rule. `.claude/settings.local.json` is gitignored and per-machine. Because the derive callback fires on *every* closure, a rule that lives only in the local file means each teammate's first close stops on a prompt. Prefer the versioned file for this one, even when the rest of your allow-list is local.
 
 ### 3.2-bis Context budgets (optional)
 

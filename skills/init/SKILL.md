@@ -206,7 +206,8 @@ The two fields are XOR per the spec format. Never write both.
    - Never auto-migrate. Never move user files.
 2. Else default to `project_management_dir: project-management`.
 3. **Derive callback (opt-in).** Ask once: *"Does this project generate anything from the story files — roadmap blocks, an index, a dashboard — that a command regenerates? If so, which command?"* An answer → `pm_derive_command`. Silence, "no", or no idea → **write nothing**; the field is absent and Phase 5.5 of `/kairos:close-story` skips.
-   Never guess it, and never infer it from a Makefile target that merely looks related: a wrong command runs on every close and its failure is a gate. If `worktree_mode` is later set to `epic_shared`, point the user at `worktree_pm_derive_command` — the same isolation problem as `worktree_test_command`.
+   Never guess it, and never infer it from a Makefile target that merely looks related: a wrong command runs on every close and its failure is a gate.
+   When they name one, tell them in the same breath: **add a matching `permissions.allow` rule** (`"Bash(make gen-roadmap)"` for a bare command) to `.claude/settings.json` — Kairos writes no permissions, and an unanswered prompt on this gate blocks a closure that had nothing wrong with it. Prefer the versioned settings file over `settings.local.json`: the callback fires on every close, for everyone. If `worktree_mode` is later set to `epic_shared`, point the user at `worktree_pm_derive_command` — the same isolation problem as `worktree_test_command`.
 
 ### Phase 7 — Diff vs existing spec (idempotent re-run path)
 

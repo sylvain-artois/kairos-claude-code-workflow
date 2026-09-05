@@ -49,6 +49,8 @@ git -C {WORK} status -s
 
 **Failure is a gate, not a warning.** A non-zero exit means the project's own derivation is broken. Stop and ask; do not run Phase 6. Committing over it reproduces exactly the CI red this phase exists to prevent — the operator decides whether to fix the generator, skip the callback for this close, or abort. Record what was decided in the Phase 9 summary.
 
+**A permission denial is not a derive failure.** If the shell is refused rather than run — the classifier stopping a command the spec declares but `permissions.allow` does not — say exactly that, and point at the rule to add (`"Bash(<command>)"` in the host's `.claude/settings.json`). Reporting it as a broken generator sends the operator hunting in the wrong file. It is still a gate: nothing derived means nothing to commit, and Phase 6 waits.
+
 **Scope.** The callback exists for artefacts derived from `{pm}`. If `git status` shows changes outside `{pm}` and outside whatever paths the command is understood to own, name those files and ask before committing — the scope-creep gate of Phase 1 does not run again here, and a build hook smuggled into this field would widen every close silently.
 
 **Summary line** (Phase 9), in all three shapes:

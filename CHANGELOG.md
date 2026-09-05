@@ -35,7 +35,11 @@ surfaced the two things below.
   broken derive reproduces exactly the red the field exists to prevent. The command string is
   literal — only `{worktree}` and `{worktree_id}` are substituted, and no story field ever
   reaches a command line. `/kairos:init` asks for it once and writes nothing if you have no
-  answer. Not to be confused with `/kairos:sync-pm`, which pushes stories *outward* to the
+  answer. **The permission rule is yours to add**, as for `worktree_test_command`:
+  Kairos declares none, and a classifier prompt nobody is there to answer stops this gate
+  on a healthy tree — put `"Bash(make gen-roadmap)"` (or whatever you declared) in the
+  **versioned** `.claude/settings.json`, not in `settings.local.json`, since the callback
+  fires on every close for everyone. Not to be confused with `/kairos:sync-pm`, which pushes stories *outward* to the
   GitHub issue mirror; this points *inward*, at your own repo.
 
 ### Changed
