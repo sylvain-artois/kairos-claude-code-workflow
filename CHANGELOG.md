@@ -5,6 +5,51 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.1] - 2026-09-05
+
+A patch on 1.13.0's two changes: the agents it introduced shipped without the browser a web
+project needs, and the callback it introduced shipped without the one thing a host must do
+by hand.
+
+### Fixed
+
+- **Browser tools, for the projects that have a rendered surface.** The agents
+  `/kairos:implement-epic` spawns had no browser, so a frontend story was implemented blind
+  and a QA plan's only real check — does the page render — had no way to be written, let
+  alone run. `kairos-implement` and `kairos-close` now declare the Playwright MCP tools, and
+  `/kairos:qa` accepts a **`ui` step**: a prose block driven with the browser against the
+  work tree's own URL, alongside the existing `bash` / `http` / `sql` blocks.
+  `/kairos:create-test-plan` can emit them, under a rule that keeps them rare — never write
+  a `ui` step whose checkbox a `curl` could evaluate.
+
+  Each agent uses it for its own job and no other: the implementer to **verify what it just
+  built** (navigate, snapshot, read the console), the closer only to run a `ui` step a test
+  plan asks for — never to open the app and look around, which is the expensive wandering
+  1.13.0's split exists to stop. `browser_run_code` is deliberately excluded;
+  `browser_evaluate` covers the legitimate need. **No browser configured degrades rather
+  than fails**: the implementer works from the code, a `ui` step is marked
+  `SKIPPED (no browser)`.
+
+  Kairos declares the tools; **your project still has to grant the permission** — see
+  `docs/permissions.md` below.
+
+### Documentation
+
+- **`docs/permissions.md`** — the three grants an unattended epic needs before it works: the
+  test command, the derive callback, the browser (tools *and* `additionalDirectories` for the
+  screenshot cache, the part everyone forgets). It exists because the same lesson had now
+  been learned three times: Kairos ships no permissions, and the agents running an epic have
+  `AskUserQuestion` disallowed, so a missing rule is not a pause — it is a blocked gate,
+  indistinguishable in a summary from a failing one.
+- **`pm_derive_command` is documented where someone will read it before their first close**,
+  not only in the spec reference: quickstart, `concepts.md` §7 (where `Serves` already
+  promises "one pass over the story files"), and the `epic_shared` example spec. §3.2-ter's
+  permission bullet became a callout — which settings file wins for a per-close gate, and why
+  a bare command matches an exact allow rule while a compound one needs a wildcard broader
+  than you mean. `/kairos:init` now names the permission in the same breath as the question,
+  and `close-story` reports a permission denial as the missing rule it is rather than as a
+  broken generator.
+
 ## [1.13.0] - 2026-09-04
 
 Both changes come from one measurement: a full API-body capture of `/kairos:implement-epic
@@ -41,29 +86,6 @@ surfaced the two things below.
   **versioned** `.claude/settings.json`, not in `settings.local.json`, since the callback
   fires on every close for everyone. Not to be confused with `/kairos:sync-pm`, which pushes stories *outward* to the
   GitHub issue mirror; this points *inward*, at your own repo.
-
-- **Browser tools, for the projects that have a rendered surface.** The agents
-  `/kairos:implement-epic` spawns had no browser, so a frontend story was implemented blind
-  and a QA plan's only real check — does the page render — had no way to be written, let
-  alone run. `kairos-implement` and `kairos-close` now declare the Playwright MCP tools, and
-  `/kairos:qa` accepts a **`ui` step**: a prose block driven with the browser against the
-  work tree's own URL, alongside the existing `bash` / `http` / `sql` blocks.
-  `/kairos:create-test-plan` can emit them, under a rule that keeps them rare — never write
-  a `ui` step whose checkbox a `curl` could evaluate.
-
-  Each agent uses it for its own job and no other: the implementer to **verify what it just
-  built** (navigate, snapshot, read the console), the closer only to run a `ui` step a test
-  plan asks for — never to open the app and look around, which is the expensive wandering
-  the split above exists to stop. `browser_run_code` is deliberately excluded;
-  `browser_evaluate` covers the legitimate need. **No browser configured degrades rather
-  than fails**: the implementer works from the code, a `ui` step is marked
-  `SKIPPED (no browser)`.
-
-  The permission is yours to grant, as always — including `additionalDirectories` for the
-  screenshot cache, the part everyone forgets. New page:
-  [`docs/permissions.md`](docs/permissions.md) gathers the three things a project must allow
-  before an epic runs unattended (test command, derive callback, browser), and why a missing
-  rule reads as a failing gate to an agent that cannot answer a prompt.
 
 ### Changed
 
