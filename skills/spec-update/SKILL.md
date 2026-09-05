@@ -31,6 +31,7 @@ You update **one service's** `spec.md` from the diff of the story just closed. Y
 | `{service}` | required | Service name, resolved against `{WORK}/spec.md`'s services table |
 | `--from {WORK}` | required | The work tree to diff and write into |
 | `--story STORY-{NNN}` | required | Story ID, for the `**Last updated**` header |
+| `--since {sha}` | absent | The commit that carries the story's changes. `/kairos:close-story` Phase 4 always passes it — its Phase 3 committed the diff before calling you, so the working tree is clean by then |
 | `--date` | today | `YYYY-MM-DD`. Compute at runtime (`date +%F`) when omitted |
 
 ---
@@ -39,12 +40,17 @@ You update **one service's** `spec.md` from the diff of the story just closed. Y
 
 1. Read `{WORK}/spec.md`. Resolve `{service}` → `{path}`. Unknown service → stop, list the declared ones.
 2. No `{path}/spec.md` → stop cleanly: `SKIP: {service} has no spec.md to update` (that is `/kairos:spec backfill`'s job, not this one's — never create one here).
-3. Collect the diff scoped to `{path}`:
+3. Collect the diff scoped to `{path}`. **`--since` decides where to look, and it is not a hint:**
    ```bash
-   git -C {WORK} diff -- {path}
-   git -C {WORK} diff --staged -- {path}
+   # --since {sha} given (the normal case, from close-story Phase 4):
+   git -C {WORK} show {sha} -- {path}
+   # --since absent (invoked by hand, before any commit):
+   git -C {WORK} diff -- {path} ; git -C {WORK} diff --staged -- {path}
    ```
-   Empty on both → `SKIP: no changes in {path} — nothing to update` and stop cleanly.
+   > **Never fall back from one to the other, and never re-derive the scope yourself.** Your caller committed the diff before calling you; a bare `git diff` is empty **by construction** at that moment, and a `SKIP` built on it is a false green — the spec silently stops tracking the service. Measured on run `4eedbbb5`: two forks, same story, same tree, opposite verdicts, because one of them improvised and the other did not.
+
+   - **`--since` given and `git show {sha} -- {path}` is empty → this is an error, not a `SKIP`.** Report `ERROR: {service} — {sha} touches nothing under {path}; wrong sha, wrong path, or the caller mis-attributed the service` and stop. Let the caller decide.
+   - **`--since` absent and both diffs empty** → `SKIP: no changes in {path} — nothing to update`, and stop cleanly. That is the only legitimate empty scope.
 
 ---
 
@@ -74,7 +80,8 @@ Write the updated `{path}/spec.md` to disk. You do **not** commit — `/kairos:c
 - **`spec.md` missing at `{WORK}`** → stop, point at `/kairos:init`.
 - **Service not declared** → stop, list declared services.
 - **Service has no `{path}/spec.md`** → `SKIP`, not a failure — point at `/kairos:spec {service} backfill` if one is wanted.
-- **Diff scoped to `{path}` is empty** → `SKIP`, not a failure.
+- **Diff scoped to `{path}` is empty, `--since` absent** → `SKIP`, not a failure.
+- **Diff scoped to `{path}` is empty, `--since` given** → `ERROR`, and a hard one: the caller believes this service changed. Never downgrade it to a `SKIP`.
 - **Content in the current spec that the diff can't explain** (hand-written design notes, rationale) → leave it untouched; only touch what the diff supports.
 
 ---
@@ -82,6 +89,7 @@ Write the updated `{path}/spec.md` to disk. You do **not** commit — `/kairos:c
 ## QA self-check (before returning)
 
 - [ ] `{WORK}` came from `--from`, never assumed from cwd.
+- [ ] The scope came from `--since {sha}` when it was passed, and from the working tree only when it was not — never a fallback between the two.
 - [ ] Only `{path}/spec.md` was written — no other file touched, no commit made.
 - [ ] Every change is traceable to the scoped diff; nothing was deleted without a diff line explaining it.
 - [ ] The `**Last updated**: STORY-{NNN} ({date})` header was set.
