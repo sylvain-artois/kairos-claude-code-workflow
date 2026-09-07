@@ -400,6 +400,59 @@ fi
 r=$(sh "$DIFF" /nonexistent-path-xyz >/dev/null 2>&1; printf '%s' $?)
 chk "a bad path still exits 0 (never aborts an injection)" "$r" "0"
 
+# ---- the false-green class: a pathspec that filters everything out of a DIRTY tree.
+# A gate handed an empty scope reports no findings, which reads exactly like a clean pass.
+# Two ways in: a service path written "." (normal for a single-service spec), and a path
+# that simply matches nothing. The first must be read as "whole tree"; the second must be
+# an error, because the tree-wide collection proves the tree is not clean.
+FG="$BASE/falsegreen"; mk_workspace "$FG"
+mkdir -p "$FG/api"; echo "orig" > "$FG/api/a.py"
+git -C "$FG" add -A; git -C "$FG" commit -qm init
+echo "changed" >> "$FG/api/a.py"; echo "new" > "$FG/api/b.py"
+
+n=$(sh "$DIFF" --names "$FG" . 2>/dev/null | sed -n 's/^SCOPE-FILES: //p')
+chk 'pathspec "." means the whole tree, not "nothing matches"' "$n" "2"
+
+n=$(sh "$DIFF" --names "$FG" ./ 2>/dev/null | sed -n 's/^SCOPE-FILES: //p')
+chk 'pathspec "./" likewise' "$n" "2"
+
+n=$(sh "$DIFF" --names "$FG" api 2>/dev/null | sed -n 's/^SCOPE-FILES: //p')
+chk 'a real pathspec still filters normally' "$n" "2"
+
+n=$(sh "$DIFF" --names "$FG" api/ 2>/dev/null | sed -n 's/^SCOPE-FILES: //p')
+chk 'a trailing slash still filters normally' "$n" "2"
+
+out=$(sh "$DIFF" --names "$FG" nope 2>/dev/null)
+if printf '%s' "$out" | grep -q '^SCOPE-ERROR'; then
+  ok "a filter that swallows a DIRTY tree is an ERROR, not an empty scope"
+else
+  no "a filter that swallows a DIRTY tree is an ERROR, not an empty scope" \
+     "got: $(printf '%s' "$out" | grep -E '^SCOPE-(EMPTY|FILES|ERROR)' | tr '\n' ' ')"
+fi
+if printf '%s' "$out" | grep -q 'api/a.py'; then
+  ok "and it names the pending paths it refused to filter away"
+else
+  no "and it names the pending paths it refused to filter away" "no evidence in the error"
+fi
+
+# The converse must not regress: a genuinely clean tree under a pathspec is still EMPTY.
+git -C "$FG" add -A; git -C "$FG" commit -qm clean
+if sh "$DIFF" --names "$FG" api 2>/dev/null | grep -q 'SCOPE-EMPTY'; then
+  ok "a clean tree under a pathspec is still SCOPE-EMPTY, never an error"
+else
+  no "a clean tree under a pathspec is still SCOPE-EMPTY, never an error" "misclassified"
+fi
+
+# ---- bash 3.2 parses $( ) by counting parens: an unbalanced `)` closing a case pattern
+# ends the substitution early. dash and bash 4+ are both immune, so neither `sh -n` on a
+# Linux CI box nor `bash -n` can catch it — only the shape of the source can.
+if grep -nE 'case .* in[[:space:]]*"\$' "$ROOT/scripts/kairos-diff.sh" >/dev/null 2>&1; then
+  no "case patterns inside \$( ) are parenthesized (bash 3.2 / macOS /bin/sh)" \
+     "unparenthesized pattern found — see $(grep -nE 'case .* in[[:space:]]*"\$' "$ROOT/scripts/kairos-diff.sh" | head -1)"
+else
+  ok "case patterns inside \$( ) are parenthesized (bash 3.2 / macOS /bin/sh)"
+fi
+
 # ================================================================ 8. injected blocks
 printf '\n\033[1m8. Every injected block exits 0 — a silent failure mode\033[0m\n'
 printf '   \033[2mA non-zero rc from an injected block aborts the ENTIRE skill invocation,\n'

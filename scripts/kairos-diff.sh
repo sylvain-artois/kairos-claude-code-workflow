@@ -53,6 +53,13 @@ case "$TREE" in '$0'|'$1'|'{WORK}'|'') TREE="${CLAUDE_PROJECT_DIR:-$PWD}" ;; esa
 # a real change set silently reported as SCOPE-EMPTY instead of a collection error.
 case "$SPEC" in ?*/) SPEC="${SPEC%/}" ;; esac
 
+# "." and "./" mean "the whole tree" to every caller who writes them, but as a match pattern
+# they mean the opposite: git emits repo-relative paths with no "./" prefix, so "." and "./*"
+# match nothing and every path is filtered out. A single-service spec whose service path is
+# "." is the normal way to hit this. Normalize to the empty pathspec — the whole-tree branch
+# below, which is what the caller meant — exactly as $0/$1/{WORK} are normalized above.
+case "$SPEC" in '.'|'./') SPEC="" ;; esac
+
 command -v git >/dev/null 2>&1 || _die "git not on PATH"
 WORK=$(_toplevel "$TREE") || true
 [ -n "$WORK" ] || _die "not a git work tree: $TREE"
@@ -63,13 +70,37 @@ DIGEST=$(_digest "$WORK")
 
 # The pending change set, exactly as the digest defines it — so that what a gate reads
 # and what a receipt certifies can never be two different things.
+ALLFILES=$(_changed_paths "$WORK")
+NALL=$(printf '%s\n' "$ALLFILES" | grep -c '^..*$' || true)
 if [ -n "$SPEC" ]; then
-  FILES=$(_changed_paths "$WORK" | while IFS= read -r p; do
-            case "$p" in "$SPEC"|"$SPEC"/*) printf '%s\n' "$p" ;; esac; done)
+  # The case patterns are parenthesized — `("$SPEC"|…)` rather than `"$SPEC"|…)`.
+  # bash 3.2 (still /bin/sh on macOS) parses $( ) by counting parentheses, so the unbalanced
+  # `)` closing a case pattern ends the command substitution early and it dies on `;;`.
+  # The leading `(` balances the count. Fixed in bash 4, and dash was never affected — which
+  # is why `bash -n` and `dash -n` both pass on the broken form. Lint this file with
+  # `shellcheck -s sh`, not with the `sh` of whatever Linux box CI happens to run on.
+  FILES=$(printf '%s\n' "$ALLFILES" | while IFS= read -r p; do
+            case "$p" in
+              ("$SPEC"|"$SPEC"/*) printf '%s\n' "$p" ;;
+            esac
+          done)
 else
-  FILES=$(_changed_paths "$WORK")
+  FILES=$ALLFILES
 fi
 NFILES=$(printf '%s\n' "$FILES" | grep -c '^..*$' || true)
+
+# A filter that swallows a non-empty change set is a collection bug, never a clean tree.
+# Distinguishing the two is the whole point: a gate handed an empty scope reviews nothing
+# and reports no findings, which reads in the transcript exactly like a clean pass. The
+# tree-wide count above is the free witness — it is collected before any filter runs.
+if [ -n "$SPEC" ] && [ "${NFILES:-0}" -eq 0 ] && [ "${NALL:-0}" -gt 0 ]; then
+  printf 'SCOPE-ERROR: pathspec "%s" matched none of the %s pending path(s) in %s.\n' \
+    "$SPEC" "$NALL" "$WORK"
+  printf 'The tree is NOT clean — this is a filter failure, not an empty scope.\n'
+  printf 'Pending paths (first 20):\n'
+  printf '%s\n' "$ALLFILES" | head -20
+  exit 0
+fi
 
 NONCE=""
 if [ "$TOKEN" -eq 1 ] && [ "${NFILES:-0}" -gt 0 ]; then
