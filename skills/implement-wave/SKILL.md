@@ -17,9 +17,9 @@ A wave is a planning object of the **host project**, assembled by a human (often
 
 ## How to run it
 
-**Follow [`implement-epic.md`](../implement-epic/SKILL.md) end to end** — Preflight and its two location gates, Phase 0 resolution, Phase 1's verification of the worktree you are standing in, the one-fresh-subagent-per-story loop, the sacred gates, finalization, the printed teardown — **with the overrides below and no others.**
+**Follow [`implement-epic.md`](../implement-epic/SKILL.md) end to end** — Preflight (mode resolution, then the location gates that mode calls for), Phase 0 resolution, Phase 1's verification of the worktree you are standing in, the one-fresh-subagent-per-story loop, the sacred gates, finalization, the printed teardown — **with the overrides below and no others.** The phases Preflight skips under `in_place`/`off` are skipped here too, for the same reasons.
 
-**Including the doctrine.** Like an epic, a wave runs **inside its own worktree**, created beforehand by `/kairos:worktree {WAVE_SLUG} --wave` from the main clone. This command creates no worktree and removes none; launched from the main clone it stops at Preflight gate A and prints the handoff.
+**Including the doctrine, and including the `worktree_mode:` override.** Under `epic_shared` a wave runs **inside its own worktree**, created beforehand by `/kairos:worktree {WAVE_SLUG} --wave` from the main clone; this command creates no worktree and removes none, and launched from the main clone it stops at Preflight gate A and prints the handoff. Under `in_place` or `off` — declared in the spec, or passed as `worktree_mode:` on this invocation — a wave behaves exactly as an epic does in those modes: one branch (`feature/wave-{WAVE_SLUG}` under `in_place`, the checked-out branch under `off`), the current tree, gates A and B not applicable, Phase 1 and Phase 4.3 skipped. The override is resolved by `implement-epic` Preflight step 0, unchanged.
 
 That command file is the single source of truth for every step: read it, do not restate it, and do not re-derive its behaviour from this page. This file only says where a wave differs.
 

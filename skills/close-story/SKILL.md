@@ -40,15 +40,13 @@ date +%Y-%m-%d
 ## Phase 0 — Load context
 
 1. Read `./spec.md`. Hold `git_host`, `default_branch`, `push_mode`, `{pm}`, `worktree_mode`, `worktree_prefix`, `issue_tracker`/`issue_repo` (absent = `none` → issue steps skipped), `pm_derive_command`/`worktree_pm_derive_command` (absent → Phase 5.5 skipped), and the `## Services` table.
-2. **Resolve the story file robustly** — bare (`STORY-{NNN}.md`) or slugged, never assume one form. Glob both, hold `STORY_FILE`. Already under `{pm}/done/` → **already closed**: say so and stop (idempotent). No match → **stop and ask**. More than one → ambiguous IDs: **stop and ask**. **Never guess.**
+2. **Resolve the story file robustly** — bare (`STORY-{NNN}.md`) or slugged, never assume one form. Glob both, hold `STORY_FILE`. Already in `{pm}/done/` → **already closed**: say so and stop (idempotent). No match, or more than one → **stop and ask**. **Never guess.**
 3. Read the story: title, `Size`, `Source PRD`, `Epic`, `Issue`, `Impacted Services`.
 
 ### 0.1 — Resolve the working directory (`WORK`)
 
 - **`off`** / **`in_place`**: `WORK` = workspace root, `IS_LAST = true`.
-- **`epic_shared`** — `WORK` = `git rev-parse --show-toplevel`: **the tree this session stands in**, never one you go looking for. `EPIC_SLUG` from the `Epic` field, else the `Source PRD` basename, else the per-story slug **with a printed warning** — keep that chain. Then **confirm the tree**:
-  - in the **main clone** → **stop.** The work is not here; committing would put it on `{default_branch}`.
-  - basename not `{worktree_prefix}-epic-{EPIC_SLUG}`, or `HEAD` not `feature/epic-{EPIC_SLUG}` → **stop**, naming the tree and branch you are actually in.
+- **`epic_shared`**: `WORK` = `git rev-parse --show-toplevel` — **the tree this session stands in**, never one you go looking for. `EPIC_SLUG` from `Epic`, else the `Source PRD` basename, else the per-story slug **with a printed warning** — keep that chain. Then **confirm the tree**: the main clone, or a basename/`HEAD` naming another epic → **stop**, naming the tree and branch you are actually in.
 
 ### 0.2 — `REMAINING_OPEN` (epic_shared only)
 
@@ -61,7 +59,7 @@ Count this epic's stories still `backlog`/`in_progress`, **excluding this one**.
 
 ## Phase 1 — Detect impacted services + scope-creep gate
 
-1. Changed files: `git -C {WORK} diff --name-only`, plus `--staged`; map each to a service via the spec table. **Hold them as `STORY_PATHS`: Phases 3 and 6 stage by that list, never `-A`** — an epic tree outlives the story and carries other forks' residue. Anything `git status --porcelain` shows outside it goes to your caller (`BLOCKED: unrelated changes — {paths}`), not into the commit.
+1. Changed files: `git -C {WORK} diff --name-only`, plus `--staged`; map each to a service via the spec table. **Hold them as `STORY_PATHS`: Phases 3 and 6 stage by that list, never `-A`** — an epic tree outlives the story and carries other forks' residue. Anything `git status --porcelain` shows outside it goes to your caller (`BLOCKED: unrelated changes`), not into the commit.
 2. `IMPACTED` = the story's declared `Impacted Services` ∪ what the diff actually touches.
 3. **Scope-creep gate:** a changed file mapping to **no** service in `IMPACTED` → **stop and ask**, showing the files. Do NOT proceed: committing them silently widens scope past the story's declaration. **Exempt:** files under `{pm}/`.
 
@@ -85,13 +83,13 @@ sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} {service.path}
 
 Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-contract.md): `{service.review_command}` unset **or** still the `<TODO…>` placeholder → `/kairos:review {service.path} --from {WORK}`; `skip` → opt-out; a slash command or script path → those modes.
 > **`--from {WORK}` is not optional** — a reviewer aimed at the wrong tree reports nothing, and an empty report reads as a clean pass.
-> **Budget per service: one review, then one `--recheck` at most.** Only Critical/High may be fixed here; re-run **once** with `--recheck`. Still Critical/High → **stop and ask**. No third pass. **Medium/Low go in the summary, never fixed here** ([why](references/gates-detail.md)).
+> **Budget per service: one review, then one `--recheck` at most.** Only Critical/High may be fixed here. Still Critical/High after the recheck → **stop and ask**; no third pass. **Medium/Low go in the summary, never fixed here** ([why](references/gates-detail.md)).
 
 **(d)** `{service.suggest_test_plan}` and no `TEST_PLAN_*.md` → prompt **once** to make one.
 
-**(e) Leave a receipt.** (a)–(c) green for **every** service → write the `review` receipt with `--mechanism kairos-fork` and the `SCOPE-TOKEN` from (c). All services on `review_command: skip` → `--skipped "<reason>"`, no token. Commands: [`references/security-gate.md`](references/security-gate.md).
+**(e) Leave a receipt.** (a)–(c) green for **every** service → `review` receipt, `--mechanism kairos-fork`, with (c)'s `SCOPE-TOKEN`. All services on `review_command: skip` → `--skipped "<reason>"`, no token. Commands: [`references/security-gate.md`](references/security-gate.md).
 
-> **Never work around a refused receipt.** `--write` refuses a `passed` receipt with no token, `enforce` denies the commit — otherwise a gate that ran and one that never ran leave the same artefact ([why](../../docs/review-contract.md)). Re-run the gate, or record `--skipped`/`--override`. Script missing → `gate receipts: unavailable`, continue.
+> **Never work around a refused receipt.** `--write` refuses a `passed` receipt with no token, `enforce` denies the commit — else a gate that ran and one that never ran leave the same artefact ([why](../../docs/review-contract.md)). Re-run the gate, or record `--skipped`/`--override`. Script missing → `gate receipts: unavailable`, continue.
 
 **All gates green for all services → proceed to Phase 2.5.**
 
@@ -124,7 +122,7 @@ Clear, or medium/low acknowledged → receipt: `--mechanism kairos-fork --scope-
 
 ### Stage 2 — the whole branch, before the push
 
-`origin/HEAD...` is finally the right scope. **Neither stage replaces the other.** In Phase 7, after the deferral rule lets you through and **before** the push: run the built-in `security-review` from `{WORK}`, apply the same severity gate, receipt with `--mechanism native-skill`. **A push is never refused; the hook only warns.**
+`origin/HEAD...` is finally the right scope. **Neither stage replaces the other.** In Phase 7, after the deferral rule lets you through and **before** the push: run the built-in `security-review` from `{WORK}`, same severity gate, receipt `--mechanism native-skill`. **A push is never refused; the hook only warns.**
 
 → Receipt commands, fields per mechanism, what replaced the provenance footer: [`references/security-gate.md`](references/security-gate.md).
 
@@ -146,15 +144,17 @@ Hold its sha as `SRC_SHA` — Phase 4 needs it. → [`references/commits-and-spe
 
 ## Phase 4 — Update per-service `spec.md` from the diff
 
-Each service in `IMPACTED` with a `{path}/spec.md` → `/kairos:spec-update {service} --from {WORK} --story STORY-{NNN} --since {SRC_SHA}`. **≥ 2 → fire every service's call in parallel; 1 → inline.** No subagent wrapper — same as Phase 2.
+**Targets come from the commit, not from `IMPACTED`**: services in `IMPACTED` with a `{path}/spec.md` **and** a file under `{path}` in `git -C {WORK} show --name-only --format= {SRC_SHA}`. One with no file there is skipped, not an error. **Zero targets while the commit touched files → say so, naming the unmatched paths**; a note, not a gate ([why](references/commits-and-specs.md)).
 
-> **`--since` is not optional** — Phase 3 committed, so a fork left to find its own scope reports a false `SKIP`. An `ERROR` back means your sha or mapping is wrong: **stop and ask**.
+Each → `/kairos:spec-update {service} --from {WORK} --story STORY-{NNN} --since {SRC_SHA}`. **≥ 2 → in parallel; 1 → inline.** No subagent wrapper — same as Phase 2.
+
+> **`--since` is not optional** — Phase 3 committed, so a fork finding its own scope reports a false `SKIP`. `ERROR` = sha and table disagree: **stop and ask**.
 
 ---
 
 ## Phase 5 — Archive story + PRD, update ROADMAP
 
-1. `Status` → `done`, `git mv` to `{pm}/done/` using `STORY_FILE` — **never a bare glob**.
+1. `Status` → `done`, `git mv` to `{pm}/done/` using `STORY_FILE` — **never a bare glob**. Same edit: **`Branch`** ← `git -C {WORK} rev-parse --abbrev-ref HEAD` ([why](references/archival.md)).
 2. Archive the `Source PRD` **only if no other open story references it**; move the ROADMAP row into `Done`.
 3. **Issue mirror** (`issue_tracker: github`): close the issue explicitly **in `off` mode only** — elsewhere the PR closes it at merge, and closing now would close it before review. Best-effort: a failure is a warning, **never a gate**.
 
@@ -213,18 +213,18 @@ One block. **Intermediate** (epic_shared, not last): tests, review, receipts, co
 Each **stops the flow before any commit** unless stated otherwise:
 
 - **`spec.md` missing** → stop, point at `/kairos:init`.
-- **Story ambiguous, missing, or already closed** → stop. Never guess.
-- **A test fails**, **QA returns `STOPPED`**, **review or security finds Critical/High** → stop and ask; no commit; story stays `in_progress`.
-- **The security gate could not run** (scope error, skill unavailable, no token) → stop and ask, or return `BLOCKED` as a subagent. Never skip it silently; **never stand in for it with a hand-rolled pass**.
+- **Story ambiguous, missing, or already closed** → stop — never guess.
+- **Test fails**, **QA `STOPPED`**, **review/security Critical/High** → stop and ask; no commit; story stays `in_progress`.
+- **Security gate could not run** (scope error, unavailable, no token) → stop and ask, or `BLOCKED` as a subagent. Never skip it silently; **never hand-roll a pass**.
 - **`--write` refuses a receipt** → re-run the gate, or record `--skipped`/`--override`. Never work around it.
 - **Diff outside `Impacted Services`** → scope-creep gate; stop and ask.
-- **Changes outside `STORY_PATHS` at Phase 3/6** → never `-A` over them; hand to your caller.
-- **`spec-update` returns `ERROR`** → wrong sha or service mapping. Stop and ask.
+- **Changes outside `STORY_PATHS` at Phase 3/6** → never `-A`; hand to your caller.
+- **`spec-update` returns `ERROR`** → sha and services table disagree. Stop and ask.
 - **In the main clone or another epic's worktree** → stop, do not commit.
-- **Push deferred or failing** → note it, leave branch and worktree in place; re-running resumes at Phase 7. **Not a gate.**
+- **Push deferred or failing** → note it, leave branch and worktree; re-run resumes at Phase 7. **Not a gate.**
 - **Asked to remove the worktree** → decline; print the `--teardown` line.
-- **`pm_derive_command` exits non-zero** → stop and ask; no docs commit. Never commit over a broken derive.
-- **Issue mirror fails** → one-line warning pointing at `/kairos:sync-pm`. **Never a gate.**
+- **`pm_derive_command` non-zero** → stop and ask; never commit over a broken derive.
+- **Issue mirror fails** → one-line warning pointing at `/kairos:sync-pm`. **Not a gate.**
 
 ---
 

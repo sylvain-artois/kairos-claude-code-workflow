@@ -62,3 +62,19 @@ derive: none declared
 ```
 
 ---
+
+## The `Branch` field is rewritten here
+
+`create-story` fills `Branch` with `feature/epic-{epic-slug}` — the epic convention, written
+before any run exists and therefore before anyone knows which `worktree_mode` the run will use.
+Under `off`, and under any run that passed a `worktree_mode:` override, the epic branch is never
+created and the story is committed on whatever was checked out. The field then names a branch
+that does not exist.
+
+Nothing routes on it: `implement-epic` resolves the branch itself in Preflight, and
+`close-story` commits on `HEAD`. It is purely declarative — which is exactly why it is worth
+correcting rather than deleting. Mirrors and dashboards display it, and a displayed branch that
+does not exist has already produced phantom states downstream.
+
+So Phase 5 sets it from `git -C {WORK} rev-parse --abbrev-ref HEAD`, in the same edit that sets
+`Status: done`. One extra field in an edit that was happening anyway; no extra commit.

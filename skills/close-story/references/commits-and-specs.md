@@ -66,4 +66,33 @@ A fork that answers `ERROR` has been given a sha that touches nothing under its 
 wrong, or the service mapping is. Stop and ask. **Never re-run it without `--since` to get a
 greener answer** — that is the false pass this argument exists to prevent.
 
+### Why the targets come from the commit, not from `IMPACTED`
+
+`IMPACTED` is a union: the story's *declared* `Impacted Services`, plus what the diff touched.
+Phase 4 used to call `spec-update` for every member of it, which asks a service to update its
+spec from a commit that may never have touched its path. Measured on the 1.13.2 six-story
+capture: **five calls, five `ERROR`s, and not one `spec.md` updated in the entire run.** The
+service was declared impacted and genuinely was — its behaviour changed — but the commits landed
+under CI config, a root-level test directory and a Makefile, none of which sit under the `path`
+the services table gives it.
+
+So the target list is derived from `git show --name-only --format= {SRC_SHA}` and intersected
+with each service's declared `path`. That makes `ERROR` mean what it says again: not "the caller
+guessed", but "the sha and the table genuinely disagree".
+
+Two failure shapes remain, and they need opposite fixes — which is why Phase 4 reports the
+unmatched paths rather than a bare count:
+
+- **Changed files sit under a *different* declared service.** The impact attribution was wrong.
+  Nothing to change in the spec; the story declared the wrong service.
+- **Changed files sit under no declared path at all.** The services table's `path` is narrower
+  than the service really is. A service whose tests, CI workflow or build config live outside its
+  own directory is the ordinary case. The fix is in the host's `spec.md`, and it is the operator's
+  call — Kairos says so and continues, because a spec that stops tracking a service is a slow
+  problem, not a reason to refuse a commit that already passed every gate.
+
+**What this deliberately does not do**: widen a service's scope to "wherever its files seem to
+be". A path is what the services table declares. Guessing that a root `tests/` belongs to the
+service whose spec mentions it would make the scope of every gate depend on prose.
+
 ---

@@ -50,6 +50,9 @@ You update **one service's** `spec.md` from the diff of the story just closed. Y
    > **Never fall back from one to the other, and never re-derive the scope yourself.** Your caller committed the diff before calling you; a bare `git diff` is empty **by construction** at that moment, and a `SKIP` built on it is a false green — the spec silently stops tracking the service. Measured on run `4eedbbb5`: two forks, same story, same tree, opposite verdicts, because one of them improvised and the other did not.
 
    - **`--since` given and `git show {sha} -- {path}` is empty → this is an error, not a `SKIP`.** Report `ERROR: {service} — {sha} touches nothing under {path}; wrong sha, wrong path, or the caller mis-attributed the service` and stop. Let the caller decide.
+
+     **Include the commit's actual file list in the report** (`git -C {WORK} show --name-only --format= {sha}`, first 20). The caller cannot act on "empty" alone, and the two causes need opposite fixes: files sitting under a *different* declared service means the impact attribution was wrong, while files under no declared path at all means the services table's `path` is narrower than the service really is — the ordinary case being a service whose tests, CI or config live outside its own directory. Naming the paths turns a refusal into a diagnosis.
+     > `/kairos:close-story` Phase 4 now derives its targets from this same file list, so it should no longer call you for a service the commit never touched. If it did anyway, that mismatch is the finding — report it plainly rather than trying to widen your own scope to make the call succeed.
    - **`--since` absent and both diffs empty** → `SKIP: no changes in {path} — nothing to update`, and stop cleanly. That is the only legitimate empty scope.
 
 ---
