@@ -5,6 +5,125 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.3] - 2026-09-07
+
+Two measurements, one theme: **an empty scope must be loud.** A capture of
+`/kairos:implement-epic` under 1.13.2 — six stories, 1 110 calls, 73.4 M billed input tokens —
+and a field report from a second host project whose workspace root is an unversioned parent
+folder holding several independent repositories. Both hit the same defect class from opposite
+ends, and the second one also showed that Kairos was refusing a project for the shape of its
+directories rather than for anything in its code.
+
+### Fixed
+
+- **A pathspec matching nothing was reported as a verified clean scope.** `kairos-diff.sh`
+  filtered the change set by path prefix and, when the filter matched nothing, printed
+  `SCOPE-FILES: 0` followed by *"This is a real, verified empty scope — not a collection
+  failure."* A gate handed an empty scope reviews nothing and reports no findings, which reads
+  in a transcript exactly like a clean pass — so the script was not merely silent, it asserted
+  the wrong thing.
+
+  A service path of `.` — what a single-service spec naturally yields — is the ordinary way in:
+  the patterns become `.` and `./*`, which never match a git-emitted repo-relative path, so
+  every path is filtered out. `.` and `./` now normalize to the whole tree, exactly as `$0`,
+  `$1` and `{WORK}` already did one line above.
+
+  More generally, **any pathspec matching none of a non-empty change set is now `SCOPE-ERROR`**,
+  and it names the pending paths it refused to filter away. The witness was already free:
+  `DIGEST` is computed over the whole tree *before* any filter runs, so "digest non-empty +
+  `SCOPE-FILES: 0`" is mechanically a filter bug and never a clean tree. A genuinely clean tree
+  still reports `SCOPE-EMPTY`, with or without a pathspec.
+
+- **`kairos-diff.sh` did not parse under bash 3.2 — still `/bin/sh` on macOS.** bash 3.2 parses
+  `$( )` by counting parentheses, so the unbalanced `)` that closes a `case` pattern ended the
+  command substitution early and the parser died on the orphaned `;;`. This is a **parse-time**
+  failure: it fired on every invocation regardless of arguments, taking out `/kairos:review`,
+  `/kairos:gate-security` and every `close-story` Phase 2 gate on that host.
+
+  The patterns are now parenthesized, which balances the count. Worth recording for anyone
+  adding a lint step: **dash is not affected and neither is bash 4+**, so `sh -n` on a Linux CI
+  box and `bash -n` anywhere both pass on the broken form. Only `shellcheck -s sh` — or a test
+  on the shape of the source, which is what ships here — catches it.
+
+- **The main-clone/worktree probe defaulted to the permissive answer outside a repository.** It
+  compared `--absolute-git-dir` against `cd "$(git rev-parse --git-common-dir)" && pwd`. Outside
+  a repository both `rev-parse` calls print nothing — but **`cd ""` succeeds**, leaving the shell
+  where it is, so the right-hand side became the current directory while the left stayed empty,
+  the equality failed, and the `||` branch returned `LINKED-WORKTREE`. A workspace root that was
+  not a repository at all reported itself as a linked worktree, which is the single direction
+  this probe must never fail in: it is the value Preflight lets through.
+
+  The probe now has three outcomes, requires **evidence** for the permissive one (a linked
+  worktree's git dir is `…/worktrees/{name}`), lands unexpected input on the **restrictive**
+  value, and follows `project_management_dir` into the repository that actually holds the epic
+  instead of interrogating a parent folder that never was one.
+
+- **`spec.md` files stopped updating, silently at first and then loudly.** 1.13.2 made an empty
+  `spec-update` scope an `ERROR` instead of a false `SKIP`. It worked — and it fired on **every
+  story of the run**: five forks, five errors, **not one `spec.md` updated in six stories**.
+
+  The cause was in the caller. `close-story` Phase 4 asked every service in `IMPACTED` to update
+  its spec, and `IMPACTED` is a union that includes what the story *declared*. The service was
+  genuinely impacted, but the commits landed under CI config, a root-level test directory and a
+  Makefile — none of them under the `path` the services table gives it. Targets are now derived
+  from `git show --name-only {SRC_SHA}` intersected with each service's declared path, so an
+  `ERROR` once again means the sha and the table genuinely disagree. Zero targets on a non-empty
+  commit is reported with the unmatched paths named — and stays a note, not a gate: a commit
+  that cleared every gate is not refused over spec drift. `spec-update` now attaches the
+  commit's file list to its `ERROR`, because the two causes (a wrong attribution, or a `path`
+  narrower than the service really is) need opposite fixes and "empty" alone cannot separate
+  them.
+
+### Changed
+
+- **The gates that encode a directory layout are now conditional. The gates that read your code
+  are not.** `/kairos:implement-epic` declared that it "always runs `epic_shared` semantics,
+  regardless of `spec.worktree_mode`". For a workspace that had deliberately set
+  `worktree_mode: off` — and had no `worktree_prefix` to build a worktree name from — that turned
+  a declared preference into a hard stop, on a run whose diff, tests and review would all have
+  been fine.
+
+  It now accepts a **`worktree_mode:` token**, identical in grammar, validation and announcement
+  to the one `/kairos:implement-story` has always accepted; the asymmetry between two commands
+  of the same pipeline was the defect. The override is explicit, typed by a human, scoped to a
+  single invocation, echoed in the output, and **never written to `spec.md`** — an override that
+  edits the spec survives the session and stops being visible.
+
+  **Nothing about the gates that read the diff changes.** Tests, code review, security review,
+  the scope-creep check and the receipt are not overridable, by this token or anything else, in
+  any mode. Across two captures they stopped a run twice on real defects; the location gates
+  produced two blocks, both wrong, and caught nothing.
+
+  Gate A (*"you are in the main clone"*) becomes conditional, and its refusal now names the
+  override without taking it. **Gate B survives the override** and is narrowed instead: it fires
+  only inside a linked worktree whose name or branch designates *another* epic. The asymmetry is
+  deliberate — gate A refuses a topology someone may have chosen on purpose, while gate B refuses
+  a misdirection nobody chooses and no later gate can catch, because the tests pass, the review
+  is clean, the diff is correct and the branch is wrong.
+
+  Under `in_place` and `off` the run is one branch in the current tree: Phase 1 (verifying a
+  worktree that was never created) and Phase 4.3 (tearing down what was never built) are skipped
+  and say so. `/kairos:implement-wave` inherits all of it. `/kairos:close-story` now rewrites the
+  story's `Branch` field to the branch actually committed on — under an override it is not the
+  one `/kairos:create-story` guessed, and a declarative field that names a branch nobody created
+  has already produced phantom states downstream.
+
+- **The orchestrator no longer writes code, and the branch security review has an owner.**
+  Cardinal rule 7 extended past the story loop into finalization. In the capture, the block
+  *after the last delegation* cost as much as the entire six-story loop (4.52 M vs 4.61 M billed
+  input), and 19 of its 24 tool calls were the orchestrator reading source files, rewriting a
+  Makefile and a test file with heredocs, running the suite and committing — at 140k–205k of
+  context per turn, the most expensive place in a run to write a line of code, for work a fresh
+  agent starting at ~36k does better because it re-reads the code instead of recalling six
+  stories' worth of summaries.
+
+  Implementing the rule surfaced *why* it happened: the branch security review — stage 2, over
+  `origin/HEAD...`, before the push — was written nowhere. Per-story closers are told to skip
+  Phase 7, so no one owned it and the orchestrator improvised. It is now **Phase 4.0**:
+  delegated, severity-gated, receipted with `--mechanism native-skill`. Anything it finds goes
+  back out as a delegation — implement, then close — with one retry, then stop and ask. A
+  finding is a delegation, not a to-do.
+
 ## [1.13.2] - 2026-09-05
 
 Three fixes from one measurement: a capture of `/kairos:implement-epic` under 1.13.0 — four
