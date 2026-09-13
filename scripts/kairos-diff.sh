@@ -2,6 +2,11 @@
 # kairos-diff.sh — the scope a Kairos gate reviews, and the token that proves it held it.
 #
 #   kairos-diff.sh <tree> [pathspec] [--names] [--no-token] [--max-lines N]
+#   kairos-diff.sh <tree> [pathspec] --branch <base> [--names] [--no-token]
+#
+# --branch <base> switches to the COMMITTED scope stage 2 of the security gate covers at push
+# time: merge-base(<base>, HEAD)..HEAD. Its token is keyed by the branch tip, and in this mode
+# --names still mints it — names-only is how a caller proves the range without printing it.
 #
 # WHY THIS EXISTS (measured in production):
 # the built-in security-review skill collects its own scope as `git diff origin/HEAD...`.
@@ -26,13 +31,14 @@ set -u
 # `_die` from the lib exits 64; nothing in this script may exit non-zero.
 _die() { printf 'SCOPE-ERROR: %s\n' "$1"; exit 0; }
 
-TREE=""; SPEC=""; NAMES=0; TOKEN=1; MAXL=6000
+TREE=""; SPEC=""; NAMES=0; TOKEN=1; MAXL=6000; KBASE=""; NOTOKEN=0
 _seen_positional=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --names)     NAMES=1; TOKEN=0 ;;
-    --no-token)  TOKEN=0 ;;
+    --names)     NAMES=1 ;;
+    --no-token)  NOTOKEN=1 ;;
+    --branch)    shift; [ $# -gt 0 ] && KBASE="$1" ;;
     --max-lines) shift; [ $# -gt 0 ] && MAXL="$1" ;;
     -h|--help)   sed -n '2,25p' "$0"; exit 0 ;;
     --*)         : ;;   # tolerate unknown flags rather than abort an injection
@@ -66,6 +72,54 @@ WORK=$(_toplevel "$TREE") || true
 
 BRANCH=$(git -C "$WORK" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '?')
 HEADSHA=$(git -C "$WORK" rev-parse --short HEAD 2>/dev/null || printf '(unborn)')
+
+# Token policy. Pending mode: --names never mints (it is the injected file list, and the
+# diff call mints). Branch mode: --names does mint — see the header.
+[ "$NOTOKEN" -eq 1 ] && TOKEN=0
+[ -z "$KBASE" ] && [ "$NAMES" -eq 1 ] && TOKEN=0
+
+# ---------------------------------------------------------------- branch mode (stage 2)
+# The scope the native security-review covers at push time: every commit between the merge
+# base with <base> and HEAD. The native skill collects that scope itself and cannot quote a
+# nonce, so the caller mints one here, keyed by the tip, and the stage-2 receipt must quote it
+# back. Measured before this mode existed (F12): the branch receipt was written on
+# declaration — 0 files, no token — the substitution the story path had already closed.
+if [ -n "$KBASE" ]; then
+  [ "$HEADSHA" != "(unborn)" ] || _die "no commit on $BRANCH, so there is no branch scope to cover."
+  git -C "$WORK" rev-parse --verify -q "$KBASE^{commit}" >/dev/null 2>&1 \
+    || _die "base '$KBASE' does not resolve in $WORK. For origin/HEAD, run: git -C $WORK remote set-head origin -a"
+  MB=$(git -C "$WORK" merge-base "$KBASE" HEAD 2>/dev/null) || MB=""
+  [ -n "$MB" ] || _die "no merge base between $KBASE and HEAD in $WORK"
+  FILES=$(git -C "$WORK" diff --name-only --no-renames "$MB" HEAD ${SPEC:+-- "$SPEC"} 2>/dev/null)
+  NFILES=$(printf '%s\n' "$FILES" | grep -c '^..*$' || true)
+
+  NONCE=""
+  if [ "$TOKEN" -eq 1 ] && [ "${NFILES:-0}" -gt 0 ]; then
+    NONCE=$(_nonce)
+    _token_add "$WORK" "head-$HEADSHA" "$NONCE" || NONCE=""
+  fi
+
+  printf 'SCOPE-TOKEN: %s\n' "${NONCE:-none}"
+  printf 'SCOPE-TREE: %s\n' "$WORK"
+  printf 'SCOPE-BRANCH: %s\n' "$BRANCH"
+  printf 'SCOPE-HEAD: %s\n' "$HEADSHA"
+  printf 'SCOPE-RANGE: %s..%s (merge base with %s)\n' "$(printf '%s' "$MB" | cut -c1-12)" "$HEADSHA" "$KBASE"
+  printf 'SCOPE-PATHSPEC: %s\n' "${SPEC:-(whole tree)}"
+  printf 'SCOPE-FILES: %s\n' "${NFILES:-0}"
+  printf '\n'
+
+  if [ "${NFILES:-0}" -eq 0 ]; then
+    printf 'SCOPE-EMPTY: no committed change between %s and HEAD%s.\n' "$KBASE" "${SPEC:+ under $SPEC}"
+    printf 'This is a real, verified empty scope — not a collection failure.\n'
+    exit 0
+  fi
+  if [ "$NAMES" -eq 1 ]; then
+    printf '%s\n' "$FILES"
+    exit 0
+  fi
+  git -C "$WORK" diff --no-renames "$MB" HEAD ${SPEC:+-- "$SPEC"} 2>/dev/null | head -n "$MAXL"
+  exit 0
+fi
 DIGEST=$(_digest "$WORK")
 
 # The pending change set, exactly as the digest defines it — so that what a gate reads

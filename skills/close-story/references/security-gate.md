@@ -53,12 +53,20 @@ sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate securit
 
 The push is where code leaves the machine, and it is the moment `origin/HEAD...` is finally the **right** scope: it covers everything committed and not yet pushed, however many stories that spans. Stage 1 does not replace it, and it does not replace stage 1.
 
-**When:** in Phase 7, after the deferral rule lets you through and **before** the push — whether that is one story or the fifth of an epic. Run Anthropic's built-in `security-review` skill from `{WORK}`, apply the same severity gate as stage 1, then:
+**When:** in Phase 7, after the deferral rule lets you through and **before** the push — whether that is one story or the fifth of an epic. First mint the token over the committed range the pass is about to cover — the native skill cannot quote one, so you do:
+
+```bash
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} --branch origin/HEAD --names
+```
+
+`SCOPE-ERROR` (typically `origin/HEAD` unset) or `SCOPE-EMPTY` (nothing committed past the base) → the pass has nothing it can prove it covered: fix the base, or record `--skipped` with that reason. Otherwise hold its `SCOPE-TOKEN`, run Anthropic's built-in `security-review` skill from `{WORK}`, apply the same severity gate as stage 1, then:
 
 ```bash
 sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate security \
-   --mechanism native-skill --tree {WORK}
+   --mechanism native-skill --scope-token {SCOPE-TOKEN from --branch} --tree {WORK}
 ```
+
+**Mint before the pass, write right after it.** The token is keyed by the branch tip: a commit landing in between makes `--write` refuse it, which is the point — the pass covered a tip that is no longer the one about to leave.
 
 That receipt is keyed by the branch tip it covered, so the `pre-push` hook can see whether the tip about to leave has been reviewed. **The hook warns and returns 0 — always, in every mode.** Refusing the push of someone who has read the warning and typed the command again would take away the choice without adding any evidence. Refusal is armed for commits only.
 
@@ -90,8 +98,9 @@ sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate securit
    --mechanism kairos-fork --scope-token {SCOPE-TOKEN from the report} \\
    --tree {WORK} --story STORY-{NNN} --services "{comma-separated OPTED_IN}"
 
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} --branch origin/HEAD --names   # stage 2: mint first
 sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate security \\
-   --mechanism native-skill --tree {WORK}
+   --mechanism native-skill --scope-token {SCOPE-TOKEN from --branch} --tree {WORK}
 ```
 
 ## Receipt fields, per mechanism
@@ -99,7 +108,8 @@ sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate securit
 | Field | `kairos-fork` (stage 1) | `native-skill` (stage 2) |
 |---|---|---|
 | `--mechanism` | `kairos-fork` | `native-skill` |
-| `--scope-token` | **required** — from the report's `SCOPE-TOKEN` line | not applicable |
+| `--scope-token` | **required** — from the report's `SCOPE-TOKEN` line | **required** — from `kairos-diff.sh {WORK} --branch origin/HEAD --names`, minted before the pass |
+| files recorded | the pending change set | the committed range `merge-base(origin/HEAD, HEAD)..HEAD` (`--base` to name another base) |
 | keyed by | the pending change set's digest | the branch tip it covered |
 | sees uncommitted work | **yes — it is the only thing that does** | no |
 | scope | `kairos-diff.sh`: staged + unstaged + untracked | `origin/HEAD...`, the native collector's own |

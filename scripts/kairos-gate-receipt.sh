@@ -194,10 +194,22 @@ do_write() {
   or the token did not come from kairos-diff.sh."
           ;;
         native-skill)
-          # Stage 2. Its scope is `origin/HEAD...`, collected by the native skill itself
-          # and correct at push time; there is no Kairos artefact to bind it to. Its
-          # evidence is the branch tip it covered, recorded below.
+          # Stage 2. Its scope is `origin/HEAD...`, collected by the native skill itself. The
+          # skill cannot quote a nonce, so the caller mints one over the same committed range
+          # with `kairos-diff.sh <tree> --branch <base> --names`, keyed by the tip, and this
+          # receipt must quote it. Measured before this check (F12): the branch receipt was
+          # written on declaration — 0 files, no token — the substitution C12 had closed on
+          # the story path.
           [ "$_head" != "?" ] || _die "refusing a native-skill receipt: no commit to cover."
+          [ -n "$W_TOKEN" ] || _die "refusing a passed native-skill receipt for '$W_GATE': no --scope-token.
+  Mint one over the range the native pass covered, then quote its SCOPE-TOKEN:
+    sh \"\${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh\" $_tree --branch ${W_BASE:-origin/HEAD} --names
+  If the pass genuinely could not run, record that instead:
+    --skipped \"<why>\"   or   --override \"<why>\""
+          _token_has "$_tree" "head-$_head" "$W_TOKEN" || _die "refusing a passed native-skill receipt for '$W_GATE': unknown --scope-token.
+  The token '$W_TOKEN' was not minted for this branch tip ($_head). Either a commit landed
+  after the scope was collected — mint a new one and re-run the pass — or the token did not
+  come from kairos-diff.sh --branch."
           ;;
         *)
           _die "--write needs --mechanism <kairos-fork|native-skill> for a passed receipt.
@@ -216,8 +228,15 @@ do_write() {
 
   mkdir -p "$_sd/receipts" || _die "cannot create $_sd/receipts"
 
-  # File list, capped: a receipt is evidence, not an archive.
-  _files=$(_changed_paths "$_tree")
+  # File list, capped: a receipt is evidence, not an archive. A stage-2 receipt lists the
+  # committed range it covered — at push time nothing is pending, and "0 files" was F12.
+  if [ "$W_MECH" = "native-skill" ]; then
+    _mb=$(git -C "$_tree" merge-base "${W_BASE:-origin/HEAD}" HEAD 2>/dev/null) || _mb=""
+    if [ -n "$_mb" ]; then _files=$(git -C "$_tree" diff --name-only --no-renames "$_mb" HEAD 2>/dev/null)
+    else _files=""; fi
+  else
+    _files=$(_changed_paths "$_tree")
+  fi
   _n=$(printf '%s\n' "$_files" | grep -c '^..*$' || true)
   _flist=$(printf '%s\n' "$_files" | head -n 200 | while IFS= read -r f; do
              [ -n "$f" ] && printf '"%s",' "$(_esc "$f")"; done | sed 's/,$//')
@@ -570,7 +589,7 @@ do_after_commit() {
   _retire_receipts "$_sd" "$_tree"
   [ -f "$_sd/receipts/head-$_tip.security.json" ] && exit 0
 
-  _msg="Kairos: commit $_tip is now on $_branch, and Anthropic's native security-review has not covered it. That pass is owed before the next push — it is the second stage of the gate (the per-story Kairos gate does not replace it: it sees uncommitted work, this one sees the whole branch). Run the security-review skill from this tree, then record it with: sh \"\${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh\" --write --gate security --mechanism native-skill --tree $_tree"
+  _msg="Kairos: commit $_tip is now on $_branch, and Anthropic's native security-review has not covered it. That pass is owed before the next push — it is the second stage of the gate (the per-story Kairos gate does not replace it: it sees uncommitted work, this one sees the whole branch). Mint the scope token first with: sh \"\${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh\" $_tree --branch origin/HEAD --names — then run the security-review skill from this tree, and record it with: sh \"\${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh\" --write --gate security --mechanism native-skill --scope-token <SCOPE-TOKEN> --tree $_tree"
   printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}\n' "$(_esc "$_msg")"
   exit 0
 }
@@ -612,7 +631,8 @@ do_pre_push() {
     printf '  The per-story Kairos gate does not replace it: that one sees uncommitted\n' >&2
     printf '  work, this one sees the whole branch against origin.\n\n' >&2
     printf '  To cover it: run the security-review skill from %s, then\n' "$_tree" >&2
-    printf '    sh %s --write --gate security --mechanism native-skill --tree %s\n\n' "$0" "$_tree" >&2
+    printf '    sh %s/kairos-diff.sh %s --branch origin/HEAD --names   # mints SCOPE-TOKEN\n' "$(dirname "$0")" "$_tree" >&2
+    printf '    sh %s --write --gate security --mechanism native-skill --scope-token <SCOPE-TOKEN> --tree %s\n\n' "$0" "$_tree" >&2
   fi
   _log "$_sd" "$(printf '{"at":"%s","mode":"%s","mode_source":"%s","event":"pre-push-hook","decision":"allow","tree":"%s","branch":"%s","tip":"%s","native_pass":"%s"}' \
     "$(_now)" "$KAIROS_MODE" "$KAIROS_MODE_SOURCE" "$(_esc "$_tree")" "$(_esc "$_branch")" "$_tip" "$_cov")"
@@ -638,6 +658,7 @@ while [ $# -gt 0 ]; do
     --gate)         shift; [ $# -gt 0 ] || _die "--gate needs a value"; W_GATE="$1" ;;
     --mechanism)    shift; [ $# -gt 0 ] || _die "--mechanism needs a value"; W_MECH="$1" ;;
     --scope-token)  shift; [ $# -gt 0 ] || _die "--scope-token needs a value"; W_TOKEN="$1" ;;
+    --base)         shift; [ $# -gt 0 ] || _die "--base needs a value"; W_BASE="$1" ;;
     --scope-cmd)    shift; [ $# -gt 0 ] || _die "--scope-cmd needs a value"; W_SCOPE_CMD="$1" ;;
     --story)        shift; [ $# -gt 0 ] || _die "--story needs a value"; W_STORY="$1" ;;
     --services)     shift; [ $# -gt 0 ] || _die "--services needs a value"; W_SERVICES="$1" ;;

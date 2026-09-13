@@ -128,12 +128,36 @@ chk "skipped needs no token     → written" "$r" "0"
 r=$(try --write --gate security --tree "$W" --override "reviewed by hand, ticket OPS-7")
 chk "override needs no token    → written" "$r" "0"
 r=$(try --write --gate security --mechanism native-skill --tree "$W")
-chk "native-skill              → written" "$r" "0"
+chk "native-skill + no token    → refused" "$r" "64"
+
+# Stage 2 (F12): the branch receipt proves its scope the way the story receipts do.
+NB="$BASE/nb"; mk_workspace "$NB"
+git -C "$NB" branch nb-base
+echo "shipped" > "$NB/g.txt"; git -C "$NB" add g.txt; git -C "$NB" commit -qm "ship g"
+NSD="$KAIROS_STATE_DIR/$(basename "$NB")-$(printf '%s' "$NB" | sha256sum | cut -d' ' -f1 | cut -c1-12)"
+
+r=$(try --write --gate security --mechanism native-skill --scope-token deadbeef --tree "$NB" --base nb-base)
+chk "native + forged token      → refused" "$r" "64"
+BTOK=$(sh "$DIFF" "$NB" --branch nb-base --names | sed -n 's/^SCOPE-TOKEN: //p')
+case "$BTOK" in ''|none) no "kairos-diff.sh --branch mints a token" "got [$BTOK]" ;; *) ok "kairos-diff.sh --branch mints a token" ;; esac
+r=$(try --write --gate security --mechanism native-skill --scope-token "$BTOK" --tree "$NB" --base nb-base)
+chk "native + branch token      → written" "$r" "0"
+
+TIP=$(git -C "$NB" rev-parse --short HEAD)
+[ -f "$NSD/receipts/head-$TIP.security.json" ] && ok "native receipt is keyed by branch tip" \
+  || no "native receipt is keyed by branch tip" "no head-$TIP.security.json"
+grep -q '"n_files":1,' "$NSD/receipts/head-$TIP.security.json" 2>/dev/null \
+  && ok "native receipt lists the range it covered" || no "native receipt lists the range it covered" "n_files is not 1"
+
+echo "later" > "$NB/h.txt"; git -C "$NB" add h.txt; git -C "$NB" commit -qm "later"
+r=$(try --write --gate security --mechanism native-skill --scope-token "$BTOK" --tree "$NB" --base nb-base)
+chk "branch token, then a commit → refused" "$r" "64"
+r=$(sh "$DIFF" "$NB" --branch nb-missing-base --names | head -n1 | cut -c1-12)
+chk "an unresolvable base       → SCOPE-ERROR" "$r" "SCOPE-ERROR:"
+r=$(sh "$DIFF" "$NB" --branch HEAD --names | grep -c '^SCOPE-EMPTY')
+chk "nothing past the base      → SCOPE-EMPTY" "$r" "1"
 
 SD="$KAIROS_STATE_DIR/$(basename "$W")-$(printf '%s' "$W" | sha256sum | cut -d' ' -f1 | cut -c1-12)"
-TIP=$(git -C "$W" rev-parse --short HEAD)
-[ -f "$SD/receipts/head-$TIP.security.json" ] && ok "native receipt is keyed by branch tip" \
-  || no "native receipt is keyed by branch tip" "no head-$TIP.security.json"
 grep -q '"mechanism":"override"' "$SD"/receipts/*.security.json 2>/dev/null \
   && ok "receipt records its mechanism" || no "receipt records its mechanism" "field absent"
 

@@ -307,13 +307,19 @@ This is the deferred tail of `close-story` for the epic's **last** story — but
 
 Skip the phase when no service in the run declares `security_review: true`, and record the skip rather than passing over it silently.
 
-Otherwise delegate it — do not run the review in your own context:
+Otherwise, **first mint the scope token yourself** — the native skill cannot quote one, and a receipt without it is refused:
+
+```bash
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} --branch origin/HEAD --names
+```
+
+Hold its `SCOPE-TOKEN`. `SCOPE-ERROR` (usually `origin/HEAD` unset: `git -C {WORK} remote set-head origin -a`) or `SCOPE-EMPTY` → fix the base, or record `--skipped` with that reason; never write a passed receipt on either. Then delegate the pass — do not run the review in your own context:
 
 > **Agent prompt — branch security review** (`subagent_type: general-purpose`)
 >
 > Run the built-in `security-review` skill from `{WORK}` over the branch diff (`origin/HEAD...`). Report findings with their `* Severity:` fields, each citing the file it was found in. Change nothing: no edit, no commit, no push.
 
-Apply the same severity gate `close-story` Phase 2.5 applies — **any High or Critical stops the push**; Medium/Low are listed and the user decides. Then write the receipt with `--mechanism native-skill`. **A push is never refused by the hook; this gate is what refuses it.**
+Apply the same severity gate `close-story` Phase 2.5 applies — **any High or Critical stops the push**; Medium/Low are listed and the user decides. Then write the receipt with `--mechanism native-skill --scope-token {the token you minted}` — written on declaration, with no token and no files, it certified nothing ([F12](references/modes-and-gates.md)); `--write` now refuses that form. A commit landing between the mint and the receipt makes the token stale: mint again and re-run the pass. **A push is never refused by the hook; this gate is what refuses it.**
 
 **When something must be fixed, delegate the fix.** Spawn a **fresh** `kairos:kairos-implement` for the file(s) the finding cites, then a `kairos:kairos-close` to gate and commit it, exactly as a story would be — then re-run 4.0 **once**. Still High/Critical → stop and ask; no third pass.
 
@@ -428,5 +434,5 @@ Always prefer **stopping and asking** over silently working around. Never `rm -r
 - [ ] Finalization (push + PR/MR) gated on the **entire epic** being closed (not just the run's subset); a subset run pushed nothing; when it did finalize it ran once, in the orchestrator, honouring `push_mode`, with the PR Closes-list aggregating the whole epic.
 - [ ] Under `epic_shared`, teardown was **printed, not run** — no `git worktree remove`, no container or image pruning from inside the tree. Under `in_place`/`off`, no teardown line was printed at all.
 - [ ] **I wrote no code and made no commit** — not in the loop, not in Phase 4. Every late fix, including anything the Phase 4.0 branch security review returned, went out as a delegation. No `Edit`, no `Write`, no file-rewriting heredoc in my own context.
-- [ ] Phase 4.0 ran (or was recorded as skipped): the branch security review was delegated, its severity gate applied, its receipt written with `--mechanism native-skill`.
+- [ ] Phase 4.0 ran (or was recorded as skipped): the branch security review was delegated, its severity gate applied, its receipt written with `--mechanism native-skill` and the `SCOPE-TOKEN` minted by `kairos-diff.sh --branch` before the pass.
 - [ ] Output, commit messages, and spec edits are in English.

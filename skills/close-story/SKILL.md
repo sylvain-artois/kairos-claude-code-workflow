@@ -120,7 +120,7 @@ Clear, or medium/low acknowledged → receipt: `--mechanism kairos-fork --scope-
 
 ### Stage 2 — the whole branch, before the push
 
-`origin/HEAD...` is finally the right scope. **Neither stage replaces the other.** In Phase 7, after the deferral rule lets you through and **before** the push: run the built-in `security-review` from `{WORK}`, same severity gate, receipt `--mechanism native-skill`. **A push is never refused; the hook only warns.**
+`origin/HEAD...` is the right scope. **Neither stage replaces the other.** In Phase 7, after the deferral rule passes and **before** the push: run the built-in `security-review` from `{WORK}`, same gate; receipt `native-skill`, token from `kairos-diff.sh --branch`. **A push is never refused; the hook only warns.**
 
 → Receipt commands and fields: [`references/security-gate.md`](references/security-gate.md).
 

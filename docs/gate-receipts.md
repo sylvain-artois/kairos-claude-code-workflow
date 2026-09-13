@@ -103,7 +103,7 @@ Every receipt also records **how** the gate ran:
 | `mechanism` | Meaning | Token |
 |---|---|---|
 | `kairos-fork` | `kairos:gate-security` / the review gate, scoped by `kairos-diff.sh` | **required** |
-| `native-skill` | Anthropic's built-in pass over the committed branch, before a push | n/a — keyed by branch tip |
+| `native-skill` | Anthropic's built-in pass over the committed branch, before a push | **required** — minted by `kairos-diff.sh <tree> --branch origin/HEAD --names` before the pass, keyed by the branch tip; the receipt lists the committed range's files |
 | `override` | deliberately bypassed, with a reason | n/a |
 | `none` | legitimately skipped (nobody opted in, empty diff), with a reason | n/a |
 
