@@ -756,6 +756,34 @@ for f in "$ROOT"/skills/*/SKILL.md; do
 done
 chk "no forked skill silently loses its ARGUMENTS line" "$DROP" "0"
 
+# ================================================================ 13. verdict reuse (C22)
+printf '\n\033[1m13. A resumed close reuses a verdict only while its scope has not moved (C22)\033[0m\n'
+
+VD="$ROOT/scripts/kairos-verdict.sh"
+VW="$BASE/vw"; mk_workspace "$VW"
+mkdir -p "$VW/svc-a" "$VW/svc-b"
+echo a1 > "$VW/svc-a/x.txt"; echo b1 > "$VW/svc-b/y.txt"
+sdig() { sh "$DIFF" "$VW" "$1" --names --no-token | sed -n 's/^SCOPE-SCOPED-DIGEST: //p'; }
+DA=$(sdig svc-a); DB=$(sdig svc-b)
+case "$DA" in ''|"$DB") no "each scope has its own digest" "a=[$DA] b=[$DB]" ;; *) ok "each scope has its own digest" ;; esac
+
+chk "nothing recorded           → RUN" "$(sh "$VD" check "$VW" STORY-001 tests svc-a "$DA" | head -n1 | cut -c1-4)" "RUN:"
+printf 'PASS: svc-a — 3 passed\n' | sh "$VD" record "$VW" STORY-001 tests svc-a "$DA" >/dev/null
+chk "same scope                 → REUSE" "$(sh "$VD" check "$VW" STORY-001 tests svc-a "$DA" | head -n1)" "REUSE"
+chk "and it replays the output  " "$(sh "$VD" check "$VW" STORY-001 tests svc-a "$DA" | sed -n 2p)" "PASS: svc-a — 3 passed"
+
+echo b2 > "$VW/svc-b/y.txt"
+chk "another scope moved        → this digest holds" "$(sdig svc-a)" "$DA"
+echo a2 > "$VW/svc-a/x.txt"
+DA2=$(sdig svc-a)
+chk "this scope moved           → RUN" "$(sh "$VD" check "$VW" STORY-001 tests svc-a "$DA2" | head -n1 | cut -c1-4)" "RUN:"
+chk "another story              → RUN" "$(sh "$VD" check "$VW" STORY-002 tests svc-a "$DA" | head -n1 | cut -c1-4)" "RUN:"
+chk "another gate               → RUN" "$(sh "$VD" check "$VW" STORY-001 review-medium svc-a "$DA" | head -n1 | cut -c1-4)" "RUN:"
+chk "an empty digest            → RUN" "$(sh "$VD" check "$VW" STORY-001 tests svc-a "" | head -n1 | cut -c1-4)" "RUN:"
+chk "an unresolved placeholder  → RUN" "$(sh "$VD" check "$VW" '{STORY}' tests svc-a "$DA" | head -n1 | cut -c1-4)" "RUN:"
+r=$(sh "$VD" check "$BASE/not-a-tree" STORY-001 tests svc-a "$DA" >/dev/null 2>&1; printf '%s' $?)
+chk "it always exits 0          " "$r" "0"
+
 # ================================================================ verdict
 printf '\n\033[1m%s passed, %s failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || { printf 'failed:%s\n' "$FAILED_NAMES"; exit 1; }

@@ -78,3 +78,24 @@ it may be asked.
 has no `TEST_PLAN_*.md`, prompt **once**: `"No test plan for {service} — generate one via
 /kairos:create-test-plan? [y/N]"`. Do not nag if already prompted once for this service in
 this run.
+
+## Resuming a close: verdicts whose scope has not moved
+
+`close-story` passes `--story STORY-{NNN}` to `/kairos:gate-tests` and `/kairos:review`. With
+it, each gate fingerprints the pending changes under its service's path (`SCOPE-SCOPED-DIGEST`,
+printed by `kairos-diff.sh`), records the output of a **passing** verdict with
+`scripts/kairos-verdict.sh`, and on a later attempt of the same story replays that output
+instead of running again — as long as the fingerprint is identical. The gate that blocked, and
+every service the fix touched, run again because their fingerprint moved. A `--recheck` review
+never reuses anything.
+
+Measured before: a close blocked twice for real reasons — a High review finding, then a
+defect found in the browser — was resumed three times, and every attempt re-ran every gate on
+every service: a full Python suite for a label moved in another service's SVG renderer, seven
+review passes for one story, about six times the cost of a close that passes first time. The
+resumptions were right; replaying the gates nobody's fix had touched was not.
+
+**The limit, accepted when the rule was chosen:** the fingerprint follows the service's path
+and nothing else. A service whose tests read another service's files can reuse a verdict that
+the other service's change invalidated. Reuse is always visible — `PASS (reused)` from the test
+gate, `Reused:` in the review's provenance line — and it goes into the summary as such.

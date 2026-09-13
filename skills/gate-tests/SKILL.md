@@ -45,7 +45,7 @@ You run **one service's** test command against a work tree and report pass/fail.
 ## Usage
 
 ```
-/kairos:gate-tests {service} --from {WORK} [--worktree-id {id}]
+/kairos:gate-tests {service} --from {WORK} [--worktree-id {id}] [--story STORY-{NNN}]
 ```
 
 | Argument | Default | Meaning |
@@ -53,6 +53,7 @@ You run **one service's** test command against a work tree and report pass/fail.
 | `{service}` | required | Service name, resolved against `{WORK}/spec.md`'s services table |
 | `--from {WORK}` | required | The work tree to test from. `/kairos:close-story` always passes `{WORK}` explicitly |
 | `--worktree-id {id}` | absent | Passed by the caller **only** under `worktree_mode: epic_shared` — `{id}` is `epic-{EPIC_SLUG}`. It selects the isolated `worktree_test_command`. **Its absence does not switch the guard off**: the guard follows the tree (Phase 1), not the mode. Never invent an id the caller did not pass. |
+| `--story STORY-{NNN}` | absent | Turns on verdict reuse for a resumed close (Phase 0, step 3). Absent → the tests always run. |
 
 ---
 
@@ -60,6 +61,13 @@ You run **one service's** test command against a work tree and report pass/fail.
 
 1. Read `{WORK}/spec.md`. Resolve `{service}` → `{path}`, `test_command`, `worktree_test_command`. Unknown service → stop, list the declared ones.
 2. No `test_command` declared → report `SKIP: {service} declares no test_command` and stop cleanly. Not a failure.
+3. **With `--story` only — reuse a verdict whose scope has not moved.** Fingerprint the pending changes under the service's path, and hold the printed value as `{SCOPED_DIGEST}`:
+   ```bash
+   sh ${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh {WORK} {path} --names --no-token | sed -n 's/^SCOPE-SCOPED-DIGEST: //p'
+   sh ${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdict.sh check {WORK} {STORY} tests {service} {SCOPED_DIGEST}
+   ```
+   - `REUSE` → report `PASS (reused): ` followed by the recorded verdict line, then `scope unchanged since that run`, and stop. Run nothing.
+   - `RUN: …` → continue. A resumed close exists because something was fixed: the service that changed runs again, every time.
 
 ---
 
@@ -108,6 +116,11 @@ FAIL: {service} — {N} passed, {F} failed ({duration}s)
 or `SKIP: …` / `BLOCKED: …` per Phase 0/1 above.
 
 **A pass on another checkout is not a `PASS`.** If anything shows the run did not exercise `{WORK}` — the container mounts a different path, the story's new test files are absent from the output — the verdict is `BLOCKED: {service} — the run did not test {WORK}: {evidence}`. Never `PASS` followed by a warning: the first line is the verdict your caller gates on, and a warning below it is a warning nobody's gate reads.
+
+**With `--story`, record a `PASS` — and only a `PASS`** — so a resumed close can reuse it:
+```bash
+printf '%s\n' "{your PASS line}" | sh ${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdict.sh record {WORK} {STORY} tests {service} {SCOPED_DIGEST}
+```
 
 **Any `FAIL` or `BLOCKED` is a hard gate for the caller: stop and ask, do not commit.** This skill only reports — the caller (`/kairos:close-story` Phase 2) decides what to do with the verdict.
 

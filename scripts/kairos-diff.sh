@@ -156,6 +156,16 @@ if [ -n "$SPEC" ] && [ "${NFILES:-0}" -eq 0 ] && [ "${NALL:-0}" -gt 0 ]; then
   exit 0
 fi
 
+# The scoped digest: the same kind of fingerprint as DIGEST, restricted to FILES. DIGEST moves
+# when anything in the tree moves; this one moves only when THIS scope does — which is what lets
+# a resumed close reuse a gate verdict for a service the fix never touched (kairos-verdict.sh).
+SDIGEST=$(
+  printf '%s\n' "$FILES" | while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    if [ -f "$WORK/$p" ]; then printf '%s %s\n' "$(git -C "$WORK" hash-object -- "$p" 2>/dev/null)" "$p"
+    else printf 'deleted %s\n' "$p"; fi
+  done | LC_ALL=C sort | _sha256)
+
 NONCE=""
 if [ "$TOKEN" -eq 1 ] && [ "${NFILES:-0}" -gt 0 ]; then
   NONCE=$(_nonce)
@@ -167,6 +177,7 @@ printf 'SCOPE-TREE: %s\n' "$WORK"
 printf 'SCOPE-BRANCH: %s\n' "$BRANCH"
 printf 'SCOPE-HEAD: %s\n' "$HEADSHA"
 printf 'SCOPE-DIGEST: %s\n' "$DIGEST"
+printf 'SCOPE-SCOPED-DIGEST: %s\n' "$SDIGEST"
 printf 'SCOPE-PATHSPEC: %s\n' "${SPEC:-(whole tree)}"
 printf 'SCOPE-FILES: %s\n' "${NFILES:-0}"
 printf '\n'

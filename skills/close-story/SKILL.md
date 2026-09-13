@@ -70,7 +70,7 @@ Note from each impacted `{path}/spec.md`: `test_command`, `worktree_test_command
 
 **Gates**, before any commit, for every service in `IMPACTED`. Each gate below is its own forked skill call (C2) — **1 service → inline; ≥ 2 → fire every service's calls in parallel**, in one message. No subagent wrapper: the fork already isolates each call's context.
 
-**(a) Unit tests.** `/kairos:gate-tests {service} --from {WORK}`, adding `--worktree-id epic-{EPIC_SLUG}` under `worktree_mode: epic_shared`. **A `FAIL` or `BLOCKED` verdict → stop and ask.** Do NOT proceed to commit. The story stays `in_progress`.
+**(a) Unit tests.** `/kairos:gate-tests {service} --from {WORK} --story STORY-{NNN}`, adding `--worktree-id epic-{EPIC_SLUG}` under `worktree_mode: epic_shared`. **A `FAIL` or `BLOCKED` verdict → stop and ask.** Do NOT proceed to commit. The story stays `in_progress`.
 
 **(b) QA.** Any `{service.path}/qa/TEST_PLAN_*.md` → `/kairos:qa {service} --from {WORK}`. **`STOPPED` is a hard gate: stop and ask.** `ISSUES FOUND` is reported; the user decides.
 
@@ -80,7 +80,7 @@ Note from each impacted `{path}/spec.md`: `test_command`, `worktree_test_command
 sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} {service.path}
 ```
 
-Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-contract.md): `{service.review_command}` unset **or** still the `<TODO…>` placeholder → `/kairos:review {service.path} --from {WORK}`; `skip` → opt-out; a slash command or script path → those modes.
+Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-contract.md): `{service.review_command}` unset **or** still the `<TODO…>` placeholder → `/kairos:review {service.path} --from {WORK} --story STORY-{NNN}`; `skip` → opt-out; a slash command or script path → those modes.
 > **`--from {WORK}` is not optional** — a reviewer aimed at the wrong tree reports nothing, and an empty report reads as a clean pass.
 > **Budget per service: one review, then one `--recheck` at most.** Only Critical/High may be fixed here. Still Critical/High after the recheck → **stop and ask**; no third pass. **Medium/Low go in the summary, never fixed here** ([why](references/gates-detail.md)).
 > **No output, no review.** Only the provenance line, contract headers or the empty-scope line count. A launch stub with nothing after it (`… (background)`) → re-run in the foreground, else **stop and ask**; no receipt.
@@ -97,7 +97,7 @@ Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-co
 
 ## Phase 2.5 — Security review (opt-in, per service)
 
-**After** the Phase 2 gates, **before** any commit. Both stages run Anthropic's prompt; Kairos owns only the **scope**.
+**After** the Phase 2 gates, **before** any commit.
 
 `OPTED_IN` = services in `IMPACTED` with `security_review: true`. Empty, or empty diff for all → **skip the phase and record the skip** (`--skipped`), never pass it over silently.
 
