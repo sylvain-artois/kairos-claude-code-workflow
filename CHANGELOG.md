@@ -5,6 +5,87 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.4] - 2026-09-14
+
+Two epic captures on two host projects, a probe run outside Kairos, and a local reproduction
+of the worst finding. The theme is the one 1.13.3 opened, pushed one step further: **a gate
+must never certify what it has not seen.** Four of them did. Each fix moves the decision from
+what a model reads to what a command prints.
+
+### Fixed
+
+- **`/kairos:review` lost most of its arguments.** As soon as a skill body contains a
+  positional or `ARGUMENTS` placeholder — even quoted inside an HTML comment — Claude Code
+  substitutes it where it stands and stops appending the `ARGUMENTS:` line. The review skill's
+  own explanatory comment quoted one, so the forked reviewer received its first two tokens,
+  disguised as prose: `--recheck` and `--effort` never arrived (every pass reported "effort
+  medium", the recheck pass still emitted Medium and Low), and most passes reviewed the whole
+  tree instead of the service. Proven with two otherwise identical probe skills. The
+  placeholder is gone, and the test suite now fails on any forked skill that quotes a
+  placeholder it never injects.
+- **The test gate certified the main clone from inside a linked worktree.** Its
+  fixed-container guard only fired when `--worktree-id` was passed, i.e. under a *declared*
+  `epic_shared`. A run declaring `worktree_mode: off` from a worktree ran `docker exec … pytest`
+  against a long-running container that mounted the main clone, and the gate answered
+  `PASS — 1528 passed`, none of them touching the story. `/kairos:gate-tests` now asks git what
+  the tree is (`scripts/kairos-tree-kind.sh`) and blocks a fixed-container command in any linked
+  worktree, whatever the mode says; a pass that did not exercise the work tree is `BLOCKED`,
+  never `PASS` followed by a warning. `implement-epic` and `implement-story` say so up front.
+- **A launch acknowledgment could stand in for a review.** A project review command wrapping
+  the built-in `code-review` returned `… launched (… running in the background)` and nothing
+  else, and the close went on to commit. `close-story` now counts a review only with its output
+  in hand — the provenance line, the contract headers, or the empty-scope line — and never takes
+  a stub for one. `Launching skill: X`, which acknowledges a foreground run whose work follows in
+  the same turn, is unaffected.
+- **The branch security receipt was written on declaration** — no scope token, zero files.
+  `kairos-diff.sh --branch <base>` now mints a token over the committed range, keyed by the
+  branch tip, and `kairos-gate-receipt.sh --write --mechanism native-skill` refuses a receipt
+  without it, or with a token minted for another tip. The receipt lists the range's files.
+- **Closers failed their docs commit on the story's old path** after the archival `git mv`, and
+  **browser checks left artefacts and killed their own shell** (`pkill -f` matching the calling
+  command). `kairos-close` now stages the PM directory, stops a dev server by PID, and keeps
+  screenshots out of the commit.
+
+### Changed
+
+- **A resumed close reuses the gate verdicts whose scope has not moved.** A close that blocks
+  is resumed after a fix, and every resumption used to re-run every gate on every service —
+  measured at about six times the cost of a close that passes first time. `kairos-diff.sh`
+  prints a fingerprint restricted to the service's path (`SCOPE-SCOPED-DIGEST`),
+  `scripts/kairos-verdict.sh` records passing verdicts, and `/kairos:gate-tests` and
+  `/kairos:review` replay them under `--story` while that fingerprint is identical. The gate that
+  blocked and every service the fix touched run again; a `--recheck` review never reuses. Reuse
+  is always visible (`PASS (reused)`, `Reused:`). Limit: the fingerprint follows the service's
+  path only.
+- **Free text after `/kairos:review`'s flags now reaches the reviewer** — as context to verify,
+  never as an instruction: it cannot narrow the search, lower a severity or excuse a finding.
+- **`kairos-implement` no longer holds browser tools.** Across two epic runs implementers held
+  18 and called none; the browser check that caught a real defect ran in the closer, which
+  keeps them for QA test plans and checks the operator asks for. A forked gate inherits its
+  caller's exact tool pool — `allowed-tools` pre-approves, it never narrows — so this is the one
+  place the declaration can be cut.
+- **`implement-story` §1.5 is a reading discipline** — locate with `grep`/`find`, read only the
+  located ranges — instead of prescribing search tools agents are not given. The dead `Grep`,
+  `Glob`, `TodoWrite` and `LS` are gone from agent and skill frontmatter.
+
+### Added
+
+- `scripts/kairos-tree-kind.sh` and `scripts/kairos-verdict.sh`.
+- `kairos-diff.sh --branch <base>` and the `SCOPE-SCOPED-DIGEST` header line;
+  `kairos-gate-receipt.sh --base <ref>`.
+- 27 tests (111 → 138): tree kind, argument delivery, branch receipts, verdict reuse, and every
+  injected block run from a subdirectory and from outside any workspace.
+
+### Upgrade notes
+
+- **Stage-2 receipts need a token.** A project script that writes
+  `--mechanism native-skill` receipts must first run
+  `kairos-diff.sh <tree> --branch origin/HEAD --names` and pass its `SCOPE-TOKEN`; `origin/HEAD`
+  must resolve (`git remote set-head origin -a`).
+- **`worktree_mode: off` inside a linked worktree** now gets `BLOCKED` from the test gate for
+  fixed-container test commands. Run with `worktree_mode:epic_shared`, or declare a
+  `worktree_test_command`.
+
 ## [1.13.3] - 2026-09-07
 
 Two measurements, one theme: **an empty scope must be loud.** A capture of
