@@ -30,6 +30,23 @@ Run the review on the **service-scoped diff** (restricted to that service's path
 
 All modes emit findings under `## Critical` / `## High` / `## Medium` / `## Low`.
 
+## No output, no review
+
+A review counts only when its **output is in hand**: Mode 1's `_Reviewed …_` provenance line,
+the contract headers, or `_No changes in scope — nothing to review._`. A Mode 1 pass with no
+findings emits the provenance line alone — so do not demand headers, demand output.
+
+What never counts is a **launch acknowledgment with nothing after it**. Measured: a Mode 2
+project command that wrapped the built-in `code-review` returned `Skill "code-review" launched
+(forked execution, running in the background)` and nothing else. The service it covered was
+reviewed by no pass, and the close went on. Re-run such a reviewer in the foreground; if it
+cannot run there, **stop and ask**, and write no receipt.
+
+**`Launching skill: X` is not that stub.** It acknowledges a *foreground* launch: the skill's
+body follows in the same turn and the review happens there — measured at 76 messages of real
+analysis after exactly that line. Judge by what follows the acknowledgment, never by its
+wording: findings in contract form, or nothing.
+
 > **If review surfaces a Critical or High finding → stop and ask.** Do NOT proceed to
 > commit. Medium/Low findings are reported; the user decides whether to fix before closing.
 

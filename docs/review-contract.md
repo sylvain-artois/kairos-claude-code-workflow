@@ -127,6 +127,8 @@ Modes 2 and 3 inherit the budget — it belongs to the caller, not to the review
 
 A user who wants project-aware review authors a slash command in their project's `.claude/commands/` (e.g. `review-api.md`) that encodes their stack's idioms — Pydantic patterns, NestJS module boundaries, Go error conventions — and sets `review_command: review-api` in the service spec. `/kairos:close-story` invokes that command on the service diff and parses its output against the contract.
 
+**It must answer in the same turn.** The gate reads what the command returns, when it returns. A command that hands the work to a background task — a wrapper around the built-in `code-review` among them, since that skill forks to the background — returns a launch stub, and `/kairos:close-story` refuses a stub as no review at all: it re-runs the reviewer in the foreground or stops and asks, and writes no receipt. A wrapper that awaits the built-in is a fine tool for a human at the keyboard (§1.1); it is not a gate.
+
 See [examples/review-command-example.md](examples/review-command-example.md) for a minimal, copyable template.
 
 ### Mode 3 — External binary / script

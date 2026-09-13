@@ -52,7 +52,6 @@ date +%Y-%m-%d
 
 Count this epic's stories still `backlog`/`in_progress`, **excluding this one**. `IS_LAST = (REMAINING_OPEN == 0)`. If the count contradicts what the user expects, print the list behind it and ask.
 
-
 → [`references/context-resolution.md`](references/context-resolution.md)
 
 ---
@@ -84,6 +83,7 @@ sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} {service.path}
 Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-contract.md): `{service.review_command}` unset **or** still the `<TODO…>` placeholder → `/kairos:review {service.path} --from {WORK}`; `skip` → opt-out; a slash command or script path → those modes.
 > **`--from {WORK}` is not optional** — a reviewer aimed at the wrong tree reports nothing, and an empty report reads as a clean pass.
 > **Budget per service: one review, then one `--recheck` at most.** Only Critical/High may be fixed here. Still Critical/High after the recheck → **stop and ask**; no third pass. **Medium/Low go in the summary, never fixed here** ([why](references/gates-detail.md)).
+> **No output, no review.** Only the provenance line, contract headers or the empty-scope line count. A launch stub with nothing after it (`… (background)`) → re-run in the foreground, else **stop and ask**; no receipt.
 
 **(d)** `{service.suggest_test_plan}` and no `TEST_PLAN_*.md` → prompt **once** to make one.
 
@@ -92,8 +92,6 @@ Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-co
 > **Never work around a refused receipt.** `--write` refuses a `passed` receipt with no token, `enforce` denies the commit — else a gate that ran and one that never ran leave the same artefact ([why](../../docs/review-contract.md)). Re-run the gate, or record `--skipped`/`--override`. Script missing → `gate receipts: unavailable`, continue.
 
 **All gates green for all services → proceed to Phase 2.5.**
-
-→ Review command-mode selection (1/2/3): [`references/gates-detail.md`](references/gates-detail.md).
 
 ---
 
@@ -124,7 +122,7 @@ Clear, or medium/low acknowledged → receipt: `--mechanism kairos-fork --scope-
 
 `origin/HEAD...` is finally the right scope. **Neither stage replaces the other.** In Phase 7, after the deferral rule lets you through and **before** the push: run the built-in `security-review` from `{WORK}`, same severity gate, receipt `--mechanism native-skill`. **A push is never refused; the hook only warns.**
 
-→ Receipt commands, fields per mechanism, what replaced the provenance footer: [`references/security-gate.md`](references/security-gate.md).
+→ Receipt commands and fields: [`references/security-gate.md`](references/security-gate.md).
 
 ---
 
@@ -230,4 +228,4 @@ Each **stops the flow before any commit** unless stated otherwise:
 
 ## QA self-check (before declaring success)
 
-Walk [`references/qa-self-check.md`](references/qa-self-check.md) before declaring the story closed — every gate, every receipt, staging, scope, push/PR, archive, English only.
+Walk [`references/qa-self-check.md`](references/qa-self-check.md) before declaring the story closed.
