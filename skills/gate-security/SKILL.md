@@ -8,7 +8,7 @@ background: false
 
 <!--
   `context: fork` + `background: false` (C2, first gate converted). No `arguments:` block —
-  V1 in notes/plan-refactoring-skills-api.md §6.2 measured that declaring one breaks the
+  V1 in notes/refactoring/plan-2026-08-29.md §6.2 measured that declaring one breaks the
   positional `$0`/`$1` substitution inside the `!` injection blocks below, silently (empty
   reply, rc 0). The caller keeps passing `{work-tree} [pathspec]` as the Skill tool's `args`
   string, exactly as before — that path was never `arguments:`-based, so fork changes

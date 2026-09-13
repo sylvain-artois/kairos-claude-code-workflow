@@ -134,6 +134,13 @@ There is no worktree to be in or out of. Instead:
   ```
   Mention it in the Phase 0 run plan the user approves; that upfront go-ahead is the confirmation, so do not raise a second prompt here.
 
+**In either mode, if the dynamic context printed `LINKED-WORKTREE`, say so in the run plan.** The mode says "no worktree", git says this is one, and the test gate follows git: every service whose `test_command` attaches to a fixed container will come back `BLOCKED` at close, because it would test the main clone rather than this tree. Name the override that avoids it:
+```
+⚠ This tree is a linked worktree, but worktree_mode is {effective}. Fixed-container test commands will be BLOCKED at close.
+  If this worktree belongs to the epic, run: /kairos:implement-epic {arguments} worktree_mode:epic_shared
+```
+It goes into the same upfront go-ahead — no second prompt.
+
 Both modes then skip Phase 1 entirely (it verifies a worktree that was never created) and Phase 4.3 (there is nothing to tear down). `NOT-A-REPO` still stops the run in every mode — no repository, no branch, no epic.
 
 ### Under `epic_shared`, both gates apply, and both refuse rather than repair

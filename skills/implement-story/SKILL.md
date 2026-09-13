@@ -184,11 +184,20 @@ No worktree, no new branch. Work in place on the current branch. Print:
 ```
 ℹ worktree_mode: off — working in the current tree on the current branch (no branching).
 ```
+**Then ask git what this tree is** — `off` and `in_place` both run this check:
+```bash
+sh ${CLAUDE_PLUGIN_ROOT}/scripts/kairos-tree-kind.sh .
+```
+On `LINKED-WORKTREE`, say so before implementing anything. The close-time test gate follows the tree, not the mode, and will report `BLOCKED` for every service whose `test_command` attaches to a fixed container:
+```
+⚠ This tree is a linked worktree, but worktree_mode is {effective}. Fixed-container test commands will be BLOCKED at close.
+  If this worktree belongs to the story's epic, re-run with worktree_mode:epic_shared.
+```
 Continue to Phase 2.5.
 
 #### Mode `in_place` — current tree, one branch per story
 
-No worktree. Create a story branch from `default_branch` and work in the current tree.
+No worktree. Create a story branch from `default_branch` and work in the current tree. Run the linked-worktree check described under `off` first.
 
 ```bash
 SLUG=$(echo "{story-title}" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9-' | cut -c1-40)

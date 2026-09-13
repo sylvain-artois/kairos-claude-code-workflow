@@ -668,6 +668,43 @@ LEAK=$(grep -rlwiE 'civilia|wispra|afk' "$ROOT/skills" "$ROOT/docs" "$ROOT/scrip
        | grep -v 'run-tests.sh' | wc -l | tr -d ' ')
 chk "no source-project name leaks into shipped artefacts" "$LEAK" "0"
 
+# ================================================================ 12. tree kind + argument delivery
+printf '\n\033[1m12. What tree is this, and does a fork still get its arguments (F22, F14)\033[0m\n'
+
+TK="$ROOT/scripts/kairos-tree-kind.sh"
+TM="$BASE/tk-main"; mk_workspace "$TM"
+git -C "$TM" worktree add -q "$BASE/tk-linked" -b tk-branch >/dev/null 2>&1
+mkdir -p "$BASE/tk-linked/sub" "$BASE/tk-none"
+# A main clone living under a directory NAMED worktrees — the path heuristic's blind spot.
+TW="$BASE/worktrees/tk-main2"; mk_workspace "$TW"
+
+chk "the main clone is MAIN-CLONE                  " "$(sh "$TK" "$TM")" "MAIN-CLONE"
+chk "a main clone under worktrees/ is MAIN-CLONE   " "$(sh "$TK" "$TW")" "MAIN-CLONE"
+chk "a linked worktree is LINKED-WORKTREE          " "$(sh "$TK" "$BASE/tk-linked")" "LINKED-WORKTREE"
+chk "a subdirectory of one is LINKED-WORKTREE      " "$(sh "$TK" "$BASE/tk-linked/sub")" "LINKED-WORKTREE"
+chk "a plain directory is NOT-A-REPO               " "$(sh "$TK" "$BASE/tk-none")" "NOT-A-REPO"
+chk "a missing directory is NOT-A-REPO             " "$(sh "$TK" "$BASE/does-not-exist")" "NOT-A-REPO"
+r=$(sh "$TK" "$BASE/does-not-exist" >/dev/null 2>&1; printf '%s' $?)
+chk "it always exits 0                             " "$r" "0"
+
+# F14: as soon as a skill body contains a positional or ARGUMENTS placeholder — even inside an
+# HTML comment — the host substitutes it where it stands and stops appending the `ARGUMENTS:`
+# line. A forked skill that injects nothing reads its arguments from that line, so it must
+# quote no placeholder at all. Skills that do inject (inside a ```! block or an inline !`…`)
+# are exempt: they consume the placeholder on purpose.
+DROP=0
+for f in "$ROOT"/skills/*/SKILL.md; do
+  grep -qE '^context: fork' "$f" || continue
+  counts=$(awk '/^```!/{inb=1; next} inb && /^```/{inb=0; next}
+    /\$(ARGUMENTS|[0-9])/ { if (inb || index($0, "!`")) inj++; else out++ }
+    END { print inj+0, out+0 }' "$f")
+  inj=${counts% *}; out=${counts#* }
+  if [ "$inj" -eq 0 ] && [ "$out" -gt 0 ]; then
+    DROP=$((DROP+1)); printf '     quotes a placeholder it never injects: %s\n' "${f#$ROOT/}"
+  fi
+done
+chk "no forked skill silently loses its ARGUMENTS line" "$DROP" "0"
+
 # ================================================================ verdict
 printf '\n\033[1m%s passed, %s failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || { printf 'failed:%s\n' "$FAILED_NAMES"; exit 1; }
