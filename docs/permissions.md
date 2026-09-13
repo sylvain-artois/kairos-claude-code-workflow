@@ -55,8 +55,9 @@ check cannot run.
 
 Two separate mechanisms have to agree, and both are required:
 
-- **Kairos declares the tools on its agents.** `kairos-implement` and `kairos-close` list the
-  browser tools in their frontmatter, and `/kairos:qa` lists them in its `allowed-tools` so a
+- **Kairos declares the tools on its agents.** `kairos-close` lists the browser tools in its
+  frontmatter — the implementer deliberately has none: a rendered check belongs to the close,
+  where it can still stop a commit — and `/kairos:qa` lists them in its `allowed-tools` so a
   `ui` step in a test plan can actually be executed. Nothing for you to do here.
 - **Your project grants the permission.** That part is yours:
 
@@ -96,8 +97,8 @@ refused looks like a browser failure. Add the directory your MCP server actually
 `browser_evaluate` covers every legitimate need a story or a test plan has. Add it yourself if
 you must; Kairos will not do it for you.
 
-**No browser configured is not an error.** Kairos degrades: the implementer works from the code
-and says nothing about it, and a `ui` step in a test plan is marked `SKIPPED (no browser)` and
+**No browser configured is not an error.** Kairos degrades: the closer's browser check is
+reported as not run, and a `ui` step in a test plan is marked `SKIPPED (no browser)` and
 carried into the summary rather than failed. What you lose is the check, not the run.
 
 ## Checking your work

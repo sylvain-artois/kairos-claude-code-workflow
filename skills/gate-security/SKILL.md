@@ -1,7 +1,7 @@
 ---
 name: gate-security
 description: Security-review one story's pending changes — Anthropic's analysis prompt, aimed at the Kairos scope
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh *), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Read, Glob, Grep, LS, Task, Agent
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh *), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Read, Task, Agent
 context: fork
 background: false
 ---

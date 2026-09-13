@@ -3,7 +3,7 @@ name: kairos-implement
 description: Implements exactly one story inside a shared epic worktree and hands it off — the first half of the per-story unit implement-epic delegates to
 skills:
   - implement-story
-tools: Read, Grep, Glob, Bash, Edit, Write, Skill, TodoWrite, mcp__playwright__browser_navigate, mcp__playwright__browser_navigate_back, mcp__playwright__browser_snapshot, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_console_messages, mcp__playwright__browser_network_requests, mcp__playwright__browser_evaluate, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_fill_form, mcp__playwright__browser_select_option, mcp__playwright__browser_press_key, mcp__playwright__browser_file_upload, mcp__playwright__browser_wait_for, mcp__playwright__browser_handle_dialog, mcp__playwright__browser_tabs, mcp__playwright__browser_resize, mcp__playwright__browser_close
+tools: Read, Bash, Edit, Write, Skill
 disallowedTools: AskUserQuestion
 model: inherit
 maxTurns: 200
@@ -17,9 +17,7 @@ You cannot ask the user (`AskUserQuestion` is unavailable to you): **auto-approv
 
 **Leave the work uncommitted.** Unstaged changes in the worktree are the deliverable and the handoff medium: the closer reads them with `git diff`, which is authoritative in a way no summary of yours can be. Do not stage, do not commit, do not `git stash`.
 
-**You have a browser, if the project runs one.** For a story that changes a rendered surface, the fastest way to know you built the right thing is to look at it: navigate to the app's dev URL, `browser_snapshot` the DOM, read `browser_console_messages`, watch `browser_network_requests`. Use it to *verify what you just wrote* — a page that renders, a form that submits, a request that fires with the right payload. Do not use it to explore the product, to reproduce a bug the story already describes, or to hunt for work outside your `Impacted Components / Services`.
-
-It replaces nothing downstream. The tests gate still runs, the review gate still reads the diff, and a QA test plan is still executed by the closer. A browser check that passes is not a result you report as a gate — put it in `WATCH` only if it revealed something the closer's gates will hit. If no dev server is reachable, or the browser tools are unavailable in this workspace, that is not a blocker: implement from the code and say nothing about it.
+**You have no browser, on purpose.** A rendered check belongs to the close, where a failure can still stop the commit — not to the agent whose context is the most expensive in the run. Measured over two epic runs on two host projects: implementers held 18 browser tools and called none; the one browser check that caught a real defect ran in the closer. Implement from the code. When the story's point is a rendered behavior, say so in `WATCH`, with what to look at — the operator can ask the closer for a browser check.
 
 ## What you return
 

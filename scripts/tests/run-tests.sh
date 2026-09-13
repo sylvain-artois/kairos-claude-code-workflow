@@ -522,6 +522,33 @@ for f in "$ROOT"/skills/*/SKILL.md; do
 done
 rm -f "$BASE"/blk-*.sh
 
+# C23: the same blocks, from where a session really stands when something has gone wrong. A
+# session keeps the cwd of its last `cd` (measured: a close-story invoked from a page
+# directory three levels down), and a command can be typed outside any Kairos workspace. The
+# blocks may say MISSING or (none) there — they may never abort the invocation.
+mkdir -p "$FIX/api/deep/er" "$BASE/not-kairos"
+DRIFT=""
+for f in "$ROOT"/skills/*/SKILL.md; do
+  sk=$(basename "$(dirname "$f")")
+  rm -f "$BASE"/blk-*.sh
+  nb=$(awk -v d="$BASE/blk" '
+        /^```!/ {inb=1; n++; f=d "-" n ".sh"; next}
+        inb && /^```/ {inb=0; next}
+        inb {print > f}
+        END {print n+0}' "$f")
+  [ "${nb:-0}" -gt 0 ] || continue
+  for where in "$FIX/api/deep/er" "$BASE/not-kairos"; do
+    i=1
+    while [ "$i" -le "$nb" ]; do
+      ( cd "$where" && CLAUDE_PLUGIN_ROOT="$ROOT" sh "$BASE/blk-$i.sh" "$where" "" ) >/dev/null 2>&1 \
+        || DRIFT="$DRIFT $sk#$i@$(basename "$where")"
+      i=$((i+1))
+    done
+  done
+done
+rm -f "$BASE"/blk-*.sh
+chk "every injected block exits 0 from a subdirectory and outside a workspace" "${DRIFT:-none}" "none"
+
 # The dead form must never come back: `!cmd` inside a PLAIN fence arrives as literal text.
 DEAD=0
 for f in "$ROOT"/skills/*/SKILL.md; do

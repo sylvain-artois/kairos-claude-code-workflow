@@ -133,7 +133,9 @@ For each service in the story's `Impacted Services` table:
 
 #### 1.5 Scan service code
 
-For each impacted service, use Explore / Grep / Glob (not `cat`/`find` via Bash) to learn current patterns: directory layout, entrypoint, existing test files and fixtures, pub/sub and DB conventions, import style. If a service has existing tests, the implementation should include matching tests.
+For each impacted service, learn current patterns: directory layout, entrypoint, existing test files and fixtures, pub/sub and DB conventions, import style. If a service has existing tests, the implementation should include matching tests.
+
+**Locate first, then read only what you located.** Search with `grep -rn` / `find` through Bash, then read the lines that matter — `Read` with `offset`/`limit`, or `sed -n 'a,bp'`. Do not look for dedicated search tools: agents running this command are not given any, and a turn spent reaching for one is a turn spent deciding how to `cat`. One representative file per pattern is enough; never read a whole large file to learn a convention. Everything you read stays in your context for every turn that follows, and an implementer's context is the most expensive one in the run.
 
 #### 1.6 Print context summary
 
