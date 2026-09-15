@@ -68,20 +68,21 @@ Note from each impacted `{path}/spec.md`: `test_command`, `worktree_test_command
 
 ## Phase 2 — Per-service gates (tests → QA → review)
 
-**Gates**, before any commit, for every service in `IMPACTED`. Each gate below is its own forked skill call (C2) — **1 service → inline; ≥ 2 → fire every service's calls in parallel**, in one message. No subagent wrapper: the fork already isolates each call's context.
+**Gates**, before any commit, for every service in `IMPACTED`. Each gate is its own fork (C2) — **1 service → inline; ≥ 2 → all calls in parallel**, in one message, no subagent wrapper.
 
 **(a) Unit tests.** `/kairos:gate-tests {service} --from {WORK} --story STORY-{NNN}`, adding `--worktree-id epic-{EPIC_SLUG}` under `worktree_mode: epic_shared`. **A `FAIL` or `BLOCKED` verdict → stop and ask.** Do NOT proceed to commit. The story stays `in_progress`.
 
 **(b) QA.** Any `{service.path}/qa/TEST_PLAN_*.md` → `/kairos:qa {service} --from {WORK}`. **`STOPPED` is a hard gate: stop and ask.** `ISSUES FOUND` is reported; the user decides.
 
-**(c) Code review.** Collect the service-scoped diff with the Kairos collector, which mints the token the receipt needs:
+**(c) Code review.** Collect the service-scoped diff; the collector mints the receipt's token:
 
 ```bash
 sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} {service.path}
 ```
 
 Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-contract.md): `{service.review_command}` unset **or** still the `<TODO…>` placeholder → `/kairos:review {service.path} --from {WORK} --story STORY-{NNN}`; `skip` → opt-out; a slash command or script path → those modes.
-> **`--from {WORK}` is not optional** — a reviewer aimed at the wrong tree reports nothing, and an empty report reads as a clean pass.
+> **A story path under no impacted `{path}`** (`{pm}/` aside) → Mode 1 becomes **one** `/kairos:review .` pass, token: `kairos-diff.sh {WORK}`. Never two pathspecs ([why](references/gates-detail.md)).
+> **`--from {WORK}` is not optional** ([why](references/gates-detail.md)).
 > **Budget per service: one review, then one `--recheck` at most.** Only Critical/High may be fixed here. Still Critical/High after the recheck → **stop and ask**; no third pass. **Medium/Low go in the summary, never fixed here** ([why](references/gates-detail.md)).
 > **No output, no review.** Only the provenance line, contract headers or the empty-scope line count. A launch stub with nothing after it (`… (background)`) → re-run in the foreground, else **stop and ask**; no receipt.
 

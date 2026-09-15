@@ -105,3 +105,9 @@ worth of summaries, and it throws the context away when it is done.
 The rule that follows is short — **a finding is a delegation, not a to-do** — and the tell is
 concrete: reaching for `Edit`, `Write`, or a heredoc that rewrites a file means you are in the
 wrong context.
+
+What the rule does **not** say is "delegate without asking". A later run read it that way and
+carried it into the story loop: 3 blocked closes out of 3 relaunched with a delegated fix and no
+question, one of them rewording a story's acceptance criterion to match the code. The results were
+right; the gate was not. A red gate is still a question — propose the fix in one line, take the
+`go`, then delegate.

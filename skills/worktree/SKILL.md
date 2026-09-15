@@ -143,7 +143,7 @@ Changes **outside** `{pm}/` are a warning only — print them with "won't be car
 
 ```bash
 # {compose} = the service's compose_file (from its spec)
-grep -q '${CONTAINER_ENV_PREFIX}' "$REPO_ROOT/{compose}" || echo "NOT PREFIXED: {compose}"
+grep -qF '${CONTAINER_ENV_PREFIX}' "$REPO_ROOT/{compose}" || echo "NOT PREFIXED: {compose}"
 ```
 
 Here this is a **warning**, listing every unprefixed file and pointing at `/kairos:setup-worktree-isolation` — this command does not know which services a future run will touch, so it cannot fairly block on a service nobody will test. The **hard gate stays where the story list is known**: `/kairos:implement-epic` Phase 1 and `/kairos:implement-story` Phase 2a-bis still refuse to run when an *impacted* service is unprefixed. Nothing is relaxed; the warning simply arrives early enough to be fixed before you open the session.

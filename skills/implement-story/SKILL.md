@@ -250,7 +250,7 @@ The second check is the one that catches the plausible mistake — the operator 
 
 - **Compose prefix — hard gate, impacted services only.** For each impacted service declaring `worktree_test_command`, its Compose file must namespace the built `image:`/`container_name:` with `${CONTAINER_ENV_PREFIX}`, or the isolated test container `/kairos:close-story` runs later will collide with — or overwrite — the prod one:
   ```bash
-  grep -q '${CONTAINER_ENV_PREFIX}' "$WORK/{compose}" || echo "NOT PREFIXED: {compose}"
+  grep -qF '${CONTAINER_ENV_PREFIX}' "$WORK/{compose}" || echo "NOT PREFIXED: {compose}"
   ```
   Unprefixed → **stop and ask.** Do not auto-edit the Compose file: an uncommitted infra change inside the worktree is scope creep, and the prefix would still be missing from `{spec.default_branch}`, where it is actually needed.
   > ⛔ `{service}`'s Compose (`{compose}`) isn't prefixed for worktree isolation — worktree tests would collide with prod containers. Run `/kairos:setup-worktree-isolation` on `{spec.default_branch}` in the main clone and commit it, then re-create the worktree. (Aborting.)

@@ -50,18 +50,21 @@ You run **one service's** test command against a work tree and report pass/fail.
 
 | Argument | Default | Meaning |
 |---|---|---|
-| `{service}` | required | Service name, resolved against `{WORK}/spec.md`'s services table |
+| `{service}` | required | Service name, resolved against `{WORK}/spec.md`'s services table; its commands come from the service's own `spec.md` (Phase 0) |
 | `--from {WORK}` | required | The work tree to test from. `/kairos:close-story` always passes `{WORK}` explicitly |
 | `--worktree-id {id}` | absent | Passed by the caller **only** under `worktree_mode: epic_shared` — `{id}` is `epic-{EPIC_SLUG}`. It selects the isolated `worktree_test_command`. **Its absence does not switch the guard off**: the guard follows the tree (Phase 1), not the mode. Never invent an id the caller did not pass. |
-| `--story STORY-{NNN}` | absent | Turns on verdict reuse for a resumed close (Phase 0, step 3). Absent → the tests always run. |
+| `--story STORY-{NNN}` | absent | Turns on verdict reuse for a resumed close (Phase 0, step 4). Absent → the tests always run. |
 
 ---
 
 ## Phase 0 — Resolve
 
-1. Read `{WORK}/spec.md`. Resolve `{service}` → `{path}`, `test_command`, `worktree_test_command`. Unknown service → stop, list the declared ones.
-2. No `test_command` declared → report `SKIP: {service} declares no test_command` and stop cleanly. Not a failure.
-3. **With `--story` only — reuse a verdict whose scope has not moved.** Fingerprint the pending changes under the service's path, and hold the printed value as `{SCOPED_DIGEST}`:
+1. Read `{WORK}/spec.md`. Resolve `{service}` → `{path}` from its services table. Unknown service → stop, list the declared ones.
+2. **Read `{WORK}/{path}/spec.md`** when it exists, and take `test_command` and `worktree_test_command` from it; a field it does not declare falls back to the root spec. That per-service file is where the spec format puts them — never conclude from the root spec alone.
+3. Neither file declares a `test_command` → report `SKIP: {service} declares no test_command (read {path}/spec.md and spec.md)` and stop cleanly. Not a failure.
+
+   **Why both files.** Measured: this gate once read the root spec only, and on a host that declares every test command in the service's own spec it answered `SKIP: declares no test_command` twice out of three, for a service with 347 tests. A `SKIP` is not a failure, so the close would have committed on it; the operator, reading the message, concluded the service had no tests.
+4. **With `--story` only — reuse a verdict whose scope has not moved.** Fingerprint the pending changes under the service's path, and hold the printed value as `{SCOPED_DIGEST}`:
    ```bash
    sh ${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh {WORK} {path} --names --no-token | sed -n 's/^SCOPE-SCOPED-DIGEST: //p'
    sh ${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdict.sh check {WORK} {STORY} tests {service} {SCOPED_DIGEST}
@@ -130,7 +133,7 @@ printf '%s\n' "{your PASS line}" | sh ${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdi
 
 - **`spec.md` missing at `{WORK}`** → stop, point at `/kairos:init`.
 - **Service not declared** → stop, list declared services.
-- **No `test_command` for the service** → `SKIP`, not a failure.
+- **No `test_command` in `{path}/spec.md` nor in the root spec** → `SKIP`, not a failure. Root spec alone → not a `SKIP`, go read the service's spec.
 - **`{WORK}` is not a git work tree** → `BLOCKED`.
 - **Fixed-container guard trips** (under `--worktree-id`, or in a linked worktree) → `BLOCKED`, never run the command.
 - **Evidence the run tested another checkout** → `BLOCKED`, never `PASS`.
@@ -142,6 +145,7 @@ printf '%s\n' "{your PASS line}" | sh ${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdi
 
 - [ ] No secret, key, or `worktree_seed_files` path was listed, read, or `cat`ed — the caller had already checked them.
 - [ ] `{WORK}` came from `--from`, never assumed from cwd.
+- [ ] `test_command` was looked up in `{WORK}/{path}/spec.md` before the root spec, and a `SKIP` names both files.
 - [ ] `kairos-tree-kind.sh` ran, and the command was picked from the Phase 1 table — by the presence of `--worktree-id` **and** the tree kind, never from `{WORK}`'s name or the declared mode.
 - [ ] The fixed-container guard ran before any `{test_command}` in every row that calls for it.
 - [ ] The first line of the output is the verdict, and it is not `PASS` if anything suggested `{WORK}` was not what ran.

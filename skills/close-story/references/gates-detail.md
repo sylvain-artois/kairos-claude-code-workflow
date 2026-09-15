@@ -47,6 +47,26 @@ body follows in the same turn and the review happens there — measured at 76 me
 analysis after exactly that line. Judge by what follows the acknowledgment, never by its
 wording: findings in contract form, or nothing.
 
+## Files no service path covers
+
+A service's declared `path` is often narrower than what its change touches. A mono-repo may
+declare `api → backend` while the suite lives in a root `tests/`, the API contract is a
+generated `openapi.json` at the root, and the build is a root `Makefile`. Phase 1 maps those
+files to the service by judgment; the review collector does not — `kairos-diff.sh {WORK}
+backend` sees `backend/` and nothing else.
+
+Measured on a three-story epic: a story's commit carried its new tests under `tests/`, the
+review pass read the four files under `backend/`, and the receipt — which lists **every**
+pending file, whatever the token's pathspec — recorded `review passed, 18 file(s)`. The
+story's tests were read by no reviewer, and the receipt said otherwise. Another closer had
+tried `kairos-diff.sh {WORK} backend tests`: the collector kept `backend`, dropped `tests`
+without a word, and only a whole-tree pass covered the story.
+
+So when any pending story path sits under no impacted service's `path`, the Mode 1 passes
+collapse into one pass over the whole tree, with that pass's token on the receipt. It costs
+one wider review; it buys a receipt that lists only what a reviewer read. Mode 2 and Mode 3
+services keep their own pass — their project command owns its framing.
+
 > **If review surfaces a Critical or High finding → stop and ask.** Do NOT proceed to
 > commit. Medium/Low findings are reported; the user decides whether to fix before closing.
 

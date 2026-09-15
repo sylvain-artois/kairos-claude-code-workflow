@@ -36,8 +36,8 @@ The argument is `$ARGUMENTS`. Resolve it to an **ordered list of story files** i
    | `off` | the current tree | the branch already checked out — you create none and switch to none | none |
 4. **Implement then close, story by story** — never implement all then close all. Closing story N (moving it to `done/`, `Status: done`) is what makes story N+1's dependency check pass. It also keeps each review diff scoped to one story.
 5. **One fresh subagent per story.** Each subagent inherits your working directory, which **is** the run's tree in every mode; it is still passed `{WORK}` as an explicit path and still runs git as `git -C {WORK}` — belt and braces, the two agree. Subagents must **not** create their own worktree (`isolation: worktree` is forbidden here) and must **not** push, open a PR/MR, or tear anything down.
-6. **Autonomous, but a safety gate is sacred.** A subagent auto-approves routine prompts (the implementation plan, the commit) but **never works around** a blocking gate: a failing test, a Critical/High review or security finding, scope creep, an unmet dependency, or an ambiguous story. On any of those it returns `BLOCKED: <reason>` **without committing**, and **you stop the whole run** and surface it to the user. Never let a subagent decide to push past a red gate.
-7. **You never write code, and you never commit — not in the loop, and not in the finalization.** The subagents implement and commit; you resolve, delegate, push, and open the PR/MR. This holds **after** the last delegation too: when a late gate — the Phase 4.0 branch security review above all — comes back with something to fix, that fix is a **delegation**, never an edit you make yourself. Measured: that block cost as much as the whole six-story loop, and 19 of its 24 tool calls were the orchestrator editing files by hand at 140 k–205 k of context per turn ([why](references/modes-and-gates.md)). **If you find yourself reaching for `Edit`, `Write`, or a heredoc that rewrites a file, you are in the wrong context: spawn an agent.**
+6. **Autonomous, but a safety gate is sacred.** A subagent auto-approves routine prompts (the implementation plan, the commit) but **never works around** a blocking gate: a failing test, a Critical/High review or security finding, scope creep, an unmet dependency, or an ambiguous story. On any of those it returns `BLOCKED: <reason>` **without committing**, and **you stop the whole run** and surface it to the user. Never let a subagent decide to push past a red gate — and never decide it yourself: a fix you delegate without asking is the same workaround, one level up. **A story's acceptance criteria and scope are the user's, not yours:** never tell a subagent to reword, drop or relax one, even when the code or an operator decision recorded in it contradicts the story — that contradiction is a question.
+7. **You never write code, and you never commit — not in the loop, and not in the finalization.** The subagents implement and commit; you resolve, delegate, push, and open the PR/MR. This holds **after** the last delegation too: when a late gate — the Phase 4.0 branch security review above all — comes back with something to fix, that fix is a **delegation**, never an edit you make yourself. Measured: that block cost as much as the whole six-story loop, and 19 of its 24 tool calls were the orchestrator editing files by hand at 140 k–205 k of context per turn ([why](references/modes-and-gates.md)). **If you find yourself reaching for `Edit`, `Write`, or a heredoc that rewrites a file, you are in the wrong context: spawn an agent.** Delegation is *how* a fix gets made, never a reason to skip asking whether to make it: after a red gate, you propose, the user answers, then you delegate.
 8. **You do not tear the worktree down**: `git worktree remove .` from inside would succeed and delete the directory you are running in. Teardown is a line you print for the operator to run from the main clone — and only under `epic_shared`, which is the only mode that created anything.
 9. **English only** — all code, comments, commit messages, and output.
 
@@ -228,7 +228,7 @@ Three checks, all local, all cheap:
 1. **Isolation precondition (Compose prefix) — hard gate, scoped to this run.** For every service impacted by a story in this run that declares `worktree_test_command`, its Compose file must namespace the built `image:` / `container_name:` with `${CONTAINER_ENV_PREFIX}`, or the isolated test container intermediate-close runs will collide with — or overwrite — the long-running prod one. `/kairos:worktree` warned about this for *all* services; here it blocks, for the ones this run will actually touch:
    ```bash
    # {compose} = the service's compose_file (from its spec)
-   grep -q '${CONTAINER_ENV_PREFIX}' "{WORK}/{compose}" || echo "NOT PREFIXED: {compose}"
+   grep -qF '${CONTAINER_ENV_PREFIX}' "{WORK}/{compose}" || echo "NOT PREFIXED: {compose}"
    ```
    Any impacted service unprefixed → **stop the run**. Do not auto-edit the Compose file: an uncommitted infra change inside the worktree is scope creep, and the prefix would still be missing from `{default_branch}` where it is needed.
    > ⛔ `{service}`'s Compose (`{compose}`) isn't prefixed for worktree isolation — worktree tests would collide with prod containers. Run `/kairos:setup-worktree-isolation` on `{default_branch}` in the main clone and commit it, then re-create this worktree and re-run. (Aborting — nothing implemented.)
@@ -282,7 +282,13 @@ Spawn `kairos:kairos-close` with the implementer's report pasted verbatim into t
 
 - `STATUS: DONE` from the implementer → go straight to 2b. From the closer → append its report to the run log and continue to the next story. Print a one-line tick:
   `✓ {i}/{N} STORY-{NNN} closed (intermediate) — {commit subjects}`.
-- `STATUS: BLOCKED` → **stop the entire run.** Do not start the next story, and do not spawn the other half of this one. Surface the `BLOCKED_REASON` to the user and ask how to proceed (fix-and-resume / skip this story / abort). The completed stories stay committed on the epic branch; the blocked story stays `in_progress`. Re-running `/kairos:implement-epic` from this worktree later resumes (Phase 0 re-derives the still-open list).
+- `STATUS: BLOCKED` → **stop the entire run, and end your turn on the question.** Do not start the next story, and do not spawn the other half of this one. **No `Agent` call touches this story — not a fix, not a re-close — until the user has answered.** An obvious fix is not an exception, and neither is a user who may be away: measured, an orchestrator that judged the fix obvious relaunched 3 blocked closes out of 3 without asking, and once had a story's acceptance criterion rewritten to match the code. Make the answer cheap instead:
+  ```
+  ⛔ STORY-{NNN} blocked — {BLOCKED_REASON, one line}
+  Proposed fix: {one line: what a fresh kairos-implement would change, and where}
+  Reply: go (delegate that fix, then re-close) · skip (leave this story in_progress, go on) · abort
+  ```
+  A fix that would touch an acceptance criterion or the story's scope is not proposed as `go` — say what contradicts what, and ask. The completed stories stay committed on the epic branch; the blocked story stays `in_progress`. Re-running `/kairos:implement-epic` from this worktree later resumes (Phase 0 re-derives the still-open list).
 
 ---
 
@@ -321,7 +327,7 @@ Hold its `SCOPE-TOKEN`. `SCOPE-ERROR` (usually `origin/HEAD` unset: `git -C {WOR
 
 Apply the same severity gate `close-story` Phase 2.5 applies — **any High or Critical stops the push**; Medium/Low are listed and the user decides. Then write the receipt with `--mechanism native-skill --scope-token {the token you minted}` — written on declaration, with no token and no files, it certified nothing ([F12](references/modes-and-gates.md)); `--write` now refuses that form. A commit landing between the mint and the receipt makes the token stale: mint again and re-run the pass. **A push is never refused by the hook; this gate is what refuses it.**
 
-**When something must be fixed, delegate the fix.** Spawn a **fresh** `kairos:kairos-implement` for the file(s) the finding cites, then a `kairos:kairos-close` to gate and commit it, exactly as a story would be — then re-run 4.0 **once**. Still High/Critical → stop and ask; no third pass.
+**When something must be fixed, propose the fix, ask, then delegate it.** The question takes the Phase 2 form (`⛔ … · Proposed fix: … · go / skip / abort`); nothing is spawned before the answer. On `go`, spawn a **fresh** `kairos:kairos-implement` for the file(s) the finding cites, then a `kairos:kairos-close` to gate and commit it, exactly as a story would be — then re-run 4.0 **once**. Still High/Critical → stop and ask; no third pass.
 
 > This is the concrete case cardinal rule 7 exists for, and the one the 1.13.2 capture caught ([the measurement](references/modes-and-gates.md)). **A finding is a delegation, not a to-do.**
 
@@ -412,7 +418,7 @@ opened here. Do not tear the worktree down — the epic is not finished.
 | A targeted story is in neither `stories/` nor `done/` | Stop. It was almost certainly never committed before the worktree was created — say that, don't just say "not found". |
 | Stories span more than one epic / a story lacks an `Epic` | Stop and ask — this command is single-epic. |
 | Dependency cycle, or a dep outside the run not `done` | Stop. Name the blocking story. |
-| A subagent returns `BLOCKED` | Stop the whole run, surface the reason, ask (fix-resume / skip / abort). |
+| A subagent returns `BLOCKED` | Stop the whole run, end the turn on the question: reason, proposed fix, `go / skip / abort`. No `Agent` call on that story before the answer. |
 | The user asks you to tear the worktree down | Decline and print the `/kairos:worktree … --teardown` line for the main clone (4.3). Running it here would delete the directory this session lives in — git allows it. |
 | Push deferred / fails (`manual`, no remote, "skip") | Note in summary; worktree + branch stay; re-running resumes at Phase 4. |
 | Run re-invoked after a partial run | Same worktree, same branch — Phase 0 re-derives the still-open list from `{pm}/` here; resume the loop. |
@@ -430,7 +436,7 @@ Always prefer **stopping and asking** over silently working around. Never `rm -r
 - [ ] Nothing created a worktree. Under `epic_shared`, Phase 1 **verified** the one `/kairos:worktree` prepared (Compose prefix for impacted services, seed files, memory link) and reported each result honestly.
 - [ ] Each story ran in its **own fresh subagent**, in the shared worktree (no per-agent worktree), implement-then-close, sequentially.
 - [ ] No subagent pushed, opened a PR/MR, or tore down anything; no subagent worked around a blocking gate.
-- [ ] A `BLOCKED` return stopped the whole run; completed stories stayed committed, the blocked one stayed `in_progress`.
+- [ ] A `BLOCKED` return stopped the whole run; completed stories stayed committed, the blocked one stayed `in_progress`. **Between that `BLOCKED` and the user's answer, no `Agent` call touched the story**, and no delegation prompt asked for an acceptance criterion or the scope to change.
 - [ ] Finalization (push + PR/MR) gated on the **entire epic** being closed (not just the run's subset); a subset run pushed nothing; when it did finalize it ran once, in the orchestrator, honouring `push_mode`, with the PR Closes-list aggregating the whole epic.
 - [ ] Under `epic_shared`, teardown was **printed, not run** — no `git worktree remove`, no container or image pruning from inside the tree. Under `in_place`/`off`, no teardown line was printed at all.
 - [ ] **I wrote no code and made no commit** — not in the loop, not in Phase 4. Every late fix, including anything the Phase 4.0 branch security review returned, went out as a delegation. No `Edit`, no `Write`, no file-rewriting heredoc in my own context.
