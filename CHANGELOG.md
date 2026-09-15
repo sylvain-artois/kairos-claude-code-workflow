@@ -5,7 +5,7 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.14.0] - 2026-09-15
 
 The first release published to the marketplace since **1.3.1**. Versions 1.4.0 through 1.13.4
 were built and measured on a branch and never reached `main`; they ship together here, and
