@@ -78,7 +78,23 @@ Turn it on by re-running `/kairos:init` — it asks once, and only when `gh` is 
 | [`/kairos:setup-worktree-isolation`](skills/setup-worktree-isolation/SKILL.md) | One-time Compose rewrite so worktree test runs never collide with prod (prereq for worktree mode) |
 | [`/kairos:release`](skills/release/SKILL.md) | Analyze commits, write a release note, tag it, push |
 
+Behind `/kairos:close-story` sit three forked gates — `/kairos:gate-tests`, `/kairos:gate-security` and `/kairos:spec-update` — each run in its own context and aimed at an explicit work tree. `/kairos:implement-epic` and `/kairos:implement-wave` delegate every story to two agents, `kairos-implement` then `kairos-close`, so the orchestrator's context grows by summaries, not by code.
+
 Commands are interactive — they ask before doing anything irreversible. You rarely need the docs below; they're here when you want the *why*.
+
+## How Kairos is measured
+
+Kairos is not tuned by feel. Each release is validated by running a real epic on a real project while capturing the session's full API traffic: every request and response body, including subagents and forked gates. The traffic is then regrouped per agent, per story and per gate. Two questions come out of it. **Did each gate read what its receipt says it read?** And **what does a story cost**, counted in tokens rather than dollars, because prices move with the model and the host? The captures deliberately span project typologies, because most defects only show up on one of them:
+- a mono-repo holding a Python API and a TypeScript web app, with an end-to-end suite, a real browser, GitHub, and one worktree per epic with isolated containers;
+- a multi-service workspace of independent Python and Node services, each declaring its tests in its own `spec.md`, with no end-to-end tier, on GitLab, working in place;
+- a workspace whose root is a plain folder holding several separate repositories.
+
+Examples:
+- **The test gate** looked for tests only in the root spec. That surfaced only on the per-service layout.
+- **The fixed-container guard** certified the wrong checkout. That surfaced only where the declared mode and the actual tree disagreed.
+- **Root-level test files** went unreviewed. That surfaced only on a mono-repo with shared root files.
+
+Sixteen captures since 1.7.0, of 300 to 1 600 API calls each, stand behind 1.14.0. Every *Fixed* entry in the [changelog](CHANGELOG.md) states the measurement that found it.
 
 ## How it compares
 
@@ -104,4 +120,4 @@ Kairos's niche: **existing projects, a pre-human QA layer, and staying small.** 
 
 ## Contributing & license
 
-The plugin is just Markdown command definitions — see [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under [MIT](LICENSE).
+The plugin is Markdown command definitions, plus a few POSIX shell scripts for the gates and a test suite for those scripts — see [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under [MIT](LICENSE).

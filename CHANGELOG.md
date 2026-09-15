@@ -5,6 +5,62 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+The first release published to the marketplace since **1.3.1**. Versions 1.4.0 through 1.13.4
+were built and measured on a branch and never reached `main`; they ship together here, and
+their entries below still describe each step. Two more epic captures, on two project
+typologies, found the last four defects this release fixes.
+
+### Fixed
+
+- **The review receipt listed files no reviewer had read.** Once `/kairos:review` received its
+  pathspec again, each pass read exactly `{service.path}` — and a change outside every declared
+  path (tests in a root `tests/`, a generated contract, a root `Makefile`) fell into no pass.
+  The receipt still lists every pending file: measured, `review passed, 18 file(s)` for a pass
+  that read 4, the story's own tests among the unread. `close-story` now turns the per-service
+  Mode 1 passes into one whole-tree pass whenever a story path sits under no impacted service's
+  path, and never hands the collector two pathspecs (it keeps the first and drops the rest).
+- **The Compose-prefix check always failed from Claude Code's Bash tool.** There, `grep` is a
+  shell function around a bundled ugrep, which reads `$` inside a pattern as an anchor:
+  `grep -q '${CONTAINER_ENV_PREFIX}'` never matched, and `implement-story`, `implement-epic` and
+  `worktree` reported `NOT PREFIXED` on prefixed Compose files. The check is now a fixed-string
+  match (`grep -qF`).
+- **An epic run fixed its own blocked stories without asking.** `implement-epic` said to stop
+  and ask on `BLOCKED`, but its finalization phase taught the opposite loop — "a finding is a
+  delegation" — and the orchestrator applied it to the story loop: measured, 3 blocked closes
+  out of 3 relaunched with a delegated fix and no question, once rewording a story's acceptance
+  criterion to match the code. A `BLOCKED` now ends the orchestrator's turn on a one-line
+  question (reason, proposed fix, `go / skip / abort`), no agent touches the story before the
+  answer, the finalization fix follows the same form, and a story's criteria and scope are never
+  changed by delegation.
+- **The test gate skipped services whose tests it did not look for.** `/kairos:gate-tests` read
+  `test_command` from the root `spec.md` only, while the spec format — and `close-story` and
+  `implement-story` — take it from the service's own `{path}/spec.md`. On a host that declares
+  every test command per service, the gate answered `SKIP: declares no test_command` twice out
+  of three for a service with 347 tests; a `SKIP` is not a failure, so only the closer's own
+  reasoning kept the story from committing on it. The gate now reads the per-service spec first,
+  falls back to the root, and a `SKIP` names both files.
+
+### Documentation
+
+- **README — "How Kairos is measured"**: the method behind every entry in this file, and why
+  it runs on several project typologies.
+- **README and `CONTRIBUTING.md`** name the forked gates, the two agents, the helper scripts and
+  the test suite, which the 1.3.1 text still described as absent.
+
+### Upgrade notes — coming from 1.3.1
+
+- **Commands are skills** (1.4.0). `/kairos:<name>` is unchanged.
+- **One session, one tree** (1.5.0). Under `worktree_mode: epic_shared`, open the epic's tree
+  with `/kairos:worktree` from the main clone and start the epic run from inside it.
+- **Hooks load at session start** (1.6.0): restart Claude Code after updating.
+- **Gate receipts** (1.6.0 – 1.9.0) live outside your repository; a push is never refused.
+- **Before an unattended epic**, grant the permissions in
+  [`docs/permissions.md`](docs/permissions.md) (1.13.1).
+- Then the 1.13.4 notes below: stage-2 receipts need a scope token, and `worktree_mode: off`
+  inside a linked worktree blocks fixed-container test commands.
+
 ## [1.13.4] - 2026-09-14
 
 Two epic captures on two host projects, a probe run outside Kairos, and a local reproduction

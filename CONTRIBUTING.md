@@ -1,13 +1,17 @@
 # Contributing to Kairos
 
-Kairos is **just Markdown**. There's no application code, no build step, no test runner — the deliverable is the slash-command definitions in [`skills/`](skills/) and the reference docs in [`docs/`](docs/). That makes contributing easy: edit a file, try it, open a PR.
+Kairos is **mostly Markdown**. There's no application code and no build step. The deliverable is the slash-command definitions in [`skills/`](skills/), the agents in [`agents/`](agents/), and the reference docs in [`docs/`](docs/). A few POSIX shell scripts back the gates, and a test suite covers those scripts. That makes contributing easy: edit a file, try it, open a PR.
 
 ## Where things live
 
 | Path | What |
 |---|---|
-| `skills/*/SKILL.md` | The canonical slash commands. **Edit these.** |
-| `docs/*.md` | Human-facing references (spec format, review contract, concepts). |
+| `skills/*/SKILL.md` | The canonical slash commands, including the forked gates (`gate-tests`, `gate-security`, `spec-update`, `review`, `qa`). **Edit these.** |
+| `agents/*.md` | `kairos-implement` and `kairos-close`, the per-story agents that `implement-epic` and `implement-wave` delegate to. |
+| `scripts/*.sh` | Scope collection, gate receipts, tree kind and verdict reuse. POSIX `sh`, and must parse under bash 3.2 (macOS). |
+| `scripts/tests/run-tests.sh` | The test suite for those scripts and for the injected blocks in the skills. |
+| `hooks/hooks.json` | The receipt hooks (warn, never refuse a push). |
+| `docs/*.md` | Human-facing references (spec format, review contract, concepts, receipts, permissions). |
 | `docs/examples/*.md` | Filled-in specs, test plans, review commands. |
 | `.claude-plugin/plugin.json` | Plugin manifest (name, version, description). |
 
@@ -17,9 +21,12 @@ Kairos is **just Markdown**. There's no application code, no build step, no test
 
 Commands are Markdown, so "testing" means running them:
 
-1. Point Claude Code at this repo as a local plugin (`/plugin install` from a local path, or symlink into your plugins dir).
-2. In a throwaway project, run the command you changed end-to-end.
-3. Confirm the safety gates still fire (a failing test must stop `/close-story`; an ambiguous story selection must ask, not guess).
+1. Run `sh scripts/tests/run-tests.sh`. It must stay green.
+2. Add your working tree as a local marketplace (`/plugin marketplace add /path/to/kairos-claude-code-workflow`, then `/plugin install kairos@kairos`). The install **copies** the tree into a version-keyed cache, so a later edit reaches the plugin only through a version bump, or through an uninstall followed by a reinstall. Restart Claude Code afterwards, because hooks load at session start.
+3. In a throwaway project, run the command you changed end-to-end.
+4. Confirm the safety gates still fire. A failing test must stop `/close-story`, and an ambiguous story selection must ask, not guess.
+
+Never merge to `main` to try a change: this repository is its own marketplace, so `main` is what every user's next `/plugin update` installs.
 
 ## Style rules
 
