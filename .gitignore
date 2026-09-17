@@ -1,0 +1,12 @@
+# Les CSV d'analyse ne sont pas versionnés : ~5 Mo par cycle, et le journal
+# porte déjà les conclusions. Seule leur archive compressée est conservée,
+# sur disque, hors git. Voir telemetry/README.md.
+telemetry/analysis_*/
+telemetry/*.tar.gz
+
+# Les captures brutes n'ont rien à faire ici non plus — elles vivent dans
+# ~/.civilia-telemetry/api-bodies/ et se suppriment après dépouillement.
+
+__pycache__/
+.DS_Store
+*.swp
