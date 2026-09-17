@@ -15,7 +15,26 @@ Kairos is **mostly Markdown**. There's no application code and no build step. Th
 | `docs/examples/*.md` | Filled-in specs, test plans, review commands. |
 | `.claude-plugin/plugin.json` | Plugin manifest (name, version, description). |
 
-> Heads-up: `notes/` is gitignored. It's a private authoring scratchpad, not part of the plugin — don't put shippable content there.
+> Heads-up: not everything about Kairos is in `main`. `CLAUDE.md` is gitignored, and the piloting material sits on a separate orphan branch (below). Neither is distributed — don't put private notes in the plugin tree.
+
+## Why there is a `project-management` orphan branch
+
+Kairos is its own marketplace: `.claude-plugin/marketplace.json` declares `"source": "./"`, so whatever reaches `main` is exactly what every user's next `/plugin update` installs. Nothing filters in between — the manifest has no `files` or `ignore` field, there is no `.claudeignore`, and there is no packaging step. **The only reliable boundary between "worked on" and "shipped" is the git boundary.**
+
+The backlog, the decisions log, the dated journal and the telemetry tooling therefore live on `project-management`, a branch with **no common ancestor with `main`**. Being orphan is the safety property, not a quirk: with no shared history, it cannot be fast-forwarded or merged into `main` by accident.
+
+The branch is maintainer-side and **not published on this remote**, so a fresh clone does not carry it — and nothing in a PR ever needs it. Where it does exist, it is mounted as a **sibling worktree** rather than switched to in place, so the plugin tree and the piloting tree stay open at once and neither leaks into the other's commits:
+
+```sh
+git worktree add ../kairos-project-management project-management
+```
+
+```
+kairos-claude-code-workflow/     <- the clone: main, feature/*  (what ships)
+kairos-project-management/       <- the worktree: project-management (never ships)
+```
+
+What this means for a contributor: nothing on that branch belongs in a PR against `main`. If you move content from it into the plugin tree, scrub project-specific names first (see [Style rules](#style-rules)).
 
 ## Testing a change locally
 
