@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "kairos",
-  "description": "Kairos — a story-driven agile workflow for Claude Code.",
+  "description": "Kairos — agentic workflows for Claude Code: story-driven delivery, goal-driven pursuit.",
   "owner": {
     "name": "sylvain-artois"
   },
@@ -9,7 +9,7 @@
     {
       "name": "kairos",
       "source": "./",
-      "description": "A story-driven agile workflow: /init, /create-prd, /create-story, /implement-story, /implement-epic, /implement-wave, /close-story, /qa, /release."
+      "description": "Two agentic workflows for Claude Code, driven by one spec.md: story-driven delivery with gates (/create-prd, /create-story, /implement-story, /implement-epic, /close-story) and goal-driven pursuit against an executable yardstick (/create-goal, /pursue-goal). Built for solo devs and small teams on existing projects."
     }
   ]
 }
