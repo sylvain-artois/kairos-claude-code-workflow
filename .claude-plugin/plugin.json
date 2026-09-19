@@ -1,5 +1,5 @@
 {
     "name": "kairos",
-    "version": "1.14.0",
+    "version": "2.0.0",
     "description": "Two agentic workflows for Claude Code, driven by one spec.md: story-driven delivery with gates (/create-prd, /create-story, /implement-story, /implement-epic, /close-story) and goal-driven pursuit against an executable yardstick (/create-goal, /pursue-goal). Built for solo devs and small teams on existing projects."
 }
