@@ -7,15 +7,15 @@ Kairos is **mostly Markdown**. There's no application code and no build step. Th
 | Path | What |
 |---|---|
 | `skills/*/SKILL.md` | The canonical slash commands, including the forked gates (`gate-tests`, `gate-security`, `spec-update`, `review`, `qa`). **Edit these.** |
-| `agents/*.md` | `kairos-implement` and `kairos-close`, the per-story agents that `implement-epic` and `implement-wave` delegate to. |
+| `agents/*.md` | `kairos-implement` and `kairos-close`, the per-story agents that `implement-epic` and `implement-wave` delegate to; `kairos-generator` and `kairos-evaluator`, the per-round agents of `pursue-goal`. |
 | `scripts/*.sh` | Scope collection, gate receipts, tree kind and verdict reuse. POSIX `sh`, and must parse under bash 3.2 (macOS). |
 | `scripts/tests/run-tests.sh` | The test suite for those scripts and for the injected blocks in the skills. |
 | `hooks/hooks.json` | The receipt hooks (warn, never refuse a push). |
-| `docs/*.md` | Human-facing references (spec format, review contract, concepts, receipts, permissions). |
+| `docs/*.md` | Human-facing references (spec format, review contract, concepts, goals, receipts, permissions, tips, the open backlog in `need-help.md`). |
 | `docs/examples/*.md` | Filled-in specs, test plans, review commands. |
 | `.claude-plugin/plugin.json` | Plugin manifest (name, version, description). |
 
-> Heads-up: not everything about Kairos is in `main`. `CLAUDE.md` is gitignored, and the piloting material sits on a separate orphan branch (below). Neither is distributed — don't put private notes in the plugin tree.
+> Heads-up: not everything about Kairos is in `main`. The piloting material sits on a separate orphan branch (below) and is never distributed. `CLAUDE.md` is tracked and ships with the plugin, so it follows the same rule as the rest of the tree — don't put private notes in it.
 
 ## Why there is a `project-management` orphan branch
 
@@ -61,4 +61,4 @@ Never merge to `main` to try a change: this repository is its own marketplace, s
 2. If the change affects a shared contract (spec fields, review/QA output format), update the matching doc in `docs/` in the same PR — the two must stay in sync.
 3. Describe in the PR *what workflow problem* the change solves, not just what it does.
 
-That's it. Small, focused PRs get reviewed fastest.
+That's it. Small, focused PRs get reviewed fastest. Looking for something to work on? [docs/need-help.md](docs/need-help.md) lists the open backlog, with a size for each item.

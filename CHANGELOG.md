@@ -5,6 +5,74 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+A second workflow beside the story flow: **goals**. In the story flow the human traces the
+path (PRD → stories → acceptance criteria) and every story is gated on its way in. In the goal
+flow the human fixes the destination and the walls, and the agent chooses its route, measured
+after every round against an executable yardstick it shares with its judge. It is the Kairos
+take on the agent loops that are everywhere right now, with the gates the story flow already had.
+
+The goal flow is **young and not yet measured** to the standard the story flow is: it has run on
+real projects and those runs shaped it, but no capture series stands behind it yet. Its shape
+may move in minor versions. The story flow is unchanged and stays maintained.
+
+No existing command changes behavior; the major version marks the second workflow.
+
+### Added
+
+- **`/kairos:create-goal`** writes `{pm}/goals/{slug}/GOAL.md` (objective, contract of
+  observable assertions, invariants, non-binding terrain, preconditions, budget) and
+  `measure.sh`, the contract compiled into one POSIX script that prints one PASS / FAIL / JUDGE
+  line per row, with its duration. Verifiers are `grep`, `probe` (against `$BASE`, the exact
+  served origin), `test` (the service's own test command) or `judge` (a rubric with a
+  threshold). The yardstick is run once on the current code: every assertion must be red and
+  every invariant green, or the goal is not saved as `ready`. `--from-prd` converts a PRD.
+- **`/kairos:pursue-goal`** runs the goal. It locks `GOAL.md` and `measure.sh` by hash. Each
+  round, a fresh `kairos-generator` takes a **lot** of two or three red rows, grouped by
+  service, under a budget of about 60 tool calls. After each round the orchestrator re-checks
+  the lock and the scope and re-runs the yardstick itself. Once everything is green, one
+  `kairos-evaluator` pass re-runs the verifiers, audits the tests the generator wrote, rules on
+  the judge rows and drives the app. The finalization runs the same gates as a story (tests,
+  review, security), makes one commit, updates the service specs, archives the goal under
+  `goals/done/{slug}/` with its run files, runs the branch security review, then pushes per
+  `push_mode` and prints the PR/MR.
+- **Two agents**, `kairos-generator` (codes, measures itself, never commits) and
+  `kairos-evaluator` (no `Edit`, no `Write`; judges the disk, never the generator's report).
+- **Run files** that survive compaction and resume: `STATE.md` (with a `Recipes` section so the
+  next round starts from commands that work), `RUN.md`, `MEASURE-{r}.txt`, `EVAL-{n}.md`. A
+  budget-limited run keeps its tree and resumes where it stopped.
+- **Signals and alarms.** Red rows, failing tests and review findings feed the next round. A
+  lock mismatch, a path outside the declared services, an invariant red twice, a High/Critical
+  security finding, `BLOCKED` or a stall stop the run on a `go / abort` question. A word from
+  the user during a round is relayed to the running agent as an **owner ruling**.
+
+### Documentation
+
+- **README** announces the goal flow, says plainly how young it is, and adds both commands.
+- **`docs/goals.md`** (new): the contract, the yardstick, the rounds, the files a goal leaves
+  behind, and when to pick a goal over stories.
+- **`docs/tips-and-tricks.md`** (new): keep `/kairos:implement-epic` runs to three or four
+  stories, because cost still grows roughly with the square of the orchestrator's context
+  despite the firewalls around it; keep `CLAUDE.md`, service specs and story references small,
+  because agents re-read them on every turn; and name a skill in plain language to use it as a
+  frame for a request its slash form does not cover.
+- **`docs/need-help.md`** (new): the open backlog in public — a call for contributions, and
+  a plain account of what measurement found that does not work as intended yet (no CI, no
+  end-to-end eval, receipt gaps, prose commands reinvented by agents, the cost of long runs,
+  the goal flow's known gaps).
+- **Full docs review:** `concepts.md`, `quickstart.md`, `spec-format.md` (`goals/` under the
+  PM directory), `permissions.md` (the goal agents cannot ask either; `measure.sh` needs its
+  rules), `review-contract.md`, `CONTRIBUTING.md` (the two new agents; `CLAUDE.md` is tracked).
+- **`CLAUDE.md` is tracked** and describes the repository as it is.
+
+### Upgrade notes
+
+- Nothing to migrate. The story flow, `spec.md` and the gate receipts are unchanged.
+- To try a goal: grant the permissions in [`docs/permissions.md`](docs/permissions.md) plus
+  whatever your `measure.sh` rows call, then `/kairos:create-goal`.
+- Restart Claude Code after updating, so the new agents and skills load.
+
 ## [1.14.0] - 2026-09-15
 
 The first release published to the marketplace since **1.3.1**. Versions 1.4.0 through 1.13.4

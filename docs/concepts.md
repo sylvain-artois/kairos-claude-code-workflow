@@ -1,6 +1,6 @@
 # Kairos concepts (one page)
 
-Seven ideas. Read this once; the commands handle the rest interactively.
+Eight ideas. Read this once; the commands handle the rest interactively.
 
 ## 1. Workspace vs service
 
@@ -52,6 +52,10 @@ Set `issue_tracker: github` and each PRD gets a milestone, each story an issue �
 A PRD lists the PRDs it needs (`depends_on`, by slug); a story lists the stories it needs (`Depends on`, by id). Nothing records the reverse: **`blocks` is the transpose**, computed in one pass whenever someone wants it. Writing it down too would mean editing the blocker every time a new dependent appears — the edit everyone forgets, and a second version of the truth to keep in sync.
 
 Story edges gate execution (`/kairos:implement-story` stops on an open dependency, `/kairos:implement-epic` and `/kairos:implement-wave` sort on them). PRD edges are descriptive: they exist so a planning tool — or an LLM you hand the repo to — can order initiatives, rank blockers, and size bars from the stories' `Size`. Kairos draws no chart itself. A third field points the other way: a story's `Serves` names ids of **your** requirement vocabulary — feature lots, OKRs, compliance controls — that Kairos carries and never interprets, so "which requirements are done" becomes one pass over the story files instead of a hand-written table that rots. If your project turns that pass into a generated file, `pm_derive_command` has `/kairos:close-story` regenerate it *while* it archives the story, so the derived artifact rides the same commit and never reaches CI stale ([spec-format.md §3.2-ter](spec-format.md)). Contract: [dependencies.md](dependencies.md).
+
+## 8. Stories or goals
+
+Kairos has two workflows over the same `spec.md`. The **story flow** (sections 3–7) has you trace the path: a PRD, stories, acceptance criteria, each story gated on its way in. The **goal flow**, new in 2.0, has you fix the destination and the walls: `/kairos:create-goal` writes a contract of observable assertions, the invariants, and `measure.sh`, an executable yardstick verified red on the current code. `/kairos:pursue-goal` then runs rounds of a fresh generator agent, measures the tree itself after each one, has an evaluator judge it once the yardstick is green, and ends through the same gates, with one commit and one PR. Goals live under `{project_management_dir}/goals/` and are archived under `goals/done/`. Pick a goal when the finish line can be stated as facts a script can check; pick stories when the path matters too. Details: [goals.md](goals.md).
 
 ---
 

@@ -71,11 +71,11 @@ The root spec is required. Every Kairos workspace has exactly one.
 
 | Field | Required | Type | Default | Notes |
 |---|---|---|---|---|
-| `project_management_dir` | yes | path | `project-management` | Holds `prds/`, `stories/`, `done/`, `roadmap.md`. Relative to workspace root |
+| `project_management_dir` | yes | path | `project-management` | Holds `prds/`, `stories/`, `done/`, `goals/` (with `goals/done/`), `roadmap.md`. Relative to workspace root |
 | `pm_derive_command` | no | string | — | Command that regenerates artifacts **your project derives** from `project_management_dir` — generated roadmap blocks, indexes, dashboards, anything whose content is computed from story fields. `/kairos:close-story` runs it from the workspace root right after it archives a story and **before** the commit that carries the archival, then folds whatever it regenerates into that same commit. Unset = no callback. See §3.2-ter |
 | `worktree_pm_derive_command` | no | string | `pm_derive_command` | Replaces it when the command runs inside an `epic_shared` worktree. Tokens `{worktree}` / `{worktree_id}` — same isolation problem as `worktree_test_command`, same remedy |
 
-Kairos enforces a single PM root. The subdirectories (`prds/`, `stories/`, `done/`) are conventions, not configurable.
+Kairos enforces a single PM root. The subdirectories (`prds/`, `stories/`, `done/`, `goals/`) are conventions, not configurable.
 
 Not to be confused with `/kairos:sync-pm`, which pushes the story files **outward** to the GitHub issue mirror. `pm_derive_command` points **inward**: it regenerates files inside your own repo.
 

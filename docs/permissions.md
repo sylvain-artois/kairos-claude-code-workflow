@@ -22,6 +22,11 @@ The default instinct is to let permissions accumulate in the local file, because
 Claude Code writes them when you approve a prompt. For everything below, resist it: these fire
 on **every** run.
 
+The goal flow has the same constraint: `/kairos:pursue-goal` runs `kairos-generator` and
+`kairos-evaluator`, which cannot ask either. On top of the rules below, grant whatever your
+goal's `measure.sh` rows call — `sh` on the script itself, `curl` for probe rows, the test
+commands — or every measure reads as a red row ([goals.md](goals.md)).
+
 ## 1. The test command
 
 The single most likely rule to be missing, and the most expensive when it is. A
@@ -55,9 +60,9 @@ check cannot run.
 
 Two separate mechanisms have to agree, and both are required:
 
-- **Kairos declares the tools on its agents.** `kairos-close` lists the browser tools in its
-  frontmatter — the implementer deliberately has none: a rendered check belongs to the close,
-  where it can still stop a commit — and `/kairos:qa` lists them in its `allowed-tools` so a
+- **Kairos declares the tools on its agents.** `kairos-close` and `kairos-evaluator` list the
+  browser tools in their frontmatter — the implementer and the generator deliberately have none:
+  a rendered check belongs to the close or the judge, where it can still stop a commit — and `/kairos:qa` lists them in its `allowed-tools` so a
   `ui` step in a test plan can actually be executed. Nothing for you to do here.
 - **Your project grants the permission.** That part is yours:
 

@@ -2,7 +2,7 @@
 
 Code review is the hardest part of a workflow to make generic: every project has its own idioms, stack, and depth requirements. Kairos solves this by **not shipping a reviewer**. Instead it defines a small contract that any reviewer can satisfy — the default reviewer, a project-authored slash command, or an external script — and selects one per service via the `review_command` field in that service's `spec.md`.
 
-`/kairos:close-story` runs the resolved review on the **service-scoped diff** during its per-service gate phase. This document is the contract that step depends on.
+`/kairos:close-story` runs the resolved review on the **service-scoped diff** during its per-service gate phase. `/kairos:pursue-goal` runs the same review, under the same contract, when it finalizes a goal. This document is the contract those steps depend on.
 
 ---
 
