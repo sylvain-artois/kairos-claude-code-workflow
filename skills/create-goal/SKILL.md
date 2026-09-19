@@ -23,7 +23,7 @@ The workspace's `spec.md` is the single source of truth for paths and services. 
 
 1. **Read `./spec.md` before anything else.** `{spec.project_management_dir}` is the output root; the services table is the only source of service names and paths. Missing → stop, point at `/kairos:init`.
 2. **Two files out, no more.** `{spec.project_management_dir}/goals/{slug}/GOAL.md` and `{spec.project_management_dir}/goals/{slug}/measure.sh`. Never touch source code, tests, stories, PRDs or other goals. **No silent overwrite**: an existing slug → propose `{slug}-v2` or a user-chosen name.
-3. **Every assertion is observable, or it is not in the contract.** A row you cannot compile into a command, a scripted probe, or a `judge` with a rubric *and a threshold* is returned to the user as a question, never written down as a wish.
+3. **Every assertion is observable, or it is not in the contract — and its verifier covers exactly what it says.** A row you cannot compile into a command, a scripted probe, or a `judge` with a rubric *and a threshold* is returned to the user as a question, never written down as a wish. An assertion that says *every X* is verified by a command that walks every X, or it is reworded to the scope the verifier actually covers: the evaluator judges the words, the generator makes the verifier green, and when the two differ the round between them is wasted.
 4. **The yardstick is red before the run.** `measure.sh` is executed once here, on the current code: every contract row must be FAIL, every invariant PASS. An assertion that is already green measures nothing; an invariant that is already red is a precondition, not an invariant. Neither is written silently.
 5. **No open question survives into `ready`.** A goal with a non-empty `## Open Questions` is saved as `draft`; `/kairos:pursue-goal` refuses it. A loop does not settle an ambiguity, it propagates one.
 6. **English only.** The goal and the script ship with the code.
@@ -49,9 +49,9 @@ grep -m1 -E '^\- \*\*worktree_prefix\*\*:' ./spec.md 2>/dev/null || echo "worktr
 sed -n '/^## Services/,/^## /p' ./spec.md 2>/dev/null | grep -E '^\|' || echo "(no services table)"
 ```
 
-### Existing goals (slug collision)
+### Existing goals — open and archived (slug collision)
 ```!
-PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); for g in "$PM"/goals/*/GOAL.md; do [ -f "$g" ] && printf '%s  %s\n' "$(basename "$(dirname "$g")")" "$(grep -m1 -E '^\- \*\*status\*\*:' "$g" | sed -E 's/.*: *//')"; done 2>/dev/null; echo "(end of list)"
+PM=$(grep -m1 -E '^\- \*\*project_management_dir\*\*:' ./spec.md 2>/dev/null | sed -E 's/.*: *//'); for g in "$PM"/goals/*/GOAL.md "$PM"/goals/done/*/GOAL.md; do [ -f "$g" ] && printf '%s  %s\n' "$(basename "$(dirname "$g")")" "$(grep -m1 -E '^\- \*\*status\*\*:' "$g" | sed -E 's/.*: *//')"; done 2>/dev/null; echo "(end of list)"
 ```
 
 ### Today's date
@@ -80,7 +80,7 @@ Read `./spec.md` completely: `project_management_dir`, `worktree_prefix`, `workt
 - **slug**: {slug}
 - **status**: draft                 # draft | ready | achieved | abandoned — the run's own state lives in STATE.md
 - **services**: api, dashboard      # names from the services table; the run may touch nothing else
-- **budget**: rounds 4 · stall 2 · tokens 3000000
+- **budget**: rounds 6 · stall 2          # rounds of 2–3 contract rows each; there is no token budget — the harness reports none
 - **serves**: {ids or "none"}       # the project's own requirement ids — Kairos never interprets them
 - **source**: {pm}/prds/{slug}.md | none
 - **created**: {date}
@@ -115,6 +115,8 @@ Read `./spec.md` completely: `project_management_dir`, `worktree_prefix`, `workt
 
 A `judge` row is reserved for what is not mechanically decidable — tone, layout, respect of an architecture decision. It always carries a threshold. "The UX is better" is refused; "every onboarding step uses the formal register and no step greets the user by first name — threshold: zero exceptions" is a judge row.
 
+**Size.** `/kairos:pursue-goal` hands the generator two or three rows per round, grouped by the service their verifier runs against, so a goal of six rows over two services is three or four rounds, not one — set `rounds` to about twice the number of row groups. Beyond eight contract rows, or when the rows do not share an objective, propose two goals.
+
 ## Phase 3 — Compile `measure.sh`
 
 One `check` line per contract row and per invariant with a mechanical check, one `judge` line per row that needs the evaluator. The preamble is fixed; only the rows and the per-service `tests_*` helpers are generated.
@@ -132,17 +134,18 @@ set -u
 cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 0
 case "$(git rev-parse --absolute-git-dir 2>/dev/null)" in */worktrees/*) TREE_KIND=LINKED-WORKTREE ;; *) TREE_KIND=MAIN-CLONE ;; esac
 WT_ID=${PWD##*/}; WT_ID=${WT_ID#{worktree_prefix}-}     # the isolation slug a linked worktree's tests use
+BASE=${MEASURE_BASE_URL:-{origin the operator confirmed, scheme and host included}}; export BASE   # the exact origin the app is served on — see the probe rule
 ONLY=" $* "; P=0; F=0; IP=0; IF=0; J=0
 _want() { [ "$ONLY" = "  " ] || case "$ONLY" in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 check() {  # check <id> '<label>' <command> [args...]   — rc 0 is PASS
   _id=$1; _label=$2; shift 2; _want "$_id" || return 0
-  _out=$("$@" 2>&1); _rc=$?
+  _t0=$(date +%s); _out=$("$@" 2>&1); _rc=$?; _dt=$(( $(date +%s) - _t0 ))
   _ev=$(printf '%s' "$_out" | tail -n 3 | tr '\n' ' ' | cut -c1-160)
   if [ "$_rc" -eq 0 ]; then _r=PASS; else _r=FAIL; fi
   case "$_id" in I*) if [ "$_r" = PASS ]; then IP=$((IP+1)); else IF=$((IF+1)); fi ;;
                  *)  if [ "$_r" = PASS ]; then P=$((P+1));   else F=$((F+1));   fi ;; esac
-  if [ "$_r" = PASS ]; then printf '%s PASS  %s\n' "$_id" "$_label"
-  else printf '%s FAIL  rc=%s %s\n' "$_id" "$_rc" "$_ev"; fi
+  if [ "$_r" = PASS ]; then printf '%s PASS  %s  [%ss]\n' "$_id" "$_label" "$_dt"
+  else printf '%s FAIL  rc=%s %s  [%ss]\n' "$_id" "$_rc" "$_ev" "$_dt"; fi
 }
 judge() {  # judge <id> '<rubric — threshold>'   — not mechanically decidable; the evaluator rules
   _want "$1" || return 0; J=$((J+1)); printf '%s JUDGE  %s\n' "$1" "$2"
@@ -160,7 +163,7 @@ tests_api() {
 # --- contract (cheapest first)
 check C1 'panel text gone from the dashboard'      absent 'not open yet' dashboard/src
 check C3 'session lookup only on the two routes'   tests_api -k needs_session
-check C2 'sign-in lands on /'                      sh -c 'curl -s -o /dev/null -w "%{http_code} %{redirect_url}" http://localhost:8000/login | grep -q "302 .*/$"'
+check C2 'sign-in lands on /'                      sh -c 'curl -s -o /dev/null -w "%{http_code} %{redirect_url}" "$BASE/login" | grep -q "302 .*/$"'
 judge C4 'every onboarding step uses the formal register, no first-name greeting — threshold: zero exceptions'
 
 # --- invariants
@@ -174,7 +177,8 @@ Rules for the rows:
 
 - **`test` rows** call the service's `tests_{name}` helper (name with non-alphanumerics replaced by `_`), generated from that service's spec. A `test_command` that attaches to a fixed container (`docker exec`, `docker compose exec`) tests another checkout inside a linked worktree: if the service declares no `worktree_test_command`, generate the helper with `echo "BLOCKED: fixed-container test_command, no worktree_test_command"; return 1` in the worktree branch and **say so** in the preview — a goal run under `epic_shared` will not be able to measure that row. A `-k`/`--grep` selector that matches nothing yet is expected: the row is red until the generator writes the test.
 - **`grep` rows** use `absent`/`present` with a fixed pattern and a path inside a declared service.
-- **`probe` rows** are a single `sh -c '…'` — curl against a base URL the operator confirms in the preview. A probe that needs the app running is measured FAIL when it is down; put the start command in `Preconditions`, not in the script.
+- **`probe` rows** are a single `sh -c '…'` against `$BASE`, never a literal URL. `BASE` is the **exact origin the app is served on, scheme and host name included**, confirmed by the operator in the preview: an app that checks `Origin` refuses `127.0.0.1` when it serves `localhost`, and every write-side probe and e2e row then fails for a reason that is not the goal's. `MEASURE_BASE_URL` overrides it without touching the locked file. A probe that needs the app running is measured FAIL when it is down; put the start command in `Preconditions`, not in the script.
+- **Every row prints its duration** (`[12s]`). Rows that drive the running app cost minutes; when an assertion can be pinned by a unit or API test instead, prefer that verifier — the generator measures after every change, and a yardstick that takes three minutes is measured three times less.
 - **`judge` rows** carry the rubric and its threshold on the line, verbatim from `GOAL.md`.
 - Nothing in the script reads `GOAL.md`, writes a file, or touches git state. `set -u`, POSIX `sh`, must parse under bash 3.2.
 
@@ -184,11 +188,11 @@ Rules for the rows:
 sh {pm}/goals/{slug}/measure.sh
 ```
 
-Read every line against rule 4. A contract row already PASS → tell the user which and why it measures nothing, then drop it or tighten it — never keep it. An invariant FAIL → it is a precondition or a bug; move it to `Preconditions` or ask. A row whose command errors (`rc=127`, `command not found`, a wrong path) is a broken yardstick, not a red assertion — fix the row and run again. `JUDGE` lines are listed as pending; that is their normal state.
+Read every line against rule 4, and read the durations: a row above a minute is worth a cheaper verifier when one exists. A contract row already PASS → tell the user which and why it measures nothing, then drop it or tighten it — never keep it. An invariant FAIL → it is a precondition or a bug; move it to `Preconditions` or ask. A row whose command errors (`rc=127`, `command not found`, a wrong path) is a broken yardstick, not a red assertion — fix the row and run again. `JUDGE` lines are listed as pending; that is their normal state.
 
 ## Phase 5 — Preview and confirm
 
-Print `GOAL.md`, then `measure.sh`, then the baseline output. Derive `{slug}` from the title (kebab-case); on a collision with the goals listed in dynamic context propose `{slug}-v2`. Ask once:
+Print `GOAL.md`, then `measure.sh`, then the baseline output. When the script has probe or e2e rows, name `BASE` explicitly and ask the operator to confirm it is the origin the app is served on. Derive `{slug}` from the title (kebab-case); on a collision with the goals listed in dynamic context propose `{slug}-v2`. Ask once:
 
 > Save as `{pm}/goals/{slug}/GOAL.md` + `measure.sh` with status **{ready | draft}**? [Y/n/edit]
 
@@ -215,6 +219,7 @@ Next — under in_place or off:
 - [ ] Exactly two files were written, both under `{pm}/goals/{slug}/`; nothing else in the tree changed.
 - [ ] Every contract row is `grep`, `probe`, `test`, or `judge` with a threshold — no wish survived.
 - [ ] `measure.sh` ran on the current code: every `C*` FAIL, every `I*` PASS, no `rc=127`; the output was shown to the user.
-- [ ] Rows are ordered cheapest first; fixed-container test commands were flagged for worktree runs.
+- [ ] Rows are ordered cheapest first and print their duration; probes use `$BASE`, confirmed as the served origin; fixed-container test commands were flagged for worktree runs.
+- [ ] Every assertion's words and its verifier cover the same scope; `rounds` was set from the number of row groups.
 - [ ] `status: ready` only with an empty `## Open Questions`.
 - [ ] No story was created, no PRD modified, no code touched. English throughout.
