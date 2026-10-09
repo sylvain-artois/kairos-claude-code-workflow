@@ -9,8 +9,8 @@ Kairos has two ways to get from an intention to a pull request, and both read th
 | You write | the path: PRD → stories → acceptance criteria | the destination and the walls: a contract, invariants, a yardstick |
 | The agent | follows the story it was given | chooses its route, one round at a time |
 | Progress is | stories closed | rows of `measure.sh` turned green |
-| Unit of delivery | a story, an epic, a wave | one goal |
-| Commands | `/kairos:create-prd` → `/kairos:create-story` → `/kairos:implement-story` / `implement-epic` → `/kairos:close-story` | `/kairos:create-goal` → `/kairos:pursue-goal` |
+| Unit of delivery | a story, an epic, a wave | one goal, or a chain of goals |
+| Commands | `/kairos:create-prd` → `/kairos:create-story` → `/kairos:implement-story` / `implement-epic` → `/kairos:close-story` | `/kairos:create-goal` → `/kairos:pursue-goal` / `pursue-goals` |
 
 Pick a **goal** when the finish line can be stated as observable facts ("this probe answers 302 to `/`", "this pattern is gone from `dashboard/src`", "this test passes") and you do not care much how the code gets there. Pick **stories** when the path is the point, when the work is best sliced up front, or when someone else has to follow the backlog.
 
@@ -62,7 +62,32 @@ After one go-ahead on the run plan, the run is autonomous:
 
 **Talking to a running goal.** What you say while a round runs is an **owner ruling**: the orchestrator relays it to the running agent, writes it into `STATE.md`, and hands it to the next evaluator. It never rewrites `GOAL.md` for it. A ruling that contradicts the contract is an alarm, not an edit. In the other direction, the orchestrator has no product authority: a doubt of its own becomes a question to you, never a round.
 
-## 3. Where it runs
+## 3. `/kairos:pursue-goals` — chaining goals
+
+A large feature often decomposes into four or five goals rather than one. `/kairos:pursue-goals` is the goal flow's unit of delivery above one goal — what `/kairos:implement-wave` is to stories: one shared tree, one branch, one pull request.
+
+```
+/kairos:pursue-goals {run-slug} {goal-a} {goal-b} {goal-c}
+```
+
+The first token names the run (and, under worktrees, the tree and branch — not a goal); the rest are goal slugs **in execution order** — the order is yours, and a goal that needs another's code simply comes after it. Each goal is pursued exactly as §2 describes, including its own gates, its own commits and its archive to `goals/done/{slug}`; only the branch security review, the push and the PR are deferred, run once after the last goal. One go-ahead covers the whole chain.
+
+Three properties worth knowing before leaving it running overnight:
+
+- **Every goal is validated upfront** (status `ready`, no open questions, `measure.sh` present, services declared) — a chain never discovers a draft goal at dawn. Baselines, though, are measured at each goal's turn: goal B's yardstick runs on the tree goal A already changed, which is the point.
+- **Any stop stops the chain.** An alarm inside a goal surfaces that goal's own question; a goal that ends `budget-limited` or `stalled` halts the chain rather than letting the next goal build on sand.
+- **Resume is free.** Finished goals sit under `goals/done/` and are dropped on re-run; an interrupted goal resumes from its `STATE.md` with a fresh budget. Re-running the same command line is always the answer, whatever stopped it.
+
+Under `worktree_mode: epic_shared`, commit all the goal directories first, then build the tree from the main clone with the **run slug**, not a goal slug:
+
+```
+git add project-management/goals && git commit -m "goals: contracts and yardsticks"
+/kairos:worktree {run-slug} --raw
+cd {worktree_prefix}-{run-slug} && claude
+/kairos:pursue-goals {run-slug} {goal-a} {goal-b} ...
+```
+
+## 4. Where it runs
 
 Same topology rules as an epic ([concepts.md §3](concepts.md)). Under `worktree_mode: epic_shared`, commit the goal directory first (a worktree only carries committed content), then open the tree from the main clone and start the run inside it:
 
@@ -75,7 +100,7 @@ cd {worktree_prefix}-{slug} && claude
 
 Under `in_place` or `off`, run `/kairos:pursue-goal {slug}` where you are. A `test` row whose service declares a fixed-container `test_command` and no `worktree_test_command` cannot be measured from a worktree; `create-goal` says so before you save.
 
-## 4. Files a goal leaves behind
+## 5. Files a goal leaves behind
 
 ```
 {pm}/goals/done/{slug}/
@@ -89,6 +114,6 @@ Under `in_place` or `off`, run `/kairos:pursue-goal {slug}` where you are. A `te
 
 There is no token budget. The harness reports a figure that tracks an agent's peak context, not its cost, so `rounds` and `stall` are the only bounds, and `RUN.md` records peak context for what it is.
 
-## 5. Permissions
+## 6. Permissions
 
 The generator and the evaluator cannot answer a prompt, just like the epic agents. Grant what [permissions.md](permissions.md) lists, plus whatever your `measure.sh` rows call (`curl`, the test commands). The evaluator holds browser tools for `judge` rows about rendered behavior.

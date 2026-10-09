@@ -59,13 +59,14 @@ flowchart LR
     F -.-> D
     G["/kairos:create-goal"] --> H["/kairos:pursue-goal"]
     H -. "rounds until the yardstick is green,<br/>then tests · review · security" .-> I["one commit, one PR"]
+    J["/kairos:pursue-goals"] -. "same, over an ordered<br/>goal list — one branch, one PR" .-> H
 ```
 
 Setup once with `/kairos:init` (and `/kairos:setup-worktree-isolation` if you use worktrees); `/kairos:worktree` opens the tree an epic or a goal runs in; `/kairos:create-test-plan`, `/kairos:qa`, `/kairos:review`, `/kairos:spec`, and `/kairos:release` round out the loop.
 
 - **Existing projects, not greenfield.** `/kairos:init` reads your repo (services, test commands, VCS, branch) and writes a `spec.md` you'd have written by hand. No rewrite, no migration.
 - **A QA layer between unit tests and humans.** `/kairos:qa` runs per-service test plans — the pre-human check most workflows skip.
-- **A small, composable command set.** A four-command story core (PRD → story → implement → close), a two-command goal flow (goal → pursue), plus opt-in commands for epics, waves, worktree isolation, QA, and releases. No `.kairos/` cache, no config anywhere but `spec.md`. The one piece of runtime state — the [gate receipts](docs/gate-receipts.md) — lives outside your repository, never in it.
+- **A small, composable command set.** A four-command story core (PRD → story → implement → close), a two-command goal flow (goal → pursue, with `/kairos:pursue-goals` to chain several), plus opt-in commands for epics, waves, worktree isolation, QA, and releases. No `.kairos/` cache, no config anywhere but `spec.md`. The one piece of runtime state — the [gate receipts](docs/gate-receipts.md) — lives outside your repository, never in it.
 
 ## Issue tracking (opt-in)
 
@@ -88,6 +89,7 @@ Turn it on by re-running `/kairos:init` — it asks once, and only when `gh` is 
 | [`/kairos:close-story`](skills/close-story/SKILL.md) | Test → QA → review → commit → push/PR → archive |
 | [`/kairos:create-goal`](skills/create-goal/SKILL.md) | Turn an objective into `GOAL.md` (contract, invariants, terrain) and `measure.sh`, the yardstick, verified red on the current code |
 | [`/kairos:pursue-goal`](skills/pursue-goal/SKILL.md) | Pursue a goal in rounds of a fresh generator, re-measured after each; one evaluator pass on green; then the gates, one commit, one PR |
+| [`/kairos:pursue-goals`](skills/pursue-goals/SKILL.md) | Chain several goals — one shared tree and branch, each goal pursued and archived in turn, one branch review, one push, one PR |
 | [`/kairos:create-test-plan`](skills/create-test-plan/SKILL.md) | Generate a runnable QA test plan for a service |
 | [`/kairos:qa`](skills/qa/SKILL.md) | Execute a service's test plans, report pass/fail |
 | [`/kairos:review`](skills/review/SKILL.md) | Review a diff scope against the review contract — the default reviewer `close-story` calls |

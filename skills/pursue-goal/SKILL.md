@@ -18,6 +18,14 @@ The workspace's `spec.md` is the single source of truth for paths, services, bra
 
 `$ARGUMENTS` is the slug followed by optional `key:value` tokens. `worktree_mode:` takes `epic_shared` | `in_place` | `off` | `on` (≡ `epic_shared`); `push_mode:` takes `auto` | `manual`; `rounds:` and `stall:` take integers. Any other token or value → **stop and ask**. Strip the tokens, announce every override in Preflight, and never edit `spec.md` or `GOAL.md`.
 
+## Chained invocation (under `/kairos:pursue-goals`)
+
+When `/kairos:pursue-goals` drives this file — several goals, one shared tree and branch, one PR at the end — exactly three amendments apply; **everything else, cardinal rules included, runs as written**:
+
+1. **Preflight step 1 is the chain's.** The tree and branch are the chain run's (`{worktree_prefix}-{run-slug}` / `feature/{run-slug}`, whatever its Preflight verified) — do not check this goal's slug against the directory or branch name, and create or switch nothing.
+2. **Preflight step 4's prompt is skipped.** The chain's single go-ahead covered it: print the run-plan block as information, ask nothing.
+3. **Phase 3 ends after `references/finalize.md` § 3.3.** Gates, source commit, specs, archive — all per goal, as written. The branch security review (§ 3.4), push, PR/MR and teardown (§ 3.5) belong to the chain, once, after its last goal; the receipt hook's "branch review owed" notice after the commits is answered there.
+
 ## Cardinal rules (do not break)
 
 1. **Read `./spec.md`, then `GOAL.md`, before anything else.** `spec.md` missing → "run `/kairos:init` first". Goal missing → list the goals that exist. `measure.sh` missing → "run `/kairos:create-goal` again": a goal without a yardstick cannot be pursued.
