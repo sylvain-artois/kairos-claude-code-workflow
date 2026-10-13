@@ -1,6 +1,6 @@
 ---
 tag: F32
-statut: ouvert
+statut: en cours — implémenté sur feature/pursue-goals (72a5f7e, piste 1 + 2 + 3), à valider sur un run réel
 gravité: bloquant
 origine: mesuré le 2026-09-25 (run letters, worktree_mode off) puis le 2026-10-13
   (capture 20261013a, run profile-field-model) —

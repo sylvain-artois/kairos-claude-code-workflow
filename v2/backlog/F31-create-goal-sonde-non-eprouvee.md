@@ -1,6 +1,6 @@
 ---
 tag: F31
-statut: ouvert
+statut: en cours — implémenté sur feature/pursue-goals (f3a0369), à valider sur un run réel
 gravité: coût
 origine: capture 20261013a — run pursue-goal profile-field-model sur Client-1,
   telemetry/reports/20261013-pursue-goal-profile-field-model.md §1 et §5
