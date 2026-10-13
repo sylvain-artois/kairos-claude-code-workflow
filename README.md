@@ -99,7 +99,7 @@ Turn it on by re-running `/kairos:init` — it asks once, and only when `gh` is 
 | [`/kairos:setup-worktree-isolation`](skills/setup-worktree-isolation/SKILL.md) | One-time Compose rewrite so worktree test runs never collide with prod (prereq for worktree mode) |
 | [`/kairos:release`](skills/release/SKILL.md) | Analyze commits, write a release note, tag it, push |
 
-Behind `/kairos:close-story` sit three forked gates — `/kairos:gate-tests`, `/kairos:gate-security` and `/kairos:spec-update` — each run in its own context and aimed at an explicit work tree. `/kairos:implement-epic` and `/kairos:implement-wave` delegate every story to two agents, `kairos-implement` then `kairos-close`, so the orchestrator's context grows by summaries, not by code. `/kairos:pursue-goal` does the same with `kairos-generator` (one per round) and `kairos-evaluator` (one per green yardstick).
+Behind `/kairos:close-story` sit three gates — `/kairos:gate-tests`, `/kairos:review` and `/kairos:gate-security` — each run in a dedicated agent aimed at an explicit work tree, each recording its green verdict on disk under the scope's digest so the caller can tell a verdict from a well-formed reply that never ran (`/kairos:spec-update` and `/kairos:qa` run as forked skills). `/kairos:implement-epic` and `/kairos:implement-wave` delegate every story to two agents, `kairos-implement` then `kairos-close`, so the orchestrator's context grows by summaries, not by code. `/kairos:pursue-goal` does the same with `kairos-generator` (one per round) and `kairos-evaluator` (one per green yardstick).
 
 Commands are interactive — they ask before doing anything irreversible. You rarely need the docs below; they're here when you want the *why*.
 

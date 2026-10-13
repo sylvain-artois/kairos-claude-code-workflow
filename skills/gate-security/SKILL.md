@@ -1,18 +1,20 @@
 ---
 name: gate-security
 description: Security-review one story's pending changes — Anthropic's analysis prompt, aimed at the Kairos scope
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh *), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Read, Task, Agent
-context: fork
-background: false
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh *), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdict.sh *), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Read, Task, Agent
 ---
 
 <!--
-  `context: fork` + `background: false` (C2, first gate converted). No `arguments:` block —
-  V1 in notes/refactoring/plan-2026-08-29.md §6.2 measured that declaring one breaks the
-  positional `$0`/`$1` substitution inside the `!` injection blocks below, silently (empty
-  reply, rc 0). The caller keeps passing `{work-tree} [pathspec]` as the Skill tool's `args`
-  string, exactly as before — that path was never `arguments:`-based, so fork changes
-  nothing about how this skill is invoked, only where it runs.
+  NO `context: fork` ANY MORE (F32, 2026-10-13). This gate ran as a forked skill from C2
+  until production showed the fork channel cannot carry a verdict: it spawned its own
+  sub-tasks and handed back stubs ("waiting for the sub-task") that callers cannot tell
+  from a clean report. Gate callers now spawn a DEDICATED AGENT whose prompt invokes this
+  skill; it loads inline in that agent's fresh context, and the caller believes a clean
+  report only when the verdict store confirms it was recorded (see the Kairos addendum at
+  the end). No `arguments:` block — V1 in notes/refactoring/plan-2026-08-29.md §6.2
+  measured that declaring one breaks the positional `$0`/`$1` substitution inside the `!`
+  injection blocks below, silently (empty reply, rc 0). The caller keeps passing
+  `{work-tree} [pathspec]` as the Skill tool's `args` string, exactly as before.
 
   PROVENANCE — read references/UPSTREAM.md before editing a single line below.
 
@@ -251,6 +253,21 @@ Kairos artefact, and a green receipt regardless — not deliberate deceit.
 If the scope was `SCOPE-EMPTY` or `SCOPE-ERROR` there is no token to quote. Say which, and
 record the outcome with `--skipped` (empty) or report that the gate could not run (error).
 **Do not invent a token.**
+
+**And record a clean report before you emit it** — no High, no Critical. Pipe exactly the
+report you are about to emit (token line included) into:
+
+```
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdict.sh" record <tree> <story> security <pathspec, or whole-tree> <SCOPE-SCOPED-DIGEST>
+```
+
+`SCOPE-SCOPED-DIGEST` is at the head of the DIFF CONTENT block, next to the token; the
+story id is in your brief (`STORY-NNN`, or `goal-{slug}` on a goal run — without one there
+is nothing to record, and say so). **This record is how your verdict is believed** (F32):
+your caller accepts a clean report only after `kairos-verdict.sh check` confirms one was
+recorded for this exact scope digest — a well-formed report that skipped the record is
+treated as a gate that never ran. A report with a High or Critical finding is never
+recorded: it stops the caller by itself, and the fix will change the scope.
 
 ## What this gate does not cover
 

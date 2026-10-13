@@ -9,15 +9,40 @@
      review mechanism runs, before handing off to `kairos:review` or a project's own
      command/script. -->
 
+# Phase 2 — Confirming a green verdict in the verdict store (F32)
+
+Each vital gate (`gate-tests`, `review`, `gate-security`) records its green verdict with
+`kairos-verdict.sh record`, keyed by the scope's digest. The closer accepts a green only
+after confirming that record — a hollow reply cannot have made one:
+
+```bash
+# hold the service's digest (for tests, mint it without a token):
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} {service.path} --names --no-token | sed -n 's/^SCOPE-SCOPED-DIGEST: //p'
+# confirm:
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdict.sh" check {WORK} STORY-{NNN} {gate-key} {service key} {SCOPED_DIGEST}
+```
+
+`REUSE` = confirmed (the recorded output follows). `RUN: …` = nothing recorded for this
+scope → the gate did not actually run, whatever its reply says.
+
+| Gate | `{gate-key}` | `{service key}` |
+|---|---|---|
+| `gate-tests` | `tests` | the service name |
+| `review` | `review-{effort}` (default `review-medium`); `review-{effort}-recheck` on a recheck | the service path, or `whole-tree` |
+| `gate-security` | `security` | the pathspec, or `whole-tree` |
+
+For review and security, the digest comes free: the `kairos-diff.sh` run that minted the
+`SCOPE-TOKEN` printed `SCOPE-SCOPED-DIGEST` beside it.
+
 # Phase 2(c) — Review command-mode selection
 
 Run the review on the **service-scoped diff** (restricted to that service's path) per the
 [review contract](../../../docs/review-contract.md), resolving `{service.review_command}`:
 
 - *unset, **or** still the `<TODO…>` placeholder `/kairos:init` wrote* → **Mode 1**: run
-  `/kairos:review {service.path} --from {WORK}`. Both values resolve to this same default —
-  never treat "never configured" and "configured to the placeholder" as two different
-  behaviors.
+  `/kairos:review {service.path} --from {WORK} --story STORY-{NNN}`, in a dedicated agent
+  per Phase 2's rule. Both values resolve to this same default — never treat "never
+  configured" and "configured to the placeholder" as two different behaviors.
 - `skip` → **opt-out**: bypass the review step for this service cleanly (no prompt, no log
   noise). The security-review phase still runs if opted in.
 - a slash-command name → **Mode 2**: invoke that project command on the diff.

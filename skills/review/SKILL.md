@@ -2,12 +2,21 @@
 name: review
 description: Review a diff scope against the Kairos review contract — one deterministic pass over the scope kairos-diff.sh collects. Invoked by /kairos:close-story at its review gate.
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh *), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdict.sh *), Bash(pwd), Bash(git rev-parse:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Read
-context: fork
-background: false
 ---
 
 <!--
-  `context: fork` + `background: false` (C2). No `arguments:` block — V1 in
+  NO `context: fork` ANY MORE (F32, 2026-10-13). This skill ran as a forked gate from C2
+  until three weeks of production showed the fork channel cannot carry a verdict: forks
+  returned hollow one-shot replies — a well-formed provenance line, "0 finding(s)", emitted
+  in a single API request with no Bash call, so no scope was ever collected — and a hollow
+  clean verdict is indistinguishable from a real one by construction. Gate callers now spawn
+  a DEDICATED AGENT whose prompt invokes this skill (it loads inline in that agent's fresh
+  context), and they accept a clean verdict only when the verdict store confirms this skill
+  recorded it (Phase 3) — fail-closed: no recorded verdict, no gate. A human at the keyboard
+  may still invoke it directly; it then runs in the conversation, which is fine for a human
+  and was never fine for a gate.
+
+  No `arguments:` block — V1 in
   notes/refactoring/plan-2026-08-29.md §6.2 measured that declaring one silently breaks
   positional substitution. Nothing here depends on that substitution either:
   the scope is collected by a normal Bash call in Phase 0, not by an injected `!` block,
@@ -74,7 +83,7 @@ This command **is** Mode 1 of the contract — the default reviewer every servic
 pwd || echo "(none)"
 ```
 
-This is the **fork's** cwd, and it is the only fact here you did not have to ask for. It is the default for `{DIR}` when no `--from` is passed — informative, never authoritative: Phase 0 still verifies it is a work tree before anything reads from it.
+This is the cwd of whatever context loaded this skill — the dedicated gate agent, or the conversation itself for a human at the keyboard — and it is the only fact here you did not have to ask for. It is the default for `{DIR}` when no `--from` is passed — informative, never authoritative: Phase 0 still verifies it is a work tree before anything reads from it.
 
 ---
 
@@ -170,7 +179,9 @@ Two rules that settle the edges:
 
 One provenance line, then the findings. Omit any section that has no findings; emit only the provenance line when there are none at all.
 
-**Record a passing pass before you emit it** — `--story` given, not `--recheck`, and **no Critical, no High**: pipe exactly the output you are about to emit into `sh ${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdict.sh record {DIR} {STORY} review-{EFFORT} {SCOPE, or whole-tree} {SCOPED_DIGEST}`. A pass with a blocking finding is never recorded: the fix will change the scope, and the next pass must run.
+**Record a passing pass before you emit it** — `--story` given and **no Critical, no High**: pipe exactly the output you are about to emit into `sh ${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdict.sh record {DIR} {STORY} review-{EFFORT} {SCOPE, or whole-tree} {SCOPED_DIGEST}` (`SCOPED_DIGEST` is on the collector's `SCOPE-SCOPED-DIGEST` line). Under `--recheck`, record under the gate name `review-{EFFORT}-recheck` instead, so a recheck verdict is never replayed as a full one. A pass with a blocking finding is never recorded: the fix will change the scope, and the next pass must run.
+
+**This record is not only for reuse — it is how your verdict is believed.** Your caller accepts a clean review only after `kairos-verdict.sh check` confirms a verdict was recorded for this exact scope digest (F32): a reply that skipped the record is treated as a gate that never ran, however well-formed it reads. Emitting a clean verdict without recording it wastes the pass.
 
 ```markdown
 _Reviewed `{SCOPE}` in `{DIR}` — {N} file(s) in scope, effort {EFFORT}{, recheck}. {M} finding(s)._
@@ -214,4 +225,5 @@ Do not summarize, do not recommend a course of action, do not offer to fix. The 
 - [ ] Every finding cites a file inside the collected scope, and its level came from Phase 2's table rather than from feel.
 - [ ] Under `--recheck`, the Medium and Low sections are absent, not empty.
 - [ ] Output is the provenance line plus contract headers — no prose between sections, no summary, no offer to fix.
+- [ ] A pass with no Critical/High and a `--story` was recorded in the verdict store **before** emitting (recheck under its `-recheck` key); a blocking pass was not.
 - [ ] Output is in English.

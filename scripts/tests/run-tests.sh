@@ -123,6 +123,13 @@ echo "the content moved" >> "$W/f.txt"
 r=$(try --write --gate security --mechanism kairos-fork --scope-token "$TOK" --tree "$W")
 chk "token, then content edited → refused" "$r" "64"
 
+# kairos-agent: same proof contract as kairos-fork (F32 — gates run in dedicated agents)
+r=$(try --write --gate review --mechanism kairos-agent --tree "$W")
+chk "agent + no token           → refused" "$r" "64"
+TOK_A=$(sh "$DIFF" "$W" | sed -n 's/^SCOPE-TOKEN: //p')
+r=$(try --write --gate review --mechanism kairos-agent --scope-token "$TOK_A" --tree "$W")
+chk "agent + minted token       → written" "$r" "0"
+
 r=$(try --write --gate security --tree "$W" --skipped "no service opted in")
 chk "skipped needs no token     → written" "$r" "0"
 r=$(try --write --gate security --tree "$W" --override "reviewed by hand, ticket OPS-7")

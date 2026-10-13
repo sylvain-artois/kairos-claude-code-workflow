@@ -33,7 +33,7 @@ When a skill describes a command instead of giving it, the agent writes its own,
 
 ### Long runs cost more than they should
 
-- **The orchestrator's context still grows with every story.** Two agents per story, forked gates and short handoffs keep it in check, but nothing has measured an epic orchestrator past three or four stories, and cost grows roughly with the square of context. That is why [tips-and-tricks.md](tips-and-tricks.md) recommends three or four stories per run. Handing work from agent to agent without going through the orchestrator's context is now possible in Claude Code, and not done yet.
+- **The orchestrator's context still grows with every story.** Two agents per story, delegated gates and short handoffs keep it in check, but nothing has measured an epic orchestrator past three or four stories, and cost grows roughly with the square of context. That is why [tips-and-tricks.md](tips-and-tricks.md) recommends three or four stories per run. Handing work from agent to agent without going through the orchestrator's context is now possible in Claude Code, and not done yet.
 - **Closing is a fixed cost per story**: about half of a measured run. Running stories in parallel would buy latency, not cost. It also needs lanes you declare, because Kairos cannot compute which stories conflict.
 - **The test gate can hang for ten minutes** when a service's dependencies are missing (`npm test` without `node_modules`), with no diagnosis at the end. There is no timeout and no dependency check.
 

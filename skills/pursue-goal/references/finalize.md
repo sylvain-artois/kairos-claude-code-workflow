@@ -6,21 +6,27 @@ The order is deliberate: **gates first, commit second, archive last, push last o
 
 ## 3.1 — Gates, per impacted service
 
-Each gate is a forked skill invoked through the `Skill` tool; **1 service → inline; ≥ 2 → all calls of one gate in parallel**, in one message.
+**Each gate runs in a dedicated agent** (F32): spawn it with the `Agent` tool (`subagent_type: general-purpose`), its prompt being exactly "From `{WORK}`, invoke the Skill `kairos:{gate}` with args `{the args below}` and follow it. Change nothing: no edit, no stage, no commit." — the skill loads inline in that agent's fresh context. Never load a gate skill in your own context. **1 service → one agent; ≥ 2 → all agents of one gate in parallel**, in one message.
 
-- **(a) Tests.** `/kairos:gate-tests {service} --from {WORK}`, adding `--worktree-id {slug}` under effective `epic_shared`. The verdict is the first line: `PASS` / `SKIP` continue; `FAIL` → a **signal** when a round remains (write the output tail to `{GOAL_DIR}/GATES-{r}.md`, go back to Phase 1a with the failing rows as the lot and the file named); `BLOCKED`, or `FAIL` with no round left → alarm.
-- **(b) Review.** Mint the scope first, hold its `SCOPE-TOKEN`:
+> **A green verdict is believed from the verdict store, not from the reply** (F32). Each gate skill records its green verdict under the scope's digest; a hollow reply — well-formed, nothing executed — records nothing. Hold the service's `SCOPE-SCOPED-DIGEST` (from the `kairos-diff.sh` run below; for tests mint it with `--names --no-token`) and confirm every green with:
+> ```bash
+> sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdict.sh" check {WORK} goal-{slug} {gate-key} {service key} {SCOPED_DIGEST}
+> ```
+> `REUSE` = confirmed. `RUN: …` = nothing recorded → re-run that gate once in a fresh agent; still unconfirmed → **alarm**, no receipt. Gate keys: `tests` (service key = service name) / `review-{effort}` / `security` (service key = path, or `whole-tree`).
+
+- **(a) Tests.** `/kairos:gate-tests {service} --from {WORK} --story goal-{slug}`, adding `--worktree-id {slug}` under effective `epic_shared`. The verdict is the first line: `PASS` (confirmed) / `SKIP` continue; `FAIL` → a **signal** when a round remains (write the output tail to `{GOAL_DIR}/GATES-{r}.md`, go back to Phase 1a with the failing rows as the lot and the file named); `BLOCKED`, or `FAIL` with no round left → alarm.
+- **(b) Review.** Mint the scope first, hold its `SCOPE-TOKEN` and `SCOPE-SCOPED-DIGEST`:
   ```bash
   sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} {service.path}
   ```
-  then `/kairos:review {service.path} --from {WORK}` (or the service's `review_command` per the [review contract](../../../docs/review-contract.md); `skip` opts out). Critical/High findings → a **signal** when a round remains (same `GATES-{r}.md`; the next round is told to fix exactly those, then this phase runs again — once); with no round left → alarm. Medium/Low → listed in the summary, never fixed here. A stub with no findings after it → re-run in the foreground, else alarm. Green for every service → the receipt:
+  then `/kairos:review {service.path} --from {WORK} --story goal-{slug}` (or the service's `review_command` per the [review contract](../../../docs/review-contract.md); `skip` opts out). Critical/High findings → a **signal** when a round remains (same `GATES-{r}.md`; the next round is told to fix exactly those, then this phase runs again — once); with no round left → alarm. Medium/Low → listed in the summary, never fixed here. Green **and confirmed** for every service → the receipt:
   ```bash
   sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate review \
-     --mechanism kairos-fork --scope-token {SCOPE-TOKEN} --tree {WORK} --story goal-{slug} --services "{IMPACTED}"
+     --mechanism kairos-agent --scope-token {SCOPE-TOKEN} --tree {WORK} --story goal-{slug} --services "{IMPACTED}"
   ```
-- **(c) Security (stage 1, the pending diff)** — services in `IMPACTED` with `security_review: true`; none → record `--skipped "no service opted in"`. Else `/kairos:gate-security {WORK} {opted-in path, or omit for the whole tree}`; read `* Severity:` fields; **any High or Critical → alarm** (never a signal, never a commit); Medium/Low → listed, continue; `SCOPE-ERROR` or no token → the gate did not run → alarm. Receipt: `--gate security --mechanism kairos-fork --scope-token {from the report} --tree {WORK} --story goal-{slug} --services "{opted-in}"`.
+- **(c) Security (stage 1, the pending diff)** — services in `IMPACTED` with `security_review: true`; none → record `--skipped "no service opted in"`. Else `/kairos:gate-security {WORK} {opted-in path, or omit for the whole tree}` with `goal-{slug}` named as the story in the agent's brief; read `* Severity:` fields; **any High or Critical → alarm** (never a signal, never a commit); Medium/Low → listed, continue; `SCOPE-ERROR`, no token, or a clean report the store does not confirm → the gate did not run → alarm. Receipt: `--gate security --mechanism kairos-agent --scope-token {from the report} --tree {WORK} --story goal-{slug} --services "{opted-in}"`.
 
-Never write a `passed` receipt without a token, never stand in for a gate that did not run ([why](../../../docs/review-contract.md)). Every gate is asked once per finalization; the one retry is the extra round above.
+Never write a `passed` receipt without a token, never on an unconfirmed green, never stand in for a gate that did not run ([why](../../../docs/review-contract.md)). Every gate is asked once per finalization; the one retry is the extra round above.
 
 ## 3.2 — Source commit
 

@@ -13,7 +13,7 @@
 - [ ] No file outside the declared `Impacted Services` was committed (scope-creep gate honored).
 - [ ] Phases 3 and 6 staged **by path** (`STORY_PATHS`, then the docs list) and never `git add -A`; anything `git status` showed outside those lists was handed to the caller, not committed and not deleted.
 - [ ] Every `/kairos:spec-update` call carried `--since {SRC_SHA}` — Phase 3 commits before Phase 4 runs, so a fork without it scopes an empty working tree and returns a `SKIP` that is not a pass. No `ERROR` was answered by re-running the fork without `--since`.
-- [ ] Single-service story called each gate (`gate-tests`, `qa`, `review`, `spec-update`) inline; multi-service fired every service's calls in parallel — no subagent wrapper, each gate is its own fork (C2). Multi-service also fired the bundled-vs-split commit prompt (Phase 3, unaffected by C2).
+- [ ] The vital gates (`gate-tests`, `review`, `gate-security`) each ran in a dedicated agent — never loaded in the closer's own context — and every green verdict was confirmed in the verdict store before its receipt (F32); `qa` and `spec-update` ran as forked skills, single-service inline, multi-service in parallel. Multi-service also fired the bundled-vs-split commit prompt (Phase 3).
 - [ ] `push_mode: manual` printed the push command and waited; `auto` pushed.
 - [ ] `worktree_mode: epic_shared` with `IS_LAST == false` did **not** push or open a PR/MR; the story still moved to `{pm}/done/`.
 - [ ] In `epic_shared`, 0.1 confirmed this session is in **this epic's** worktree (not the main clone, not a sibling epic's) before anything was committed; no worktree was created or removed.

@@ -181,7 +181,7 @@ do_write() {
   case "$W_RESULT" in
     passed)
       case "$W_MECH" in
-        kairos-fork)
+        kairos-fork|kairos-agent)
           [ -n "$W_TOKEN" ] || _die "refusing a passed receipt for '$W_GATE': no --scope-token.
   A passed receipt now requires the SCOPE-TOKEN printed at the head of the diff that
   kairos-diff.sh produced for this gate. No token means the gate never held the Kairos
@@ -212,8 +212,9 @@ do_write() {
   come from kairos-diff.sh --branch."
           ;;
         *)
-          _die "--write needs --mechanism <kairos-fork|native-skill> for a passed receipt.
-  'kairos-fork' = the Kairos security gate, scoped by kairos-diff.sh (per story).
+          _die "--write needs --mechanism <kairos-fork|kairos-agent|native-skill> for a passed receipt.
+  'kairos-agent' = a Kairos gate run in a dedicated agent, scoped by kairos-diff.sh (per story).
+  'kairos-fork'  = the same gate run as a forked skill (legacy path, same proof).
   'native-skill' = Anthropic's built-in pass over the committed branch (per push)."
           ;;
       esac
@@ -523,8 +524,8 @@ _deny_commit() {
 /kairos:close-story runs both gates at its Phase 2.5 and records them for you; if this
 commit is part of a story, that is the path back. To do it by hand, from $_tree:
 
-  /kairos:review              then  --write --gate review   --mechanism kairos-fork --scope-token <token>
-  /kairos:gate-security       then  --write --gate security --mechanism kairos-fork --scope-token <token>
+  /kairos:review              then  --write --gate review   --mechanism kairos-agent --scope-token <token>
+  /kairos:gate-security       then  --write --gate security --mechanism kairos-agent --scope-token <token>
 
 The token is the SCOPE-TOKEN line each gate prints at the head of its diff.
 
