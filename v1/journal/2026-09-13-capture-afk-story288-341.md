@@ -2,11 +2,11 @@
      État courant des chantiers : ../BACKLOG.md — décisions : ../DECISIONS.md -->
 
 **Mesure** : [`../../telemetry/analysis_20260913a/`](../../telemetry/analysis_20260913a/)
-(capture brute `~/.civilia-telemetry/api-bodies/c9753a5c-…`, 660 appels appariés,
+(capture brute `~/.client-1-telemetry/api-bodies/c9753a5c-…`, 660 appels appariés,
 2 sans réponse, 1 incident `repeated_skill_invocation` — deux `gate-tests` voulus, voir M.21.3)
 **Versions concernées** : 1.13.3, chargée depuis le checkout local (`refactor/skills-api-step-1`,
 avec une édition **de commentaire seulement**, non commitée, dans `skills/{review,gate-security}/SKILL.md`)
-**Objet** : **première capture hors CIVILIA**. Hôte **AFK** (mono-dépôt multi-services,
+**Objet** : **première capture hors CLIENT-1**. Hôte **AFK** (mono-dépôt multi-services,
 GitLab, `push_mode: manual`, **`worktree_mode: off`**), session lancée à la main dans un worktree
 lié `afk-epic-words-weight-moral-foundations-v3`. `claude-opus-5`, effort `high`, `adaptive`.
 Enchaînement réel de la session : `/kairos:implement-epic STORY-288 STORY-289`, puis
@@ -109,7 +109,7 @@ forks, sur les deux captures :
 | 12 | `kairos:review editorial-pipelines/words-weight --from …` | positional `` `editorial-pipelines/words-weight`/`--from` `` |
 | 12 | `kairos:review gui/astro --from … --recheck (prior High findings…)` | positional `` `gui/astro`/`--from` `` |
 | 11 | `kairos:review frontend --from …` | positional `` `frontend`/`--from` `` |
-| 11 | `kairos:review --from {WORK}` | positional `` `--from`/`/home/…/civilia-epic-24-…` `` |
+| 11 | `kairos:review --from {WORK}` | positional `` `--from`/`/home/…/client-1-epic-24` `` |
 
 Et le contraste qui désigne le mécanisme, mêmes captures :
 

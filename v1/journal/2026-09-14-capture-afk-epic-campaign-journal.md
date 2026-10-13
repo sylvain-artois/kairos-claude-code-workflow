@@ -2,7 +2,7 @@
      État courant des chantiers : ../BACKLOG.md — décisions : ../DECISIONS.md -->
 
 **Mesure** : [`../../telemetry/analysis_20260914d/`](../../telemetry/analysis_20260914d/)
-(capture brute `~/.civilia-telemetry/api-bodies/a55f1a88-…`, 444 appels appariés, 0 sans réponse)
+(capture brute `~/.client-1-telemetry/api-bodies/a55f1a88-…`, 444 appels appariés, 0 sans réponse)
 **Versions concernées** : **1.13.4 + correctifs non commités F27 et F26**, chargés depuis le
 checkout local. **Sans F25** : le run tourne de 11 h 03 à 17 h 00, le correctif F25 est écrit à
 18 h 48 (le motif « No `Agent` call touches this story » est absent de l'orchestrateur).

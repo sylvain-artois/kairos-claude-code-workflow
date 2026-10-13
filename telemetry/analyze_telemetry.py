@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Preprocess raw Claude API telemetry captures into aggregated, LLM-friendly artifacts.
 
-Input: a raw capture directory, `~/.civilia-telemetry/api-bodies/<session-uuid>/`
+Input: a raw capture directory, `~/.client-1-telemetry/api-bodies/<session-uuid>/`
 — a folder of paired `<uuid>.request.json` / `req_<id>.response.json` files,
 i.e. every Claude API call (full request body + full response body) made
 during one Claude Code invocation. Called with no argument, the script picks
@@ -46,7 +46,7 @@ from datetime import datetime
 from pathlib import Path
 
 TELEMETRY_DIR = Path(__file__).parent
-CAPTURE_ROOT = Path.home() / ".civilia-telemetry" / "api-bodies"
+CAPTURE_ROOT = Path.home() / ".client-1-telemetry" / "api-bodies"
 OUT_DIR = None  # résolu dans main() : analysis_YYYYMMDD<lettre>
 
 LONG_GAP_THRESHOLD_S = 60
@@ -304,7 +304,7 @@ def extract_response(name: str, mtime: float, data: dict) -> dict:
 def load_archive(path: Path):
     """Charge une archive .zip OU un repertoire de capture brute.
 
-    Le repertoire est la forme native de la capture (`~/.civilia-telemetry/
+    Le repertoire est la forme native de la capture (`~/.client-1-telemetry/
     api-bodies/<session-uuid>/`) ; le .zip n'en est qu'un emballage. Les deux
     donnent les memes champs, a une nuance pres : les horodatages de zip sont
     arrondis a la seconde paire, ceux du systeme de fichiers sont au flottant.
@@ -402,9 +402,33 @@ def match_calls(requests, responses):
 def link_chains(calls):
     """Exact chain reconstruction via previous_message_id -> response.id."""
     resp_id_to_call = {c["response"]["id"]: c for c in calls}
+    # Deux reponses capturees peuvent porter le MEME id (retry rejoue, corps
+    # recapture) : le dictionnaire ne garde alors que la derniere, et un
+    # `prev_id` peut pointer vers un appel PLUS TARDIF que le sien — d'ou des
+    # cycles dans `chain_prev`. Verifie le 10/10/2026 : turn_index() bouclait
+    # sans fin sur un tel cycle et a gele la machine deux fois (45 Go + swap).
+    n_dup_resp_ids = len(calls) - len(resp_id_to_call)
     for c in calls:
         prev_id = c["request"]["prev_id"]
         c["chain_prev"] = resp_id_to_call.get(prev_id) if prev_id else None
+
+    # Briser les cycles AVANT toute traversee : un lien qui reboucle est coupe
+    # (l'appel devient racine de chaine), et on le dit plutot que de geler.
+    acyclic = set()
+    n_cycles_cut = 0
+    for c in calls:
+        path, path_ids, cur = [], set(), c
+        while cur is not None and id(cur) not in acyclic:
+            if id(cur) in path_ids:
+                cur["chain_prev"] = None
+                n_cycles_cut += 1
+                break
+            path_ids.add(id(cur))
+            path.append(cur)
+            cur = cur["chain_prev"]
+        acyclic.update(path_ids)
+    if n_dup_resp_ids or n_cycles_cut:
+        print(f"  warning: {n_dup_resp_ids} duplicated response id(s), {n_cycles_cut} chain_prev cycle(s) cut")
 
     turn_cache, root_cache = {}, {}
 
@@ -610,7 +634,7 @@ def default_out_dir():
 
 
 def latest_capture():
-    """La capture la plus recente sous ~/.civilia-telemetry/api-bodies/."""
+    """La capture la plus recente sous ~/.client-1-telemetry/api-bodies/."""
     if not CAPTURE_ROOT.is_dir():
         return None
     sessions = [d for d in CAPTURE_ROOT.iterdir() if d.is_dir()]
@@ -674,6 +698,7 @@ def main():
             all_calls_rows.append({
                 "archive": archive_name,
                 "session_id": req["session_id"],
+                "req_file": req["file"],
                 "chain_root": c["chain_root"],
                 "turn_index": c["turn_index"],
                 "req_mtime": req["mtime"],

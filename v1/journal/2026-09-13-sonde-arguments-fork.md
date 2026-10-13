@@ -48,7 +48,7 @@ dans le corps, commentaire compris, est substitué sur place et supprime l'ajout
   qu'aucun jeton n'y soit réintroduit. Vérifié : plus aucun jeton `$` positionnel ni
   `ARGUMENTS` dans le fichier.
 - **Reste non mesuré** : que la Phase 0 de `review` exploite correctement la ligne reçue (portée,
-  `--effort`, `--recheck`). C'est ce que confirmera la capture CIVILIA du plan D11, sur une session
+  `--effort`, `--recheck`). C'est ce que confirmera la capture CLIENT-1 du plan D11, sur une session
   qui charge le checkout.
 - **Garde-fou utile pour C23** : un test de `run-tests.sh` qui refuse tout jeton positionnel ou
   `ARGUMENTS` dans le corps d'un skill forké **sans bloc `!` qui l'utilise** transformerait cette

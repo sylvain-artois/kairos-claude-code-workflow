@@ -1,12 +1,12 @@
-# Pourquoi Kairos coûte cher SUR CIVILIA — analyse des traces de télémétrie
+# Pourquoi Kairos coûte cher SUR CLIENT-1 — analyse des traces de télémétrie
 
 - **Auteur** : analyse assistée, 2026-08-29
 - **Objet** : ce qui, dans **l'usage de Kairos** et dans **la structuration du dépôt
-  CIVILIA**, rend un run Kairos lent et coûteux. Le fonctionnement interne du plugin
+  CLIENT-1**, rend un run Kairos lent et coûteux. Le fonctionnement interne du plugin
   (le contenu des commandes, leurs phases) est **hors périmètre** : il fait l'objet
   d'une enquête séparée. Les quelques constats framework sont isolés au §7 et
   seulement pour mémoire.
-- **Source** : les quatre corpus de `~/.civilia-telemetry/` (corps d'API complets,
+- **Source** : les quatre corpus de `~/.client-1-telemetry/` (corps d'API complets,
   requête et réponse, du 2026-08-28).
 
 > **Statut des chiffres.** Sauf mention contraire, chaque chiffre vient d'**UNE seule
@@ -158,7 +158,7 @@ Deux remarques, et la seconde est la plus gênante :
 Un sous-agent qui implémente une story frontend reçoit intégralement, à chaque appel :
 `parser.md` (parser URSSAF, 1 007 B), `documents.md` (coffre, chiffrement d'enveloppe,
 6 314 B), `decisions-produit.md` (arbitrages oraux de juillet, 3 204 B),
-`rgpd.md`, `execution.md`, `workflow-local.md` (le cycle `/ship` de Philippe, dont
+`rgpd.md`, `execution.md`, `workflow-local.md` (le cycle `/ship` de client-1-lead, dont
 `workflow-local.md` dit lui-même qu'il **ne s'applique pas à un run Kairos**), `langue.md`,
 `frontend.md`. Sur les huit, **un seul** (`frontend.md`, 2 184 B) le concerne
 systématiquement.
@@ -239,9 +239,9 @@ des tours à trancher une contradiction que le fichier s'inflige à lui-même.
 ## 5. Cause n°3 — les stories prescrivent 80 000 jetons de lecture obligatoire
 
 C'est le levier le plus important, et il est entièrement dans le format de story de
-CIVILIA, pas dans Kairos.
+CLIENT-1, pas dans Kairos.
 
-La section `## Existing References` d'une story CIVILIA **nomme des fichiers entiers, par
+La section `## Existing References` d'une story CLIENT-1 **nomme des fichiers entiers, par
 chemin, sans ancre de section et sans extrait**. Le `CLAUDE.md` renforce l'injonction
 (« Toujours lire `docs/specs/<module>.md` AVANT de coder »), et certaines stories la
 répètent en gras (« **Read before coding** (`CLAUDE.md`) »). L'agent n'a donc pas le choix :
@@ -344,7 +344,7 @@ Trois hypothèses raisonnables que les traces **réfutent** :
 
 1. **La sortie des tests et du lint ne pollue pas le contexte.** Sur l'épic : 18 appels
    `make test`/pytest → 10 319 caractères ; 7 lints → 6 701 ; 20 tests frontend →
-   42 477. Total < 3 % du contenu. La discipline de sortie des suites CIVILIA est bonne
+   42 477. Total < 3 % du contenu. La discipline de sortie des suites CLIENT-1 est bonne
    et n'a pas besoin d'être touchée.
 2. **Le raisonnement n'est pas réinjecté.** Les requêtes portent
    `context_management: clear_thinking_20251015` ; les blocs de réflexion représentent
@@ -364,7 +364,7 @@ sortent des mêmes traces :
   schémas d'outils de chaque sous-agent** (41 217 caractères pour neuf outils). Il n'a été
   appelé **zéro fois** dans les deux runs. ≈ 9 830 jetons × 969 appels = **≈ 14,28 $ de
   poids mort par run épic**. C'est un point de configuration du harnais Claude Code, pas de
-  Kairos ni de CIVILIA — à vérifier s'il est désactivable pour un run non interactif.
+  Kairos ni de CLIENT-1 — à vérifier s'il est désactivable pour un run non interactif.
 
 ### 7.1 Un constat mineur mais réel : le hook de lint ne parle pas la bonne langue
 
@@ -378,7 +378,7 @@ déclenché **112 exécutions d'un linter Python sur du code TypeScript**. Mesur
 sur ce poste : 1,48 / 1,26 / 1,55 s par exécution, soit ≈ 2,6 minutes d'horloge — coût
 faible. Le vrai problème n'est pas le coût : c'est que **le hook n'a offert aucune
 protection sur la langue effectivement éditée**, tout en donnant l'apparence d'un garde-fou
-actif. Le `CLAUDE.md` interdit de toucher au hook sans arbitrage de Philippe ; ceci est
+actif. Le `CLAUDE.md` interdit de toucher au hook sans arbitrage de client-1-lead ; ceci est
 donc un signalement, pas une proposition d'action unilatérale.
 
 ---
@@ -397,7 +397,7 @@ se recouvrent, plusieurs agents tournant en parallèle).
 | **Commandes de lecture** (`sed` 144 + `grep` 174 + `cat` 76) | 394 | **19,0 min** | 2,5–3,5 s |
 
 Sur la vague, `EnterWorktree` monte à **669 s en moyenne** (2 appels, 22,3 min). La mise
-en place d'un worktree CIVILIA est donc un coût fixe de plus de dix minutes : le dépôt
+en place d'un worktree CLIENT-1 est donc un coût fixe de plus de dix minutes : le dépôt
 exige, avant qu'une suite y tourne, un `.env`, la moitié publique du séquestre, et — par
 la dérivation de `COMPOSE_PROJECT_NAME` du `Makefile` — **sa propre base, son propre
 conteneur et son propre réseau**. Cette isolation est un acquis (`execution.md`), pas un
@@ -417,10 +417,10 @@ les donne avec leur raisonnement pour qu'elles soient contestables.
 | # | Levier | Effort | ≈ gain / run épic | Fondement |
 |---|---|---|---:|---|
 | **L1** | **Découper l'agent de story en deux conversations** : *implémenter* puis *clôturer*, avec une note de passation écrite. | Usage Kairos — c'est déjà la forme de deux commandes distinctes ; seul l'enchaînement dans une même conversation est en cause. | **≈ 55–75 $** | §2, §6.1 et l'arithmétique ci-dessous. |
-| **L2** | **Réécrire `## Existing References`** : ancre de section obligatoire + extrait de 10–15 lignes collé dans la story. Jamais un chemin nu vers un fichier de plus de 20 Ko. | Format de story CIVILIA + gabarit. | **≈ 20–30 $** | §5. Le contexte de lecture de documents (specs, PRD, `docs/`, autres `.md`) pèse 45,55 $ des 58,68 $ de lecture de fichiers du run épic. |
+| **L2** | **Réécrire `## Existing References`** : ancre de section obligatoire + extrait de 10–15 lignes collé dans la story. Jamais un chemin nu vers un fichier de plus de 20 Ko. | Format de story CLIENT-1 + gabarit. | **≈ 20–30 $** | §5. Le contexte de lecture de documents (specs, PRD, `docs/`, autres `.md`) pèse 45,55 $ des 58,68 $ de lecture de fichiers du run épic. |
 | **L3** | **Lancer `/kairos:spec backend compact` et `/kairos:spec frontend compact`**, puis inscrire la compaction au rite de fin d'épic. | Deux commandes, une revue humaine. | **≈ 6–10 $** direct, davantage en indirect | §4. 2 780 lignes à ramener vers 360. Sort surtout `backend/spec.md` (235 Ko) de la liste des références « obligatoires », ce qui alimente L2. |
 | **L4** | **Scinder `CLAUDE.md` + `.claude/rules/` en un noyau permanent (≤ 12 Ko) et des règles chargées à la demande** (par skill, ou par service impacté). | Décision de doctrine — probablement un ADR. | **≈ 13 $** | §3. 37,9 Ko → 12 Ko ramène le préfixe de ≈ 13 000 à ≈ 4 200 jetons ; 8 800 × 969 appels = 8,5 M de jetons. |
-| **L5** | **Un « dossier de contexte » par story**, écrit UNE fois par l'orchestrateur dans le worktree, lu par chaque sous-agent à la place de la redécouverte. | Usage Kairos + convention CIVILIA. | **≈ 15–20 $** | §6.2. La part relue vaut 35,82 $ ; un dossier partagé en supprime raisonnablement la moitié. |
+| **L5** | **Un « dossier de contexte » par story**, écrit UNE fois par l'orchestrateur dans le worktree, lu par chaque sous-agent à la place de la redécouverte. | Usage Kairos + convention CLIENT-1. | **≈ 15–20 $** | §6.2. La part relue vaut 35,82 $ ; un dossier partagé en supprime raisonnablement la moitié. |
 | **L6** | **Purger la section `## Notes` du `spec.md` racine** et lever la contradiction `epic_shared` / `in_place`. | 30 minutes. | ≈ 3 $ + des tours d'arbitrage évités | §4.2. 8 Ko lus par 7 agents distincts, dont 87 % de prose historique et une contradiction interne. |
 | **L7** | **Découper les fichiers monolithiques les plus lus.** | Refactoring réel, à faire au fil de l'eau. | ≈ 5–10 $ | §9.3 ci-dessous. |
 | **L8** | *(harnais)* Vérifier si le schéma `Artifact` peut être retiré des sous-agents non interactifs. | À investiguer. | ≈ 14 $ | §7. |
@@ -481,7 +481,7 @@ Dans l'ordre, parce que le premier ne coûte presque rien et se mesure tout de s
    donnera la **deuxième mesure** qui manque à cette note.
 3. **L2** — amender le gabarit de story pour interdire la référence nue vers un fichier de
    plus de 20 Ko, et reprendre les stories du backlog courant.
-4. **L4** — proposer à Philippe la scission du préfixe documentaire, avec le tableau de
+4. **L4** — proposer à client-1-lead la scission du préfixe documentaire, avec le tableau de
    croissance du §3.1 comme pièce : le PRD 7 avait raison le 19/08, sa prémisse ne tient
    plus le 29/08.
 
@@ -489,7 +489,7 @@ Dans l'ordre, parce que le premier ne coûte presque rien et se mesure tout de s
 
 ## Annexe — méthode et reproductibilité
 
-- **Corpus** : `~/.civilia-telemetry/{session1_nokairos, create-story_prd17,
+- **Corpus** : `~/.client-1-telemetry/{session1_nokairos, create-story_prd17,
   kairos-implement-wave-…, kairos-implement-epic-…}`, un `*.request.json` et un
   `*.response.json` par appel API.
 - **Reconstruction des conversations** : l'en-tête `x-anthropic-billing-header` du premier

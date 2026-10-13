@@ -2,7 +2,7 @@
      c'est un retour de terrain depuis un autre hôte, plus une reproduction locale.
      État courant des chantiers : ../BACKLOG.md — décisions : ../DECISIONS.md -->
 
-**Origine** : retour d'un agent travaillant sur **Wispra** (architecture atypique, hôte
+**Origine** : retour d'un agent travaillant sur **Client-2** (architecture atypique, hôte
 **macOS**), transmis sous forme d'une note de deux phrases proposant un correctif.
 **Reproduction** : locale, sous `bash` 5.x et `dash`, sur `refactor/skills-api-step-1`.
 **Statut** : **défaut confirmé** (F19) ; **cause zsh non confirmée** — sonde à lancer.
@@ -10,7 +10,7 @@
 
 ---
 
-# Retour de terrain Wispra — les blocs pré-exec confondent quatre échecs avec un résultat vide
+# Retour de terrain Client-2 — les blocs pré-exec confondent quatre échecs avec un résultat vide
 
 ## La note reçue, verbatim
 
@@ -66,7 +66,7 @@ de `case` (`implement-epic:54` et `:91`), `$((BUD * 3))` est de l'arithmétique
 
 ## Pourquoi le remède proposé est mauvais, dans ses deux moitiés
 
-**`PM=${PM:-project_management}` invente une donnée**, et au pire endroit. Wispra est décrit
+**`PM=${PM:-project_management}` invente une donnée**, et au pire endroit. Client-2 est décrit
 comme atypique — c'est-à-dire, précisément, un projet dont `project_management_dir` n'est **pas**
 la valeur par défaut. Le fallback ferait lire les stories d'un répertoire qui n'est pas le bon,
 ou rendrait `(none)` pour une mauvaise raison. Il transforme une condition détectable en une
@@ -102,7 +102,7 @@ Le dépôt a déjà de la conscience macOS, mais elle porte ailleurs : `scripts/
 un test dédié de `run-tests.sh` traitent du parsing `$( )` de **bash 3.2, le `/bin/sh` de
 macOS**. Si l'exécuteur est ce `/bin/sh`-là, `nomatch` n'existe pas.
 
-À faire tourner sur le Mac, dans un appel Bash de l'agent Wispra :
+À faire tourner sur le Mac, dans un appel Bash de l'agent Client-2 :
 
 ```sh
 echo "shell=$0 zsh=${ZSH_VERSION:-no} bash=${BASH_VERSION:-no}"

@@ -71,3 +71,40 @@ dans le journal et le backlog. La correspondance ancien → nouveau est dans
 
 Le sens que portaient les anciens noms n'est pas perdu : il est en **§5 de
 [`../v1/BACKLOG.md`](../v1/BACKLOG.md)**, qui reste l'index de la série.
+
+---
+
+## D15 — Un round du flux goal, c'est un lot de deux ou trois lignes ; il n'y a pas de budget en jetons ; un goal atteint s'archive
+
+**2026-09-18**, au soir du premier run ([M.26](journal/2026-09-18-capture-goal-onboarding-polish.md)).
+
+Le round 1 du premier run a pris les six lignes du contrat d'un bloc : 191 appels, contexte
+monotone jusqu'à 383 k, et un coût de lecture de cache **quadratique** dans le nombre d'appels
+(4,1 → 8,9 → 12,9 → 16,5 M par quart de round). La lecture pesait 74 % du coût du generator ;
+la reprise à froid d'un round neuf, ~3 %. Le levier est donc la longueur du round, pas le
+démarrage du suivant.
+
+**Tranché :**
+
+1. **Un round = un lot de deux ou trois lignes rouges, nommé par l'orchestrateur** — dans
+   l'ordre du bâton, groupées par le service du vérificateur, jamais une ligne `judge`. Le
+   generator peut élargir à une ligne indémêlable en l'écrivant dans `STATE.md`. Plafond
+   souple de ~60 appels d'outils (il mesure, écrit, rend `CONTINUE`), `maxTurns` 90 en filet.
+   Le score du bâton progresse round après round ; `stall` retrouve un sens ; `RUN.md` répond
+   à « combien coûte une assertion ».
+2. **Pas de budget `tokens`.** Le chiffre que l'outil `Agent` rapporte suit le pic de contexte du
+   sous-agent, pas son coût cumulé (388 k annoncés pour 60 M de lecture réels). `rounds` et
+   `stall` bornent seuls ; `RUN.md` porte une colonne `peak-ctx` qui, elle, dit ce qu'elle mesure.
+   Le coût vrai vient de la capture, après coup.
+3. **Un goal atteint s'archive** dans `{pm}/goals/done/{slug}/`, dossier entier (contrat, bâton,
+   `RUN.md`, `MEASURE-*`, `EVAL-*`, `STATE.md`), par `git mv` dans le commit `docs(...)` de la
+   finalisation — « archive last, push last of all », comme `close-story`. Séparé du `done/`
+   des stories et des PRD : les deux flux ne se mélangent pas (C41).
+4. **La reprise à froid se paie en `Recipes`**, pas en mécanisme : une section de `STATE.md` où
+   chaque round écrit les commandes qui marchent et les `file:line` vérifiés, lue avant le code.
+
+Par la même occasion, la question 6.1 de C41 est close (`pursue-goal`, déjà tranché le 17), et
+deux règles tirées de M.26 entrent dans `pursue-goal` : **seule la table de décision lance un
+round** (un doute produit de l'orchestrateur est une question, jamais un round — motif M.24), et
+**un mot de l'utilisateur pendant un round est un arbitrage du propriétaire**, relayé au
+generator en cours par `SendMessage`, écrit dans `STATE.md`, transmis à l'evaluator suivant.

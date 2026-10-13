@@ -3,10 +3,10 @@
      État courant des chantiers : ../BACKLOG.md — décisions : ../DECISIONS.md -->
 
 **Mesure** : [`../../telemetry/analysis_20260908a/`](../../telemetry/analysis_20260908a/)
-(capture brute `~/.civilia-telemetry/api-bodies/c4dfa7ed-…`, 1 561 appels appariés, 0 orphelin,
+(capture brute `~/.client-1-telemetry/api-bodies/c4dfa7ed-…`, 1 561 appels appariés, 0 orphelin,
 0 incident)
 **Versions concernées** : 1.13.3
-**Objet** : `/kairos:implement-epic 24-state-on-the-screen` sur **CIVILIA**, `claude-opus-5`,
+**Objet** : `/kairos:implement-epic 24-state-on-the-screen` sur **CLIENT-1**, `claude-opus-5`,
 effort `high`, `adaptive`, `worktree_mode: epic_shared`
 
 ---
@@ -55,7 +55,7 @@ substitution est côté hôte et Kairos ne la voit pas.
 Le fork de revue a exécuté :
 
 ```
-kairos-diff.sh /home/…/civilia-epic-24-state-on-the-screen  --no-token
+kairos-diff.sh /home/…/client-1-epic-24  --no-token
                                                           ^^ double espace
 → SCOPE-TOKEN: none   SCOPE-PATHSPEC: (whole tree)   SCOPE-FILES: 17
 ```

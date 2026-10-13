@@ -24,7 +24,7 @@ capture brute :
 
 ```sh
 python3 telemetry/analyze_telemetry.py \
-    ~/.civilia-telemetry/api-bodies/<session-uuid> \
+    ~/.client-1-telemetry/api-bodies/<session-uuid> \
     --out telemetry/analysis_<nom> --label <nom>
 ```
 

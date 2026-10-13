@@ -12,8 +12,13 @@ Et rien ne filtre en aval — le manifeste n'a ni champ `files` ni `ignore`, il 
 la frontière git.
 
 D'où cette branche `project-management` : **orpheline**, sans ancêtre commun avec `main`,
-donc impossible à fusionner par accident. Elle est versionnée et poussée sur GitHub comme le
-reste, mais l'installation du plugin ne voit que la branche par défaut.
+donc impossible à fusionner par accident. L'installation du plugin ne voit que la branche par
+défaut.
+
+**Elle n'est pas encore poussée** — elle est versionnée localement et n'a pas d'upstream. Le
+dépôt `kairos-claude-code-workflow` est public, et cette branche cite les projets hôtes par
+leur nom : la publier demande d'abord de trancher une nomenclature d'anonymisation, ou de
+viser un dépôt privé séparé. Voir [`v2/backlog/C40`](v2/backlog/C40-publication-de-la-branche-de-suivi.md).
 
 ## Disposition sur le disque
 

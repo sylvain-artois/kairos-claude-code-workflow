@@ -5,7 +5,7 @@ telemetry/analysis_*/
 telemetry/*.tar.gz
 
 # Les captures brutes n'ont rien à faire ici non plus — elles vivent dans
-# ~/.civilia-telemetry/api-bodies/ et se suppriment après dépouillement.
+# ~/.client-1-telemetry/api-bodies/ et se suppriment après dépouillement.
 
 __pycache__/
 .DS_Store

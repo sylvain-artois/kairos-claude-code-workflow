@@ -14,7 +14,7 @@ C'est l'index à lire, pas ce répertoire.
 
 ## Prendre et dépouiller une capture
 
-La capture brute est écrite par la sonde dans `~/.civilia-telemetry/api-bodies/<session-uuid>/`
+La capture brute est écrite par la sonde dans `~/.client-1-telemetry/api-bodies/<session-uuid>/`
 — un fichier `.request.json` et un `.response.json` par appel API. Une session d'épic pèse
 100 à 600 Mo.
 
@@ -23,7 +23,7 @@ La capture brute est écrite par la sonde dans `~/.civilia-telemetry/api-bodies/
 python3 analyze_telemetry.py --label "implement-epic story-346..350, hôte AFK"
 
 # ou une capture nommée, vers un répertoire choisi
-python3 analyze_telemetry.py ~/.civilia-telemetry/api-bodies/<uuid> \
+python3 analyze_telemetry.py ~/.client-1-telemetry/api-bodies/<uuid> \
     --out analysis_20260914d --label "..."
 ```
 

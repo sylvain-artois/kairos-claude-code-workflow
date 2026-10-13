@@ -1,15 +1,15 @@
 # Run 122 — le premier épic réel sous la nouvelle doctrine
 
 Rapport de mesure, 2026-08-30. Source unique : la capture brute
-`~/.civilia-telemetry/api-bodies/eb9a207b-b83f-4670-a31c-ba55880418b0`
+`~/.client-1-telemetry/api-bodies/eb9a207b-b83f-4670-a31c-ba55880418b0`
 (562 requêtes / 561 réponses, 404 Mo), dépouillée par `analyze_telemetry.py`.
 Sorties : [`../analysis_20260830a/`](../analysis_20260830a/).
 
 - **Commande** : `/kairos:implement-epic STORY-122`, Opus 5, `effort: xhigh`, thinking `adaptive`.
-- **Lancée depuis** `~/Documents/Sources/civilia-epic-17-views` — worktree lié créé par
+- **Lancée depuis** `~/Documents/Sources/client-1-epic-17` — worktree lié créé par
   `/kairos:worktree`, conformément à la doctrine C3a. **C'est le premier run où la session
   démarre dans l'arbre.**
-- **Livré** : PR CIVILIA #270, branche `feature/epic-17-views`, 3 commits
+- **Livré** : PR CLIENT-1 #270, branche `feature/epic-17-views`, 3 commits
   (`c348328` source, `dc0f96a` docs, `effb0a0` correctif), 19 fichiers, +3 559 / −138.
 - **Horloge** : 14:39:50 → 16:22:40 locale, 1 h 43.
 - **Versions livrées de Kairos au moment du run** : v1.6.0 (skills/ + doctrine worktree +
@@ -27,7 +27,7 @@ seconde paire : les latences de ce run sont plus justes que celles de la ligne d
 
 ```
 python3 telemetry/analyze_telemetry.py \
-  ~/.civilia-telemetry/api-bodies/eb9a207b-b83f-4670-a31c-ba55880418b0 \
+  ~/.client-1-telemetry/api-bodies/eb9a207b-b83f-4670-a31c-ba55880418b0 \
   --label kairos-v2-implement-epic-story-122-opus-xhigh-thinking \
   --out telemetry/analysis_20260830a
 ```
@@ -156,7 +156,7 @@ n'a pas commencé. La mesure le confirme.
 ### 2.1 — Normalisé au rendement livré
 
 C'est le seul dénominateur honnête entre stories de tailles différentes (§1 de
-`analyse_cout_kairos_sur_civilia.md`).
+`analyse_cout_kairos_sur_client-1.md`).
 
 | Run | Diff livré | Coût | **$ / 1 000 lignes ajoutées** |
 |---|---|---:|---:|

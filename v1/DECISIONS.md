@@ -197,7 +197,7 @@ contradictions internes assumées.
 
 ## D10 — Une observation n'est pas forcément une capture (2026-09-08)
 
-*Amende [D9](#d9--le-format-des-notes-2026-09-08) le jour même.* Le premier retour de terrain — un agent Wispra sur macOS, sans télémétrie — n'entrait dans aucune case : ce n'est pas une capture, et le mettre au backlog l'aurait gonflé de trois écrans d'analyse.
+*Amende [D9](#d9--le-format-des-notes-2026-09-08) le jour même.* Le premier retour de terrain — un agent Client-2 sur macOS, sans télémétrie — n'entrait dans aucune case : ce n'est pas une capture, et le mettre au backlog l'aurait gonflé de trois écrans d'analyse.
 
 **Le journal accueille toute observation datée**, pas seulement les captures : un retour de terrain, une reproduction locale, une sonde. La règle inchangée est celle de la provenance — toute entrée dit **d'où vient ce qu'elle affirme** et **comment on l'a vérifié**. Seules les captures de télémétrie comptent dans la série du §5 du backlog.
 
@@ -215,7 +215,7 @@ Corollaire tiré du même épisode : **un retour d'agent qui arrive sous forme d
 2. **C25** : le garde de conteneur fixe de `gate-tests` s'arme sur le fait (worktree lié, conteneur fixe), pas sur le mode déclaré ; le Preflight signale un worktree lié.
 3. **F13 et F12** : les correctifs déjà définis au backlog.
 4. **Lot d'hygiène** : F15, F21 (retirer les outils navigateur des forks), F23, F24, et au moins un test C23 sur les blocs pré-exec.
-5. **Une capture de confirmation sur CIVILIA** (F14, F13, F12, C21), F22 vérifié à part en reproduction locale sur AFK. Puis release.
+5. **Une capture de confirmation sur CLIENT-1** (F14, F13, F12, C21), F22 vérifié à part en reproduction locale sur AFK. Puis release.
 
 **Arbitrages :**
 
