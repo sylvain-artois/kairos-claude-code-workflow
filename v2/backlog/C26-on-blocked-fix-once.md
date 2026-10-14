@@ -22,3 +22,10 @@ résumé final.
 **Pourquoi ça compte** : le correctif F25 n'a été confirmé qu'avec un utilisateur présent
 (capture 16). Le cas sans utilisateur reste à mesurer, et c'est précisément celui que ce mode
 adresse.
+
+**2026-10-14 ([M.28](../journal/2026-10-14-capture-epic-data-science-engineering.md))** : le
+correctif F25 est validé sur un vrai `BLOCKED` — run autonome, zéro relance, zéro critère
+réécrit, question posée au tour même avec recommandation. Ici la question était la bonne
+réponse (une décision d'architecture, pas un test rouge), donc `on_blocked: fix-once` ne
+l'aurait pas — et n'aurait pas dû — absorbée. Le cas que ce mode adresse (correctif trivial,
+utilisateur absent) reste non mesuré.

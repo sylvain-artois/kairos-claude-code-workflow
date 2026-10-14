@@ -1,6 +1,6 @@
 ---
 tag: F32
-statut: en cours — implémenté sur feature/pursue-goals (72a5f7e, piste 1 + 2 + 3), à valider sur un run réel
+statut: en cours — implémenté sur feature/pursue-goals (72a5f7e, piste 1 + 2 + 3) ; validé sur un run story réel le 2026-10-14 (M.28) — reste à valider sur un run goal
 gravité: bloquant
 origine: mesuré le 2026-09-25 (run letters, worktree_mode off) puis le 2026-10-13
   (capture 20261013a, run profile-field-model) —
@@ -84,3 +84,11 @@ La piste 1 est la seule qui ferme le faux vert ; les pistes 2 et 3 en découlent
 qu'elles ne la remplacent. Simplifier ici, c'est réduire ce qu'on demande au *canal*
 (une réponse de fork fiable) et confier l'attestation au *disque*, déjà scellé par les
 digests.
+
+## Validé sur le chemin story le 2026-10-14 ([M.28](../journal/2026-10-14-capture-epic-data-science-engineering.md))
+
+`implement-epic` sur l'hôte AFK, 2 clôtures bi-services : verdicts **pleins** (ligne PASS +
+comptes + `SCOPE-TOKEN`), reçus `mechanism=kairos-agent` à jeton, et le store exercé de bout
+en bout — le gate écrit, le closer confirme (`kairos-verdict.sh check` → `REUSE`). Aucun
+stub, aucun gate sorti de son rôle. Reste le chemin goal (`pursue-goal`), où le défaut
+avait été mesuré les 25/09 et 13/10.

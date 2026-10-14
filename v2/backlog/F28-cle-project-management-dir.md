@@ -13,7 +13,9 @@ vraie clé est `project_management_dir` ; la correspondance n'est écrite que da
 
 **Mesuré** : 2 archivages sur 6 (captures 13 et 14) partent dans `{pm}/stories/done/` au lieu
 de `{pm}/done/` — le closer cherche une clé `pm`, n'en trouve pas, et fait
-`mkdir -p …/stories/done && git mv`. Reproduit 1 fois sur 5 en capture 16.
+`mkdir -p …/stories/done && git mv`. Reproduit 1 fois sur 5 en capture 16. **Silencieux le
+2026-10-14 ([M.28](../journal/2026-10-14-capture-epic-data-science-engineering.md))** :
+2 archivages sur 2 dans `{pm}/done/` — la cause n'est pas corrigée, le défaut reste ouvert.
 
 **Conséquences** : la PR de fin d'épic, qui agrège `{pm}/done/`, **perd les `Closes #N`** des
 stories mal rangées ; l'idempotence de la Phase 0.2 est perdue ; la roadmap dérivée est fausse.

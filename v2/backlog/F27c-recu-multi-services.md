@@ -13,3 +13,9 @@ l'atteste.
 
 À traiter avec [F27b](F27b-filet-mecanique-du-recu.md) — même mécanisme de reçu, même
 famille de faux vert.
+
+**Confirmé en capture le 2026-10-14
+([M.28](../journal/2026-10-14-capture-epic-data-science-engineering.md))** : deux clôtures
+bi-services (words-weight + corpus-builder), deux passes de review chacune, et un seul reçu
+à un seul jeton par story (`--scope-token 4569ba05… --story STORY-408`). La seconde passe a
+eu lieu, rien ne l'atteste.
