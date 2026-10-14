@@ -237,7 +237,7 @@ Three checks, all local, all cheap:
 
 2. **Seed files present.** For every impacted service declaring `worktree_seed_files`, `test -f "{WORK}/{seed}"`. Missing → **warn, name the file, and continue**: many stories never touch what needs it, and stopping an autonomous run over a file the run may not use is worse than saying so. Point at `/kairos:worktree {EPIC_SLUG}` from the main clone as the one-line fix (it re-seeds on join).
 
-3. **Memory link.** `test -L "$HOME/.claude/projects/-$(pwd | sed 's|^/||; s|/|-|g')"`. Absent → **warn once and continue.** The run works without it; it simply starts without the main project's memory, and that is worth knowing before eight hours of autonomous work rather than after.
+3. **Memory link.** `test -L "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$(pwd | sed 's|[^A-Za-z0-9]|-|g')"` (the slug rule of `/kairos:worktree` Phase 3). Absent → **warn once and continue.** The run works without it; it simply starts without the main project's memory, and that is worth knowing before eight hours of autonomous work rather than after.
 
 Hold `WORK` (Phase 0 step 0), `BRANCH` (the checked-out branch, verified by gate B) and `{worktree_id}` = `epic-{EPIC_SLUG}` — the isolation slug `worktree_test_command` uses — for the rest of the run. Print:
 ```
