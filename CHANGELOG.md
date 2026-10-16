@@ -5,6 +5,61 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-10-16
+
+The goal flow gets its unit of delivery above one goal, and two fixes measured on real runs:
+the generator's round budget is now enforced rather than written, and the gates stop
+returning verdicts nobody rendered. A three-goal chain ran overnight on a real project with
+these changes: three goals delivered in about 3 h 20, every round within budget, every gate
+verdict confirmed on disk.
+
+### Added
+
+- **`/kairos:pursue-goals {run-slug} {goal-a} {goal-b} …`** chains several goals through one
+  shared tree and one branch, in the order given. Each goal is pursued, gated, committed and
+  archived exactly as `/kairos:pursue-goal` does it; the branch security review, the push and
+  the PR run once, after the last goal. Every goal is validated upfront, so a chain never
+  meets a draft at dawn; any alarm or soft stop stops the whole chain; re-running the same
+  command line resumes it. See [`docs/goals.md` §3](docs/goals.md).
+- **Receipt mechanism `kairos-agent`**: a gate run in a dedicated agent, same token proof as
+  `kairos-fork`.
+
+### Changed
+
+- **The three vital gates run in dedicated agents, and their verdicts live on disk.**
+  `gate-tests`, `review` and `gate-security` no longer use `context: fork`: a forked gate was
+  measured returning a well-formed "0 finding(s)" reply after no work at all, which reads
+  exactly like a clean pass. Each gate now records its green verdict in the verdict store
+  (`kairos-verdict.sh`), keyed by the scope's digest, and callers (`close-story`,
+  `pursue-goal`'s finalization) accept a green only once `kairos-verdict.sh check` confirms
+  it — no record, no gate, no receipt. Receipts name the mechanism that actually ran.
+  `spec-update` and `qa` stay forked.
+- **`pursue-goal` enforces the round budget.** The generator keeps a `calls: ~n` tally in
+  `STATE.md`; past about 60 the orchestrator sends one hand-back message, then stops the task
+  at the next notification and logs the round as `calls: cut`. `RUN.md` gains a `calls`
+  column, and a cut round gets a smaller lot next time. No question is asked of the user.
+- **Tests run through the narrowest selector.** The generator and the evaluator run the
+  selector that covers the row (`-k`, a single file), never a service's full suite; the full
+  suite belongs to the finalization gates, once per goal.
+- **`create-goal` proves every probe against the current code** before the lock: the reading
+  half of a comparison row is checked alone, and a baseline FAIL whose evidence shows the
+  probe misreading today's code (an unmapped `None`, an empty counter, an exception) is
+  refused instead of saved as an expected red.
+
+### Fixed
+
+- **`/kairos:worktree` memory link.** The slug replaced only `/`, while Claude Code replaces
+  every character outside `[A-Za-z0-9]`; any path with `_`, `.` or a space got no link, and
+  teardown never found it. The projects directory now honors `CLAUDE_CONFIG_DIR`. Same fix
+  in `implement-epic`'s memory-link preflight.
+
+### Upgrade notes
+
+- Nothing to migrate. Receipts written with `kairos-fork` stay valid.
+- `kairos-close` gains the `Agent` tool, to spawn the gate agents: if you restrict agent
+  tools in your permissions, allow it.
+- Restart Claude Code after updating, so the new skill and agent definitions load.
+
 ## [2.0.0] - 2026-09-19
 
 A second workflow beside the story flow: **goals**. In the story flow the human traces the
