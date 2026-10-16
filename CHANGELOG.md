@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The goal flow gets its unit of delivery above one goal, and two fixes measured on real runs:
 the generator's round budget is now enforced rather than written, and the gates stop
 returning verdicts nobody rendered. A three-goal chain ran overnight on a real project with
-these changes: three goals delivered in about 3 h 20, every round within budget, every gate
+these changes: three goals delivered in about 3 h 20, 16 of 18 rounds within budget and none needing a hand-back, every gate
 verdict confirmed on disk.
 
 ### Added
