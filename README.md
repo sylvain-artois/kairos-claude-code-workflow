@@ -29,6 +29,24 @@
 
 Full walkthrough: **[docs/quickstart.md](docs/quickstart.md)**.
 
+## New in 2.1 — chaining goals
+
+A large feature rarely fits one goal. `/kairos:pursue-goals` takes several, in the order you give, and runs them through one shared tree and one branch. Each goal is pursued, gated, committed and archived in turn. The branch review, the push and the PR run once, after the last goal:
+
+```
+/kairos:pursue-goals report-pages report-query-engine report-list-view report-detail-view
+```
+
+Every goal is checked before the first round, so a chain left running overnight never stops at dawn on a draft. Any alarm stops the whole chain, and re-running the same line resumes it. On its first measured overnight run, three goals reached their contract in about three hours and twenty minutes, asking the owner one question, in the first hour.
+
+2.1 also hardens what the goal flow already did:
+
+- **The round budget is enforced, not just written.** The generator counts its tool calls. Past about 60, the orchestrator asks it to hand back, then stops the round.
+- **Rounds run only the tests that cover their rows.** Full suites run once per goal, in the gates.
+- **Gate verdicts live on disk.** The tests, review and security gates now run in dedicated agents, and each records its green verdict under the digest of the scope it judged. A caller accepts a pass only once that record exists. A well-formed reply from a gate that never ran no longer reads as a pass.
+
+Details: **[docs/goals.md §3](docs/goals.md#3-kairospursue-goals--chaining-goals)**.
+
 ## New in 2.0 — the goal flow
 
 Kairos 2.0 adds a second way to work, in the spirit of the agent loops everyone is talking about right now. In the story flow, **you trace the path**: PRD → stories → acceptance criteria, each story gated on its way in. In the goal flow, **you fix the destination and the walls, and the agent chooses its route**:

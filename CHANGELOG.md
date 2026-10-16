@@ -53,6 +53,16 @@ verdict confirmed on disk.
   teardown never found it. The projects directory now honors `CLAUDE_CONFIG_DIR`. Same fix
   in `implement-epic`'s memory-link preflight.
 
+### Documentation
+
+- **README** gains a "New in 2.1" section presenting `/kairos:pursue-goals` and the hardened
+  goal flow, and lists the command.
+- **`docs/goals.md`**: §3 on chaining goals, with how to split a feature into goals and what a
+  chain costs (the orchestrator's context grows across goals: keep chains to three or four);
+  §2 now describes the enforced round budget, the test selectors and the gate verdicts on disk.
+- **`docs/gate-receipts.md`** documents `kairos-agent`; `quickstart.md` and `concepts.md` name
+  the new command.
+
 ### Upgrade notes
 
 - Nothing to migrate. Receipts written with `kairos-fork` stay valid.
