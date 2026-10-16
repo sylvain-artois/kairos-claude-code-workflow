@@ -33,6 +33,15 @@ leans on:
      concurrency (parallel subagents), where it's a good approximation, not
      exact. This is used only for latency numbers; conversation structure
      comes from (1), which is exact.
+
+Since Claude Code 2.1.301 (capture of 2026-10-15) the host uses server-side
+threads: a request carries `thread: {type: create|continue}` and a `continue`
+sends only the DELTA since the previous turn (2 messages for 90k billed
+tokens). FIFO pairing then mixes parallel subagents badly enough to corrupt
+chains, and first-message keying no longer sees the conversation. On such
+captures pairing switches to token prediction (`match_calls_by_tokens`) and a
+`continue` inherits its conversation from its chain predecessor
+(`resolve_conversations`).
 """
 import csv
 import hashlib
@@ -69,6 +78,23 @@ SYSTEM_REMINDER_RE = re.compile(r"<system-reminder>.*?</system-reminder>", re.S)
 # ligne de base. Un sous-agent qui s'est fait precharger le meme skill la cite
 # plus loin, apres son propre prompt de delegation — d'ou l'ancrage en tete.
 SKILL_BASEDIR_RE = re.compile(r"\ABase directory for this skill:\s*\S*?/skills/([\w-]+)")
+# Les forks du harnais (ligne de statut, suggestion de prompt, résumé d'absence)
+# reprennent l'historique COMPLET d'un agent et se chaînent sur sa dernière
+# réponse : sans ce tri, ils gonflent la conversation de l'agent qu'ils résument.
+# Reconnus à la consigne finale que l'hôte leur colle — textes de l'hôte, à
+# revérifier quand une capture montre un agent anormalement gros.
+HARNESS_FORK_MARKERS = (
+    ("agent_summary", "Bad (too long)"),                    # depuis 2.1.301
+    ("agent_summary", "Describe your most recent action"),  # avant 2.1.301
+    ("prompt_suggestion", "Reply with ONLY the suggestion"),
+    ("away_summary", "Lead with the overall goal"),
+)
+# Jetons par caractère de JSON, pour prédire la taille facturée d'une requête
+# (appariement par jetons). Mesuré le 16/10/2026 : 1 213 continues sur 1 354 à
+# moins de 5 % d'écart.
+CHARS_PER_TOKEN = 3.2
+MAX_CONTINUE_ERR = 0.5
+IMAGE_TOKENS = 1600
 
 
 def zip_mtime(info: zipfile.ZipInfo) -> float:
@@ -198,8 +224,32 @@ def _signature_text(content) -> str:
     return "\n".join(parts)
 
 
+def payload_chars(obj) -> int:
+    """Longueur JSON d'un corps, une image comptée à son coût forfaitaire.
+
+    Une capture d'écran Playwright pèse des centaines de Ko de base64 pour
+    ~1 600 jetons : comptée en caractères, elle fait prédire 300 k à une
+    requête d'évaluateur qui en facture 60 k.
+    """
+    if isinstance(obj, dict):
+        if obj.get("type") == "image":
+            return int(IMAGE_TOKENS * CHARS_PER_TOKEN)
+        return sum(len(k) + 4 + payload_chars(v) for k, v in obj.items())
+    if isinstance(obj, list):
+        return sum(payload_chars(v) + 1 for v in obj)
+    if isinstance(obj, str):
+        return len(obj) + 2
+    return len(json.dumps(obj))
+
+
+def harness_fork_kind(content) -> str:
+    text = message_text(content)
+    return next((kind for kind, marker in HARNESS_FORK_MARKERS if marker in text), "")
+
+
 def extract_request(name: str, mtime: float, data: dict) -> dict:
     diag = data.get("diagnostics") or {}
+    thread = data.get("thread") or {}
     meta = data.get("metadata") or {}
     try:
         user_id = json.loads(meta.get("user_id", "{}"))
@@ -219,7 +269,12 @@ def extract_request(name: str, mtime: float, data: dict) -> dict:
         "file": name,
         "mtime": mtime,
         "session_id": user_id.get("session_id"),
-        "prev_id": diag.get("previous_message_id"),
+        "prev_id": thread.get("previous_message_id") or diag.get("previous_message_id"),
+        # `create` | `continue` | "" (requête hors thread, historique complet).
+        "thread_type": thread.get("type") or "",
+        "messages_chars": payload_chars(messages),
+        "tools_chars": len(json.dumps(data.get("tools") or [])),
+        "harness_fork": harness_fork_kind(last_msg.get("content")) if messages else "",
         "model": data.get("model"),
         "effort": (data.get("output_config") or {}).get("effort"),
         "thinking_type": (data.get("thinking") or {}).get("type"),
@@ -399,6 +454,108 @@ def match_calls(requests, responses):
     return calls, orphan_requests, orphan_responses
 
 
+def match_calls_by_tokens(requests, responses):
+    """Appariement pour les captures en threads serveur (2.1.301+).
+
+    Le FIFO y échoue : chaque générateur, évaluateur et gate tourne en
+    parallèle d'un orchestrateur qui se réveille à chaque retour, et un seul
+    échange contamine toute la chaîne en aval — mesuré le 16/10/2026, « une
+    security review de 438 min », « un évaluateur qui lance 26 Agent ».
+
+    Deux propriétés des threads remplacent l'ordre d'arrivée :
+
+    - **la taille facturée est prévisible.** Une `continue` ne transporte que
+      le delta : sa réponse facture ≈ facturé(réponse parente) + sortie
+      (réponse parente) + delta / CHARS_PER_TOKEN. Une requête complète
+      (`create` ou hors thread) facture ≈ (system + messages + outils)
+      / CHARS_PER_TOKEN — plus grossier, mais elles sont rares ;
+    - **l'identité d'agent est connue d'avance.** Une `continue` qui cite la
+      réponse X porte le suffixe `cc_version` de son agent : la requête qui a
+      PRODUIT X a forcément le même. C'est ce garde-fou qui supprime la
+      contamination entre agents.
+
+    Chaque réponse, dans l'ordre d'arrivée, prend parmi les requêtes en attente
+    (antérieures, même modèle, même agent si connu) celle dont la prédiction
+    est la plus proche. La réponse parente d'une `continue` est toujours
+    arrivée avant elle, donc déjà appariée quand on en a besoin.
+
+    Deux exclusions, chacune vue sur la capture du 16/10 :
+
+    - une requête ne s'apparie jamais à la réponse qu'elle CITE : le fichier de
+      réponse s'écrit parfois jusqu'à 20 s après que la requête suivante est
+      partie, et sans ce garde on comptait 73 cycles de chaîne ;
+    - une `continue` dont la prédiction est exacte (parent connu) refuse une
+      réponse à plus de MAX_CONTINUE_ERR d'écart : la dernière réponse d'une
+      conversation, citée par personne, n'a pas de garde d'agent, et un
+      évaluateur à 60 k prenait une réponse d'orchestrateur à 350 k.
+
+    `pair_err` (écart relatif prédiction/facturé) est posé sur chaque appel :
+    au 16/10, 1 213 continues sur 1 354 à moins de 5 %.
+    """
+    need_agent = {r["prev_id"]: r["actor_sig"] for r in requests if r["thread_type"] == "continue" and r["prev_id"]}
+    events = [(r["mtime"], 0, "REQ", r) for r in requests] + [(r["mtime"], 1, "RES", r) for r in responses]
+    events.sort(key=lambda e: (e[0], e[1]))
+    pending, calls, orphan_responses = [], [], []
+    by_resp_id = {}
+
+    def billed(res):
+        return res["input_tokens"] + res["cache_read_tokens"] + res["cache_creation_tokens"]
+
+    def predicted(req):
+        """(prédiction, exacte ?) — exacte quand la réponse parente est connue."""
+        parent = by_resp_id.get(req["prev_id"]) if req["thread_type"] == "continue" else None
+        if parent is not None:
+            return billed(parent) + parent["output_tokens"] + req["messages_chars"] / CHARS_PER_TOKEN, True
+        return (req["system_chars"] + req["messages_chars"] + req["tools_chars"]) / CHARS_PER_TOKEN, False
+
+    for mtime, _, kind, rec in events:
+        if kind == "REQ":
+            pending.append(rec)
+            continue
+        agent = need_agent.get(rec["id"])
+        best = None
+        for req in pending:
+            if req["model"] != rec["model"] or (agent is not None and req["actor_sig"] != agent):
+                continue
+            if req["prev_id"] == rec["id"]:
+                continue
+            pred, exact = predicted(req)
+            err = abs(billed(rec) - pred) / max(pred, 1)
+            if exact and err > MAX_CONTINUE_ERR:
+                continue
+            # à écart égal, la requête la plus ancienne
+            score = err + (mtime - req["mtime"]) / 1e6
+            if best is None or score < best[0]:
+                best = (score, req, err)
+        if best is None:
+            orphan_responses.append(rec)
+            continue
+        pending.remove(best[1])
+        if rec["id"]:
+            by_resp_id[rec["id"]] = rec
+        calls.append({"request": best[1], "response": rec, "pair_err": best[2]})
+
+    # Seconde passe : les deux exclusions ci-dessus laissent quelques réponses
+    # sans requête (10 au 16/10), et chaque orpheline coupe une chaîne en deux.
+    # On les apparie aux requêtes restantes antérieures, garde d'agent seule.
+    leftovers = []
+    for rec in orphan_responses:
+        agent = need_agent.get(rec["id"])
+        cands = [
+            req for req in pending
+            if req["mtime"] <= rec["mtime"] and req["model"] == rec["model"]
+            and (agent is None or req["actor_sig"] == agent) and req["prev_id"] != rec["id"]
+        ]
+        if not cands:
+            leftovers.append(rec)
+            continue
+        scored = [(abs(billed(rec) - predicted(r)[0]) / max(predicted(r)[0], 1), r) for r in cands]
+        err, req = min(scored, key=lambda s: s[0])
+        pending.remove(req)
+        calls.append({"request": req, "response": rec, "pair_err": err})
+    return calls, pending, leftovers
+
+
 def link_chains(calls):
     """Exact chain reconstruction via previous_message_id -> response.id."""
     resp_id_to_call = {c["response"]["id"]: c for c in calls}
@@ -540,18 +697,48 @@ def resolve_conversations(calls):
     Les appels de tour 0 n'ont aucun tour assistant a hasher. On les rattache a
     la conversation qui porte le meme (definition d'agent, prompt de tache) —
     c'est-a-dire la suite du meme fil. A defaut, ils forment leur propre
-    entree `turn0:<suffixe>`, visible plutot que silencieusement fondue.
+    entree `task:<suffixe>:<empreinte>`, visible plutot que silencieusement fondue.
+
+    Threads serveur (2.1.301+) : une `continue` n'a ni premier tour assistant
+    ni premier message — elle HÉRITE la conversation, le type d'acteur et la
+    tâche de son prédécesseur de chaîne, traité avant elle (ordre des
+    requêtes). La clé de tâche prend le prompt entier, pas ses 400 premiers
+    caractères : les prompts de round d'un même goal partagent leur début.
+
+    Une `continue` dont la réponse parente est restée orpheline (deux réponses
+    du même agent à quelques jetons près, l'appariement a choisi l'autre) hérite
+    de la dernière conversation de son agent : deux instances du même type
+    d'agent ne tournent pas en parallèle dans pursue-goal. 5 cas au 16/10.
+
+    Les forks du harnais (`HARNESS_FORK_MARKERS`) forment chacun une
+    conversation `harness:<type>` par sorte, à soustraire avant de comparer.
     """
+    last_by_actor = {}
+    def task_key(r):
+        return (r["actor_sig"], hashlib.sha1(r["task_text"].encode()).hexdigest()[:10])
+
     by_task = {}
     for c in calls:
         r = c["request"]
-        if r["conv_sig"]:
-            by_task.setdefault((r["actor_sig"], r["task_text"][:400]), r["conv_sig"])
-    for c in calls:
+        if r["conv_sig"] and not r["harness_fork"] and r["thread_type"] != "continue":
+            by_task.setdefault(task_key(r), r["conv_sig"])
+    for c in sorted(calls, key=lambda c: c["request"]["mtime"]):
         r = c["request"]
-        c["conv_id"] = r["conv_sig"] or by_task.get(
-            (r["actor_sig"], r["task_text"][:400]), f"turn0:{r['actor_sig']}"
-        )
+        prev = c.get("chain_prev")
+        if r["harness_fork"]:
+            c["conv_id"] = f"harness:{r['harness_fork']}"
+            r["actor_kind"] = f"harness:{r['harness_fork']}"
+        elif r["thread_type"] == "continue" and (
+            (prev is not None and "conv_id" in prev) or r["actor_sig"] in last_by_actor
+        ):
+            src = prev if prev is not None and "conv_id" in prev else last_by_actor[r["actor_sig"]]
+            c["conv_id"] = src["conv_id"]
+            r["actor_kind"] = src["request"]["actor_kind"]
+            r["task_text"] = src["request"]["task_text"]
+        else:
+            c["conv_id"] = r["conv_sig"] or by_task.get(task_key(r)) or "task:{}:{}".format(*task_key(r))
+        if not r["harness_fork"]:
+            last_by_actor[r["actor_sig"]] = c
     return calls
 
 
@@ -685,7 +872,12 @@ def main():
         archive_name = forced_label if forced_label and len(capture_paths) == 1 else capture_path.name
         print(f"Processing {archive_name} ...")
         requests, responses = load_archive(capture_path)
-        calls, orphan_requests, orphan_responses = match_calls(requests, responses)
+        threaded = any(r["thread_type"] for r in requests)
+        if threaded:
+            calls, orphan_requests, orphan_responses = match_calls_by_tokens(requests, responses)
+            print("  server-side threads detected — pairing by predicted tokens")
+        else:
+            calls, orphan_requests, orphan_responses = match_calls(requests, responses)
         calls = link_chains(calls)
         calls = label_chains(calls)
         calls = resolve_conversations(calls)
@@ -709,6 +901,8 @@ def main():
                 "model": req["model"],
                 "effort": req["effort"],
                 "thinking_type": req["thinking_type"],
+                "thread_type": req["thread_type"],
+                "pair_err": round(c["pair_err"], 3) if "pair_err" in c else "",
                 "n_messages": req["n_messages"],
                 "n_tools_declared": req["n_tools_declared"],
                 "system_chars": req["system_chars"],
@@ -799,7 +993,16 @@ def main():
                 "cache_creation_tokens": sum(m["response"]["cache_creation_tokens"] for m in members),
                 "input_tokens_uncached": sum(m["response"]["input_tokens"] for m in members),
                 "output_tokens": sum(m["response"]["output_tokens"] for m in members),
+                # En threads, `n_messages` ne compte que le delta : la taille de
+                # contexte se lit dans le facturé du plus gros appel.
                 "max_n_messages": max(m["request"]["n_messages"] for m in members),
+                "peak_context_tokens": max(
+                    m["response"]["input_tokens"] + m["response"]["cache_read_tokens"]
+                    + m["response"]["cache_creation_tokens"] for m in members
+                ),
+                "agent_description": "" if conv_id.startswith("harness:") else next(
+                    (m["chain_agent_description"] for m in members if m["chain_agent_description"]), ""
+                ),
                 "top_tools": ";".join(f"{k}:{v}" for k, v in sorted(tool_counter.items(), key=lambda kv: -kv[1])[:5]),
                 "task": " ".join(first["request"]["task_text"].split())[:300],
             })
@@ -835,6 +1038,13 @@ def main():
             "n_calls": n_calls,
             "n_chains": n_roots,
             "n_failed_calls_no_response": len(orphan_requests),
+            "threaded": threaded,
+            # Seules les `continue` ont une prédiction exacte : c'est leur taux qui
+            # dit si l'appariement tient (≈ 90 % au 16/10/2026).
+            "pct_continue_pairs_within_5pct": pct(
+                sum(1 for c in calls if c["request"]["thread_type"] == "continue" and c.get("pair_err", 1) < 0.05),
+                sum(1 for c in calls if c["request"]["thread_type"] == "continue"),
+            ) if threaded else "",
             "model_mix": ";".join(sorted({c["request"]["model"] for c in calls})),
             "effort_mix": ";".join(sorted({str(c["request"]["effort"]) for c in calls})),
             "thinking_mix": ";".join(sorted({str(c["request"]["thinking_type"]) for c in calls})),

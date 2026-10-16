@@ -153,3 +153,22 @@ part.
 Branche `feature/pursue-goals` (jamais `main`), anglais, pas de nom d'hôte,
 phrases de gate préservées, `run-tests.sh` vert, et les prompts de round/éval de
 `pursue-goal` restent la seule source — `pursue-goals` n'en copie aucun.
+
+## Mesuré le 2026-10-16 ([M.29](../journal/2026-10-16-capture-pursue-goals-3-goals-nocturne.md))
+
+**Le constat de départ était surévalué.** Les deux captures du 10/10 étaient threadées, et
+l'ancien appariement FIFO de `analyze_telemetry.py` y contaminait les chaînes. Refaites
+avec le script corrigé : 292 → 39 tours, 342 → 22, 261 → 71, 143 → 95, évals 68 + 62 →
+30 + 19. Les vrais maxima : run 1, 173 (goal 3 round 5) ; run 2, 107. Les rounds
+dépassaient bien le budget de ~60 (×1,5 à 3), mais les évaluations tenaient.
+
+**O1 + O2 vérifiés** sur un run de 3 goals (`d1a29cf`) : rounds de 11 à 66 appels, 2 sur 18
+au-dessus de 60, compte d'appels tenu dans `STATE.md` ; aucun hand-back ni `TaskStop`
+nécessaire (l'injonction reste non exercée). Aucun lancement de test au premier plan
+au-delà de 2 min. Les réveils de polling (point O5) ont disparu : 190 réveils sur retour
+de sous-agent, 5 par notification de tâche. Le marquage proposé en O5 est sans objet.
+
+**Deux postes nouveaux, hors O1 à O5** : le contexte de l'orchestrateur de chaîne (64 k →
+349 k, 29 % du run, ~15 M récupérables en repartant à zéro entre deux goals) et le
+rebouclage review → round → toutes les gates après un High de review survenu après une
+éval verte (goal 2 : 3 passes de gates).

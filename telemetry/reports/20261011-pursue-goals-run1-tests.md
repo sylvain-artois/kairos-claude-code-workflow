@@ -1,5 +1,7 @@
 # Capture du 09-10/10/2026 — run 1 `/kairos:pursue-goals` (3 goals, sans consigne tests)
 
+> **Erratum du 2026-10-16 ([M.29](../../v2/journal/2026-10-16-capture-pursue-goals-3-goals-nocturne.md)).** Cette capture est threadée (requêtes `continue` en delta) : l'ancien appariement FIFO y contaminait les chaînes. Les comptes de tours par chaîne ci-dessous sont faux — refaits avec le script corrigé : 292 → 39, 342 → 22, 261 → 71 (sans édition) ; plus gros round réel : 173 (goal 3 round 5). Les totaux de tokens et les comptes de lancements de tests ne sont pas concernés ; les durées et coûts attribués à une chaîne le sont.
+
 Source : `analysis_20261010b/` (capture `8f1fe462`, 229 Mo, 1724 appels appariés,
 42 sans réponse). Hôte Client-1, `claude-opus-5-5`, effort medium, thinking adaptive,
 175 M de tokens facturés (96,7 % de cache hit). Dépouillé le 10/10 après correction

@@ -1,6 +1,6 @@
 ---
 tag: F32
-statut: en cours — implémenté sur feature/pursue-goals (72a5f7e, piste 1 + 2 + 3) ; validé sur un run story réel le 2026-10-14 (M.28) — reste à valider sur un run goal
+statut: en cours — implémenté sur feature/pursue-goals (72a5f7e, piste 1 + 2 + 3) ; validé sur un run story (M.28, 2026-10-14) et sur un run goal (M.29, 2026-10-16) — reste la fusion
 gravité: bloquant
 origine: mesuré le 2026-09-25 (run letters, worktree_mode off) puis le 2026-10-13
   (capture 20261013a, run profile-field-model) —
@@ -92,3 +92,8 @@ comptes + `SCOPE-TOKEN`), reçus `mechanism=kairos-agent` à jeton, et le store 
 en bout — le gate écrit, le closer confirme (`kairos-verdict.sh check` → `REUSE`). Aucun
 stub, aucun gate sorti de son rôle. Reste le chemin goal (`pursue-goal`), où le défaut
 avait été mesuré les 25/09 et 13/10.
+
+## Validé sur le chemin goal le 2026-10-16 ([M.29](../journal/2026-10-16-capture-pursue-goals-3-goals-nocturne.md))
+
+`pursue-goals`, 3 goals, 6 passes de gates : agents dédiés, verdicts confirmés par le store
+à chaque passe, reçus `mechanism=kairos-agent`, aucun stub. Les deux chemins sont couverts.
