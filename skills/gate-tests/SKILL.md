@@ -2,16 +2,17 @@
 name: gate-tests
 description: Run one service's test command against a work tree, applying the fixed-container guard wherever the tree is not the main clone — the tests half of close-story's Phase 2 gate
 allowed-tools: Bash
-context: fork
-background: false
 ---
 
 <!--
-  Extracted from close-story Phase 2(a) (C2, §M.5/M.12). `context: fork` + `background:
-  false`, no `arguments:` block — same reasoning as `gate-security`/`qa`/`review`: this file
-  fires no injected `!` block, so the positional-substitution pitfall never applies, but the
-  shape is kept consistent across every gate. `{WORK}` is always explicit, never cwd — a
-  fork must never have to trust its own working directory.
+  Extracted from close-story Phase 2(a) (C2, §M.5/M.12). NO `context: fork` any more (F32,
+  2026-10-13): the fork channel proved unable to carry a verdict in production — stubs, and
+  one forked gate-tests measured at 261 turns and 30 Edits, a gate out of its role. Gate
+  callers now spawn a DEDICATED AGENT whose prompt invokes this skill; it loads inline in
+  that agent's fresh context, and the caller believes a PASS only when the verdict store
+  confirms it was recorded (Phase 2). No `arguments:` block — this file fires no injected
+  `!` block, so the positional-substitution pitfall never applies. `{WORK}` is always
+  explicit, never cwd — a gate must never have to trust its own working directory.
 
   Never quote a dollar-sign placeholder anywhere in this file, comments included: this skill
   reads its arguments from the `ARGUMENTS:` line the host appends, and the host stops
@@ -120,10 +121,11 @@ or `SKIP: …` / `BLOCKED: …` per Phase 0/1 above.
 
 **A pass on another checkout is not a `PASS`.** If anything shows the run did not exercise `{WORK}` — the container mounts a different path, the story's new test files are absent from the output — the verdict is `BLOCKED: {service} — the run did not test {WORK}: {evidence}`. Never `PASS` followed by a warning: the first line is the verdict your caller gates on, and a warning below it is a warning nobody's gate reads.
 
-**With `--story`, record a `PASS` — and only a `PASS`** — so a resumed close can reuse it:
+**With `--story`, record a `PASS` — and only a `PASS`**:
 ```bash
 printf '%s\n' "{your PASS line}" | sh ${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdict.sh record {WORK} {STORY} tests {service} {SCOPED_DIGEST}
 ```
+(`SCOPED_DIGEST` from Phase 0 step 4; without `--story` there is nothing to record and your caller knows it.) **This record is not only for a resumed close — it is how your verdict is believed.** Your caller accepts a `PASS` only after `kairos-verdict.sh check` confirms one was recorded for this exact scope digest (F32): a well-formed `PASS` line that skipped the record is treated as a gate that never ran. A `FAIL`, `SKIP` or `BLOCKED` is never recorded — those verdicts stop the caller by themselves.
 
 **Any `FAIL` or `BLOCKED` is a hard gate for the caller: stop and ask, do not commit.** This skill only reports — the caller (`/kairos:close-story` Phase 2) decides what to do with the verdict.
 
@@ -151,3 +153,4 @@ printf '%s\n' "{your PASS line}" | sh ${CLAUDE_PLUGIN_ROOT}/scripts/kairos-verdi
 - [ ] The first line of the output is the verdict, and it is not `PASS` if anything suggested `{WORK}` was not what ran.
 - [ ] No file was edited, staged, or committed.
 - [ ] The verdict is one of `PASS` / `FAIL` / `SKIP` / `BLOCKED`, with output attached on `FAIL`.
+- [ ] A `PASS` with `--story` was recorded in the verdict store before reporting; nothing else was.

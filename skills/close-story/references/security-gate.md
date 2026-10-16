@@ -45,7 +45,7 @@ It collects its own scope through `kairos-diff.sh` — staged, unstaged **and un
 
 ```bash
 sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate security \
-   --mechanism kairos-fork --scope-token {SCOPE-TOKEN from the report} \
+   --mechanism kairos-agent --scope-token {SCOPE-TOKEN from the report} \
    --tree {WORK} --story STORY-{NNN} --services "{comma-separated OPTED_IN}"
 ```
 
@@ -80,7 +80,7 @@ Review gate (Phase 2e), once every service is green:
 
 ```bash
 sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate review \\
-   --mechanism kairos-fork --scope-token {SCOPE-TOKEN from the diff you reviewed} \\
+   --mechanism kairos-agent --scope-token {SCOPE-TOKEN from the diff you reviewed} \\
    --tree {WORK} --story STORY-{NNN} --services "{comma-separated IMPACTED}"
 ```
 
@@ -95,7 +95,7 @@ Security gate, stage 1 and stage 2:
 
 ```bash
 sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate security \\
-   --mechanism kairos-fork --scope-token {SCOPE-TOKEN from the report} \\
+   --mechanism kairos-agent --scope-token {SCOPE-TOKEN from the report} \\
    --tree {WORK} --story STORY-{NNN} --services "{comma-separated OPTED_IN}"
 
 sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} --branch origin/HEAD --names   # stage 2: mint first
@@ -105,9 +105,9 @@ sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-gate-receipt.sh" --write --gate securit
 
 ## Receipt fields, per mechanism
 
-| Field | `kairos-fork` (stage 1) | `native-skill` (stage 2) |
+| Field | `kairos-agent` (stage 1) | `native-skill` (stage 2) |
 |---|---|---|
-| `--mechanism` | `kairos-fork` | `native-skill` |
+| `--mechanism` | `kairos-agent` (`kairos-fork` on a legacy forked run) | `native-skill` |
 | `--scope-token` | **required** — from the report's `SCOPE-TOKEN` line | **required** — from `kairos-diff.sh {WORK} --branch origin/HEAD --names`, minted before the pass |
 | files recorded | the pending change set | the committed range `merge-base(origin/HEAD, HEAD)..HEAD` (`--base` to name another base) |
 | keyed by | the pending change set's digest | the branch tip it covered |

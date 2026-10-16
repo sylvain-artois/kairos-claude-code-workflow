@@ -91,10 +91,12 @@ The per-service `review_command` field selects the mode. Resolution:
 Unset and the `<TODO…>` placeholder `/kairos:init` writes resolve to the **same** default — there is deliberately no third behavior depending on whether `/kairos:init` has run. `/kairos:close-story` invokes:
 
 ```
-/kairos:review {service.path} --from {WORK}
+/kairos:review {service.path} --from {WORK} --story STORY-{NNN}
 ```
 
 That command is **one pass over one scope**: it collects the diff with `scripts/kairos-diff.sh` and reviews it. It depends on nothing external and works on any language, so the default reviewer is available wherever Kairos is.
+
+**How it runs, and how its verdict is believed (F32).** The caller spawns a **dedicated agent** whose prompt invokes the skill — never the skill in the caller's own context (the caller authored the change under review), and no longer a `context: fork` skill call: measured over three weeks of production, the fork channel returned hollow verdicts — a well-formed provenance line, "0 finding(s)", emitted in one API request with no tool call, indistinguishable from a real clean pass by reading it. So the reply is not what the caller trusts. A clean pass **records itself** in the verdict store (`kairos-verdict.sh record`, keyed by the scope's digest), and the caller accepts a green verdict only after `kairos-verdict.sh check` confirms that record for the same digest — fail-closed: no record, no gate, no receipt, whatever the reply says. A hollow reply cannot record anything, because recording requires having collected the scope.
 
 **Prompt template** (used verbatim):
 
@@ -209,12 +211,12 @@ So the rule is **amended, not abandoned**, and the distinction is the whole desi
 
 | | **Stage 1 — per story** | **Stage 2 — per push** |
 |---|---|---|
-| What | `kairos:gate-security` (the fork) | the built-in `security-review` |
+| What | `kairos:gate-security` (Anthropic's prompt, Kairos scope), in a dedicated agent | the built-in `security-review` |
 | Prompt | Anthropic's, scope blocks replaced | Anthropic's, untouched |
 | Scope | the story's exact diff — staged, unstaged **and untracked** | `origin/HEAD...` — everything committed, not yet pushed |
 | Sees uncommitted work | **yes — the only mechanism that can** | no |
 | When | before the commit | before `git push`, however many stories have closed |
-| Receipt | `mechanism: kairos-fork` | `mechanism: native-skill` |
+| Receipt | `mechanism: kairos-agent` | `mechanism: native-skill` |
 
 Stage 2 fires on the **push**, not on the end of an epic: sessions of two or three stories routinely do not finish an epic, and the push is the physical boundary — the moment code leaves the machine. Its scope is cumulative, so a third push in one session re-reads the first two stories. That cost is irreducible (the built-in skill accepts no target) and it is exactly why stage 1 exists.
 

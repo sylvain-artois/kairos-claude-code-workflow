@@ -6,7 +6,7 @@ This file is **tracked**, so it ships with the repository and every contributor'
 
 ## What this repo is
 
-`kairos-claude-code-workflow` is a **Claude Code plugin** (`.claude-plugin/plugin.json`, currently 2.0.0) that ships two workflows as slash commands: story-driven delivery and, since 2.0, goal-driven pursuit. There is no application code and no build step, but it is not Markdown alone:
+`kairos-claude-code-workflow` is a **Claude Code plugin** (`.claude-plugin/plugin.json`, currently 2.1.0) that ships two workflows as slash commands: story-driven delivery and, since 2.0, goal-driven pursuit. There is no application code and no build step, but it is not Markdown alone:
 
 - `skills/` — the shipped commands, one directory per command, each holding a `SKILL.md`. Since 1.4.0 this replaces the old flat `commands/*.md` layout; `/kairos:<name>` is unchanged for users. **Edit these** — they are the canonical, distributed version. There is no `notes/` directory any more (removed 2026-09-17).
 - `agents/` — `kairos-implement` and `kairos-close`, the per-story subagents `implement-epic` and `implement-wave` delegate to; `kairos-generator` and `kairos-evaluator`, the per-round subagents of `pursue-goal`.
@@ -50,7 +50,7 @@ Services are resolved from the **root spec's services table**, read at runtime (
 
 ## The commands
 
-`/kairos:init` bootstraps the specs. The delivery pipeline is `/create-prd` → `/create-story` → `/implement-story` → `/close-story`. Above it, two units of delivery batch that pipeline through the subagents in `agents/`: `/implement-epic` (one epic, end to end, one PR) and `/implement-wave` (an explicit story list, crossing epics on purpose, one PR). The goal flow is `/create-goal` (`GOAL.md` + `measure.sh`, the yardstick, under `{pm}/goals/{slug}/`) → `/pursue-goal` (generator rounds on lots of two or three contract rows, re-measured by the orchestrator, one evaluator pass on green, then the same gates, one commit, archive under `goals/done/`, one PR). The rest are the gates and the upkeep: `/gate-tests`, `/gate-security`, `/review`, `/spec`, `/spec-update`, `/qa`, `/create-test-plan`, `/worktree`, `/setup-worktree-isolation`, `/sync-pm`, `/release`.
+`/kairos:init` bootstraps the specs. The delivery pipeline is `/create-prd` → `/create-story` → `/implement-story` → `/close-story`. Above it, two units of delivery batch that pipeline through the subagents in `agents/`: `/implement-epic` (one epic, end to end, one PR) and `/implement-wave` (an explicit story list, crossing epics on purpose, one PR). The goal flow is `/create-goal` (`GOAL.md` + `measure.sh`, the yardstick, under `{pm}/goals/{slug}/`) → `/pursue-goal` (generator rounds on lots of two or three contract rows, re-measured by the orchestrator, one evaluator pass on green, then the same gates, one commit, archive under `goals/done/`, one PR); `/pursue-goals` chains several goals through one shared tree and branch — each goal pursued and archived in turn, push/PR/branch review once at the end. The rest are the gates and the upkeep: `/gate-tests`, `/gate-security`, `/review`, `/spec`, `/spec-update`, `/qa`, `/create-test-plan`, `/worktree`, `/setup-worktree-isolation`, `/sync-pm`, `/release`.
 
 ## Placeholder convention
 

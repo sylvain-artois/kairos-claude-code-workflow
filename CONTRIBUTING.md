@@ -6,7 +6,7 @@ Kairos is **mostly Markdown**. There's no application code and no build step. Th
 
 | Path | What |
 |---|---|
-| `skills/*/SKILL.md` | The canonical slash commands, including the forked gates (`gate-tests`, `gate-security`, `spec-update`, `review`, `qa`). **Edit these.** |
+| `skills/*/SKILL.md` | The canonical slash commands, including the gates (`gate-tests`, `gate-security`, `review` — run in dedicated agents since F32 — plus the forked `spec-update` and `qa`). **Edit these.** |
 | `agents/*.md` | `kairos-implement` and `kairos-close`, the per-story agents that `implement-epic` and `implement-wave` delegate to; `kairos-generator` and `kairos-evaluator`, the per-round agents of `pursue-goal`. |
 | `scripts/*.sh` | Scope collection, gate receipts, tree kind and verdict reuse. POSIX `sh`, and must parse under bash 3.2 (macOS). |
 | `scripts/tests/run-tests.sh` | The test suite for those scripts and for the injected blocks in the skills. |

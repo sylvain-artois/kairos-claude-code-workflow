@@ -29,6 +29,24 @@
 
 Full walkthrough: **[docs/quickstart.md](docs/quickstart.md)**.
 
+## New in 2.1 — chaining goals
+
+A large feature rarely fits one goal. `/kairos:pursue-goals` takes several, in the order you give, and runs them through one shared tree and one branch. Each goal is pursued, gated, committed and archived in turn. The branch review, the push and the PR run once, after the last goal:
+
+```
+/kairos:pursue-goals report-pages report-query-engine report-list-view report-detail-view
+```
+
+Every goal is checked before the first round, so a chain left running overnight never stops at dawn on a draft. Any alarm stops the whole chain, and re-running the same line resumes it. On its first measured overnight run, three goals reached their contract in about three hours and twenty minutes, asking the owner one question, in the first hour.
+
+2.1 also hardens what the goal flow already did:
+
+- **The round budget is enforced, not just written.** The generator counts its tool calls. Past about 60, the orchestrator asks it to hand back, then stops the round.
+- **Rounds run only the tests that cover their rows.** Full suites run once per goal, in the gates.
+- **Gate verdicts live on disk.** The tests, review and security gates now run in dedicated agents, and each records its green verdict under the digest of the scope it judged. A caller accepts a pass only once that record exists. A well-formed reply from a gate that never ran no longer reads as a pass.
+
+Details: **[docs/goals.md §3](docs/goals.md#3-kairospursue-goals--chaining-goals)**.
+
 ## New in 2.0 — the goal flow
 
 Kairos 2.0 adds a second way to work, in the spirit of the agent loops everyone is talking about right now. In the story flow, **you trace the path**: PRD → stories → acceptance criteria, each story gated on its way in. In the goal flow, **you fix the destination and the walls, and the agent chooses its route**:
@@ -59,13 +77,14 @@ flowchart LR
     F -.-> D
     G["/kairos:create-goal"] --> H["/kairos:pursue-goal"]
     H -. "rounds until the yardstick is green,<br/>then tests · review · security" .-> I["one commit, one PR"]
+    J["/kairos:pursue-goals"] -. "same, over an ordered<br/>goal list — one branch, one PR" .-> H
 ```
 
 Setup once with `/kairos:init` (and `/kairos:setup-worktree-isolation` if you use worktrees); `/kairos:worktree` opens the tree an epic or a goal runs in; `/kairos:create-test-plan`, `/kairos:qa`, `/kairos:review`, `/kairos:spec`, and `/kairos:release` round out the loop.
 
 - **Existing projects, not greenfield.** `/kairos:init` reads your repo (services, test commands, VCS, branch) and writes a `spec.md` you'd have written by hand. No rewrite, no migration.
 - **A QA layer between unit tests and humans.** `/kairos:qa` runs per-service test plans — the pre-human check most workflows skip.
-- **A small, composable command set.** A four-command story core (PRD → story → implement → close), a two-command goal flow (goal → pursue), plus opt-in commands for epics, waves, worktree isolation, QA, and releases. No `.kairos/` cache, no config anywhere but `spec.md`. The one piece of runtime state — the [gate receipts](docs/gate-receipts.md) — lives outside your repository, never in it.
+- **A small, composable command set.** A four-command story core (PRD → story → implement → close), a two-command goal flow (goal → pursue, with `/kairos:pursue-goals` to chain several), plus opt-in commands for epics, waves, worktree isolation, QA, and releases. No `.kairos/` cache, no config anywhere but `spec.md`. The one piece of runtime state — the [gate receipts](docs/gate-receipts.md) — lives outside your repository, never in it.
 
 ## Issue tracking (opt-in)
 
@@ -88,6 +107,7 @@ Turn it on by re-running `/kairos:init` — it asks once, and only when `gh` is 
 | [`/kairos:close-story`](skills/close-story/SKILL.md) | Test → QA → review → commit → push/PR → archive |
 | [`/kairos:create-goal`](skills/create-goal/SKILL.md) | Turn an objective into `GOAL.md` (contract, invariants, terrain) and `measure.sh`, the yardstick, verified red on the current code |
 | [`/kairos:pursue-goal`](skills/pursue-goal/SKILL.md) | Pursue a goal in rounds of a fresh generator, re-measured after each; one evaluator pass on green; then the gates, one commit, one PR |
+| [`/kairos:pursue-goals`](skills/pursue-goals/SKILL.md) | Chain several goals — one shared tree and branch, each goal pursued and archived in turn, one branch review, one push, one PR |
 | [`/kairos:create-test-plan`](skills/create-test-plan/SKILL.md) | Generate a runnable QA test plan for a service |
 | [`/kairos:qa`](skills/qa/SKILL.md) | Execute a service's test plans, report pass/fail |
 | [`/kairos:review`](skills/review/SKILL.md) | Review a diff scope against the review contract — the default reviewer `close-story` calls |
@@ -97,7 +117,7 @@ Turn it on by re-running `/kairos:init` — it asks once, and only when `gh` is 
 | [`/kairos:setup-worktree-isolation`](skills/setup-worktree-isolation/SKILL.md) | One-time Compose rewrite so worktree test runs never collide with prod (prereq for worktree mode) |
 | [`/kairos:release`](skills/release/SKILL.md) | Analyze commits, write a release note, tag it, push |
 
-Behind `/kairos:close-story` sit three forked gates — `/kairos:gate-tests`, `/kairos:gate-security` and `/kairos:spec-update` — each run in its own context and aimed at an explicit work tree. `/kairos:implement-epic` and `/kairos:implement-wave` delegate every story to two agents, `kairos-implement` then `kairos-close`, so the orchestrator's context grows by summaries, not by code. `/kairos:pursue-goal` does the same with `kairos-generator` (one per round) and `kairos-evaluator` (one per green yardstick).
+Behind `/kairos:close-story` sit three gates — `/kairos:gate-tests`, `/kairos:review` and `/kairos:gate-security` — each run in a dedicated agent aimed at an explicit work tree, each recording its green verdict on disk under the scope's digest so the caller can tell a verdict from a well-formed reply that never ran (`/kairos:spec-update` and `/kairos:qa` run as forked skills). `/kairos:implement-epic` and `/kairos:implement-wave` delegate every story to two agents, `kairos-implement` then `kairos-close`, so the orchestrator's context grows by summaries, not by code. `/kairos:pursue-goal` does the same with `kairos-generator` (one per round) and `kairos-evaluator` (one per green yardstick).
 
 Commands are interactive — they ask before doing anything irreversible. You rarely need the docs below; they're here when you want the *why*.
 

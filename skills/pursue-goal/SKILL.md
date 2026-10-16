@@ -18,6 +18,14 @@ The workspace's `spec.md` is the single source of truth for paths, services, bra
 
 `$ARGUMENTS` is the slug followed by optional `key:value` tokens. `worktree_mode:` takes `epic_shared` | `in_place` | `off` | `on` (≡ `epic_shared`); `push_mode:` takes `auto` | `manual`; `rounds:` and `stall:` take integers. Any other token or value → **stop and ask**. Strip the tokens, announce every override in Preflight, and never edit `spec.md` or `GOAL.md`.
 
+## Chained invocation (under `/kairos:pursue-goals`)
+
+When `/kairos:pursue-goals` drives this file — several goals, one shared tree and branch, one PR at the end — exactly three amendments apply; **everything else, cardinal rules included, runs as written**:
+
+1. **Preflight step 1 is the chain's.** The tree and branch are the chain run's (`{worktree_prefix}-{run-slug}` / `feature/{run-slug}`, whatever its Preflight verified) — do not check this goal's slug against the directory or branch name, and create or switch nothing.
+2. **Preflight step 4's prompt is skipped.** The chain's single go-ahead covered it: print the run-plan block as information, ask nothing.
+3. **Phase 3 ends after `references/finalize.md` § 3.3.** Gates, source commit, specs, archive — all per goal, as written. The branch security review (§ 3.4), push, PR/MR and teardown (§ 3.5) belong to the chain, once, after its last goal; the receipt hook's "branch review owed" notice after the commits is answered there.
+
 ## Cardinal rules (do not break)
 
 1. **Read `./spec.md`, then `GOAL.md`, before anything else.** `spec.md` missing → "run `/kairos:init` first". Goal missing → list the goals that exist. `measure.sh` missing → "run `/kairos:create-goal` again": a goal without a yardstick cannot be pursued.
@@ -152,9 +160,9 @@ started: {date}
 ```
 ```markdown
 # RUN — goal {slug}
-| round | actor | lot | score | invariants | judge | mode | peak-ctx | wall | note |
-|---|---|---|---|---|---|---|---|---|---|
-| 0 | baseline | — | {n}/{m} | {i}/{j} | {k} pending | — | — | — | |
+| round | actor | lot | score | invariants | judge | mode | calls | peak-ctx | wall | note |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | baseline | — | {n}/{m} | {i}/{j} | {k} pending | — | — | — | — | |
 ```
 
 **Step 4 — the run plan, one go-ahead** (the only routine prompt of the run):
@@ -183,13 +191,18 @@ For `r` from 1 to `rounds`:
 
 ### 1a — Cut the lot, then generate
 
-**The lot.** From `MEASURE-{r-1}.txt`, take the `C*` rows that are FAIL, in file order (`create-goal` ordered them cheapest first), skip `JUDGE` rows (they are the evaluator's), group them by the service their verifier runs against, and take the **first two or three rows of the first group** — `LOT`. Rows an `EVAL-{n}.md` ruled FAIL come first, as a group of their own. A row two rounds have left red joins the next lot with its `Dead ends` note named. Print `↻ round {r}/{rounds} — lot {LOT}` before spawning.
+**The lot.** From `MEASURE-{r-1}.txt`, take the `C*` rows that are FAIL, in file order (`create-goal` ordered them cheapest first), skip `JUDGE` rows (they are the evaluator's), group them by the service their verifier runs against, and take the **first two or three rows of the first group** — `LOT`. A row whose verifier drives the running app (a probe, an e2e test) counts as **two** rows when sizing the lot — a new screen is a lot of its own. Rows an `EVAL-{n}.md` ruled FAIL come first, as a group of their own. A row two rounds have left red joins the next lot with its `Dead ends` note named. A round that came back `calls: cut` gets a smaller lot (one or two rows), not the same one again. Print `↻ round {r}/{rounds} — lot {LOT}` before spawning.
 
 > **Agent prompt — round {r} of goal {slug}** (`subagent_type: kairos:kairos-generator`)
 >
-> Pursue goal `{slug}`: `GOAL_DIR={GOAL_DIR}`, `WORK={WORK}`, branch `{branch}`. Round {r} of {rounds}. **Your lot: {LOT}.** Make these rows PASS and leave the other rows alone — touch no code they do not need; if a row of the lot cannot go green without another red row, take that row too and say so in `STATE.md`. Read `GOAL.md`, then `STATE.md` (its `Recipes` before any code), `MEASURE-{r-1}.txt`{, and `EVAL-{n}.md` — its FAIL rows are your lot}. Measure with `sh {GOAL_DIR}/measure.sh {LOT} {every I* id}` while you work, and run the full yardstick once before you return. Budget for this round: about 60 tool calls — at that point stop opening new work: measure, write `STATE.md` (Recipes included), return `CONTINUE`. Run git as `git -C {WORK} …`, do not change directory, do not commit, stage or stash, do not touch `GOAL.md` or `measure.sh`. {When an invariant was FAIL in MEASURE-{r-1}: "`I{x}` is FAIL — restore it before anything else; if it is still FAIL when I measure, the run stops."} {Owner rulings from STATE.md, verbatim, when any.} {NEXT from the previous report, if any.} Leave the work uncommitted.
+> Pursue goal `{slug}`: `GOAL_DIR={GOAL_DIR}`, `WORK={WORK}`, branch `{branch}`. Round {r} of {rounds}. **Your lot: {LOT}.** Make these rows PASS and leave the other rows alone — touch no code they do not need; if a row of the lot cannot go green without another red row, take that row too and say so in `STATE.md`. Read `GOAL.md`, then `STATE.md` (its `Recipes` before any code), `MEASURE-{r-1}.txt`{, and `EVAL-{n}.md` — its FAIL rows are your lot}. Measure with `sh {GOAL_DIR}/measure.sh {LOT} {every I* id}` while you work, and run the full yardstick once before you return. Run every test through the narrowest selector that covers it (`-k`, a single file) — never the service's full suite, which belongs to the gates. Budget for this round: 60 tool calls, firm — note your tally in `STATE.md` (`calls: ~n`) each time you measure, and at 60 stop opening new work: measure, write `STATE.md` (Recipes included), return `CONTINUE`. If I message you to hand back, you have at most 5 more calls: finish the current edit, measure the lot, write `STATE.md`, return `CONTINUE`. Run git as `git -C {WORK} …`, do not change directory, do not commit, stage or stash, do not touch `GOAL.md` or `measure.sh`. {When an invariant was FAIL in MEASURE-{r-1}: "`I{x}` is FAIL — restore it before anything else; if it is still FAIL when I measure, the run stops."} {Owner rulings from STATE.md, verbatim, when any.} {NEXT from the previous report, if any.} Leave the work uncommitted.
 
 While the agent runs you may answer the user from the disk (`git status`, `docker ps`) — never with a score, which only your measure gives — and you relay any ruling as rule 7 says.
+
+**You are also the round's watchdog.** A generator "wants" to finish its mission; its written budget never holds by itself, and the ladder that holds it is yours — never the user's (the run is designed to be unattended): a budget overrun is a `RUN.md` row the user reads afterwards, not a question. On every background-task notification while a generator is in flight, read the tail of `{GOAL_DIR}/STATE.md`: its latest `calls: ~n` note is the agent's own tally.
+
+- Tally past ~60 → send the agent **one** message, once per round: `Hand back now. At most 5 more calls: finish the current edit, measure the lot, write STATE.md, return CONTINUE.` The grace is granted up front and is not negotiable — do not reply to a request for more.
+- Still in flight at the **next** notification after that message → stop the agent's task. Treat the round as returned `CONTINUE` with `calls: cut`, and run 1b as usual: a half-finished edit is measured like any other tree, and the next round starts from `STATE.md` and your measure, not from the dead round's story — that resume is cheap by construction is the whole reason cutting is safe.
 
 ### 1b — Measure, check, log — yourself
 
@@ -199,13 +212,13 @@ On return, in this order, without spawning anything:
 2. **Scope.** `git -C {WORK} status --porcelain --untracked-files=all`: every path must be under a `SERVICES` path or under `{GOAL_DIR}`. `.playwright-mcp/` is a stray, not a violation — name it. Anything else → alarm (name the paths; never delete them yourself).
 3. **Measure.** `sh {GOAL_DIR}/measure.sh | tee {GOAL_DIR}/MEASURE-{r}.txt`. Read every line.
 4. **Invariants.** An `I*` FAIL that was already FAIL in `MEASURE-{r-1}.txt` → alarm. A first FAIL → signal, carried into the next prompt as above.
-5. **Log** a `RUN.md` row: `| {r} | generator | {LOT} | {score} | {inv} | {judge} | {refine|pivot} | {peak-ctx} | {wall} | {SUMMARY, ≤ 12 words} |`. `peak-ctx` is the `Agent` result's token figure when it reports one (it tracks the agent's largest context, which is what a lot is meant to keep small), else `n/a`.
+5. **Log** a `RUN.md` row: `| {r} | generator | {LOT} | {score} | {inv} | {judge} | {refine|pivot} | {calls} | {peak-ctx} | {wall} | {SUMMARY, ≤ 12 words} |`. `calls` is the report's `CALLS` figure — or `cut` when you stopped the round from outside. `peak-ctx` is the `Agent` result's token figure when it reports one (it tracks the agent's largest context, which is what a lot is meant to keep small), else `n/a`.
 6. **Decide.**
    - `BLOCKED` → alarm (reason verbatim).
    - `C*` all PASS and `I*` all PASS → **Phase 2**.
    - Otherwise, red rows remain: the PASS count has failed to exceed its previous best for `stall` consecutive rounds → **stalled** (alarm); `r = rounds` → **budget-limited**; else the next round, with the next lot.
 
-Print one line per round: `↻ round {r}/{rounds} — lot {LOT} — SCORE {n}/{m} · INVARIANTS {i}/{j} · {refine|pivot} · peak-ctx {peak-ctx}`.
+Print one line per round: `↻ round {r}/{rounds} — lot {LOT} — SCORE {n}/{m} · INVARIANTS {i}/{j} · {refine|pivot} · calls {calls} · peak-ctx {peak-ctx}`.
 
 **Budget-limited is a soft stop, not a failure.** Write `run_status: budget-limited` and the score into `STATE.md`'s frontmatter, leave the tree as it is (uncommitted, on its branch), print the Phase 4 summary, and say that re-running `/kairos:pursue-goal {slug}` resumes from `STATE.md` with a fresh budget. Nothing is pushed.
 
@@ -223,7 +236,7 @@ A fix that would change a contract row, an invariant or `measure.sh` is never pr
 
 > **Agent prompt — evaluate goal {slug}** (`subagent_type: kairos:kairos-evaluator`)
 >
-> Judge goal `{slug}`: `GOAL_DIR={GOAL_DIR}`, `WORK={WORK}`. This is evaluation {n}. The orchestrator measured `MEASURE-{r}.txt` all-PASS; verify it, audit every test the diff adds or changes, rule on every JUDGE row against its threshold, read the diff for the invariants, and explore around each assertion for at most {an effort you set: e.g. 20 tool calls}. {Owner rulings from STATE.md, verbatim, when any: "Judge {row} against this reading."} Run git as `git -C {WORK} …`. Write `{GOAL_DIR}/EVAL-{n}.md`; change nothing else.
+> Judge goal `{slug}`: `GOAL_DIR={GOAL_DIR}`, `WORK={WORK}`. This is evaluation {n}. The orchestrator measured `MEASURE-{r}.txt` all-PASS; verify it, audit every test the diff adds or changes, rule on every JUDGE row against its threshold, read the diff for the invariants, and explore around each assertion for at most {an effort you set: e.g. 20 tool calls}. Run any test you check through the narrowest selector that reaches it — never the service's full suite, which is the test gate's to run. {Owner rulings from STATE.md, verbatim, when any: "Judge {row} against this reading."} Run git as `git -C {WORK} …`. Write `{GOAL_DIR}/EVAL-{n}.md`; change nothing else.
 
 Do not paste the generator's report into this prompt, and do not summarize it: the evaluator judges the disk.
 
@@ -240,7 +253,7 @@ The evaluator gets at most **one pass per green yardstick**: after its FAIL, the
 
 **Read [`references/finalize.md`](references/finalize.md) in full before the first gate**, and again if your context was compacted since: it holds every command of this phase, and the order is deliberate — gates first, commit second, archive last, push last of all. In short:
 
-1. **Gates per impacted service**, each once: tests (`/kairos:gate-tests … --worktree-id {slug}` under `epic_shared`), review (`kairos-diff.sh` token → `/kairos:review` or the service's `review_command` → receipt), security (`/kairos:gate-security` → receipt; **High/Critical is an alarm**). A red test or a Critical/High review finding is a signal for one extra round when a round remains.
+1. **Gates per impacted service**, each once, **each in a dedicated agent** — never in your own context — and each green verdict confirmed in the verdict store before its receipt (F32; the commands are in `references/finalize.md`): tests (`/kairos:gate-tests … --story goal-{slug}`, `--worktree-id {slug}` under `epic_shared`), review (`kairos-diff.sh` token → `/kairos:review` or the service's `review_command` → receipt `kairos-agent`), security (`/kairos:gate-security` → receipt; **High/Critical is an alarm**). A red test or a Critical/High review finding is a signal for one extra round when a round remains.
 2. **Source commit** — `git add` of the impacted paths and `{GOAL_DIR}`, never `-A`; hold `SRC_SHA`.
 3. **Specs and close** — `/kairos:spec-update {service} --from {WORK} --story goal-{slug} --since {SRC_SHA}` per impacted service; `status: achieved` in `GOAL.md`, `run_status: achieved` in `STATE.md`; **archive**: `git -C {WORK} mv {GOAL_DIR} {pm}/goals/done/{slug}`; `pm_derive_command` when the spec declares one; the docs commit.
 4. **Branch security review (stage 2)** — the whole branch, `kairos-diff.sh {WORK} --branch origin/HEAD --names` for the token, the built-in `security-review` skill delegated to a `general-purpose` agent, receipt `--mechanism native-skill`. The Kairos hook asks for it after every commit; this is where it is done, before the push.

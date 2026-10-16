@@ -197,23 +197,25 @@ Claude Code keys a project's state — session transcripts **and** `memory/` —
 Under the one-session-one-tree doctrine this is no longer a corner case — **every** epic session starts in a worktree. The link is what makes memory follow.
 
 ```bash
-MAIN_PROJECT=$(echo "$REPO_ROOT" | sed 's|^/||; s|/|-|g')
-WT_PROJECT=$(echo "$WORK" | sed 's|^/||; s|/|-|g')     # WORK is absolute and resolved — Phase 0.3
-CLAUDE_PROJECTS="$HOME/.claude/projects"
-LINK="$CLAUDE_PROJECTS/-$WT_PROJECT"
+MAIN_PROJECT=$(printf '%s' "$REPO_ROOT" | sed 's|[^A-Za-z0-9]|-|g')
+WT_PROJECT=$(printf '%s' "$WORK" | sed 's|[^A-Za-z0-9]|-|g')     # WORK is absolute and resolved — Phase 0.3
+CLAUDE_PROJECTS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"
+LINK="$CLAUDE_PROJECTS/$WT_PROJECT"
 
 if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
   echo "⚠ $LINK exists as a real directory — NOT linking (a session already ran here)."
   echo "  Memory will NOT follow into this worktree. Move it aside and re-run to link it."
-elif [ -d "$CLAUDE_PROJECTS/-$MAIN_PROJECT" ]; then
-  ln -sfn "$CLAUDE_PROJECTS/-$MAIN_PROJECT" "$LINK"
+elif [ -d "$CLAUDE_PROJECTS/$MAIN_PROJECT" ]; then
+  ln -sfn "$CLAUDE_PROJECTS/$MAIN_PROJECT" "$LINK"
   echo "✓ Claude Code history + memory linked to the main project"
 else
   echo "⚠ No Claude Code project directory for the main clone yet (fine on a first run) — nothing linked."
 fi
 ```
 
-Three things in that snippet are deliberate:
+Four things in that snippet are deliberate:
+
+- **The slug is Claude Code's, not a guess.** Every character outside `[A-Za-z0-9]` becomes `-` — the leading `/`, but also `_`, `.` and spaces — so `/srv/my_app/epic-v3.1` is `-srv-my-app-epic-v3-1`. Replacing only `/` produces a name Claude Code never uses. And the projects directory lives under `CLAUDE_CONFIG_DIR` when that is set (one config dir per host account is a common setup), `~/.claude` only otherwise.
 
 - **The real-directory guard.** `ln -sfn target dir/` where `dir` is a real directory does **not** fail: it silently creates `dir/target` and exits 0. You would get `✓ linked` and no link. Given the new doctrine — operators do open sessions in worktrees — this case is now likely, so it is checked rather than assumed.
 - **The whole project directory is linked, not just `memory/`.** Consequence, stated so nobody has to rediscover it: a session run in the worktree writes its transcripts into the **main** project. That is wanted — `/resume` from the main clone finds the epic's sessions — but it is a real effect, and the message says "history + memory" because that is what it does.
@@ -348,7 +350,12 @@ Runs **from the main clone**, after the branch has been pushed and the pull requ
 4. **Worktree.** `git worktree remove "$WORK"`. If it refuses — it does so on modified or untracked files — print the refusal verbatim and stop. **Never** `--force`, never `rm -rf`: the refusal means there is work in there nobody has looked at.
 5. **Memory link.** Remove it **only if it is a symlink**:
    ```bash
-   [ -L "$CLAUDE_PROJECTS/-$WT_PROJECT" ] && rm "$CLAUDE_PROJECTS/-$WT_PROJECT" && echo "✓ memory link removed"
+   CLAUDE_PROJECTS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"
+   LINK="$CLAUDE_PROJECTS/$(printf '%s' "$WORK" | sed 's|[^A-Za-z0-9]|-|g')"   # same slug as Phase 3
+   if [ -L "$LINK" ]; then rm "$LINK" && echo "✓ memory link removed"
+   elif [ -e "$LINK" ]; then echo "⚠ $LINK is a real directory — left in place"
+   else echo "⚠ no memory link at $LINK — nothing removed"
+   fi
    ```
    A real directory there means a session's own history lives in it: leave it and say so.
 6. **Branch.** Leave it. Deleting a merged branch is the host's policy (GitHub/GitLab do it on merge), and deleting an unmerged one loses work. Print `git branch -d {BRANCH}` as a suggestion; do not run it.

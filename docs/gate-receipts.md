@@ -102,10 +102,16 @@ Every receipt also records **how** the gate ran:
 
 | `mechanism` | Meaning | Token |
 |---|---|---|
-| `kairos-fork` | `kairos:gate-security` / the review gate, scoped by `kairos-diff.sh` | **required** |
+| `kairos-agent` | `kairos:gate-security` / the review gate, run in a dedicated agent, scoped by `kairos-diff.sh` — the normal stage-1 mechanism since F32 | **required** |
+| `kairos-fork` | the same gate run as a forked skill — the pre-F32 mechanism, kept so old receipts stay readable and a deliberate fork run can still be recorded truthfully | **required** |
 | `native-skill` | Anthropic's built-in pass over the committed branch, before a push | **required** — minted by `kairos-diff.sh <tree> --branch origin/HEAD --names` before the pass, keyed by the branch tip; the receipt lists the committed range's files |
 | `override` | deliberately bypassed, with a reason | n/a |
 | `none` | legitimately skipped (nobody opted in, empty diff), with a reason | n/a |
+
+The mechanism names what **actually produced the verdict** — a receipt written after an
+agent ran the gate says `kairos-agent`, never `kairos-fork` because the skill was *meant*
+to fork. Measured (F32): receipts claiming `kairos-fork` while no fork had rendered any
+verdict made the receipt chain unable to say how the tree was gated.
 
 That field is what lets a later, refusing version demand *a particular* mechanism rather
 than merely *a* receipt.
@@ -202,9 +208,9 @@ What to look for:
   so nothing is retired.
 - `"event":"push"` with `"native_pass":"uncovered"` — commits are leaving the machine that
   Anthropic's built-in pass has not seen. Stage 1 covered them per story; stage 2 has not.
-- `mechanisms` naming `kairos-fork` where you expected `native-skill`, or the reverse —
-  the two stages have different scopes, and a receipt that names the wrong one is a gate
-  aimed at the wrong thing.
+- `mechanisms` naming `kairos-agent` (or `kairos-fork`) where you expected `native-skill`,
+  or the reverse — the two stages have different scopes, and a receipt that names the wrong
+  one is a gate aimed at the wrong thing.
 
 ## The escape hatch
 

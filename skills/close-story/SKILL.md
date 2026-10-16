@@ -68,7 +68,7 @@ Note from each impacted `{path}/spec.md`: `test_command`, `worktree_test_command
 
 ## Phase 2 — Per-service gates (tests → QA → review)
 
-**Gates**, before any commit, for every service in `IMPACTED`. Each gate is its own fork (C2) — **1 service → inline; ≥ 2 → all calls in parallel**, in one message, no subagent wrapper.
+**Gates**, before any commit, for every service in `IMPACTED`. **(a), (c) and 2.5 each run in a dedicated agent** (F32) told to invoke the Skill `kairos:{gate}` from `{WORK}` with the args below and change nothing — never in your own context: you authored the change. (b) and `spec-update` stay forked. **1 service → one agent; ≥ 2 → in parallel.** **Green counts only once `kairos-verdict.sh check` confirms the recorded verdict for this scope** ([commands](references/gates-detail.md)); unconfirmed → one re-run in a fresh agent, else **stop and ask**, no receipt.
 
 **(a) Unit tests.** `/kairos:gate-tests {service} --from {WORK} --story STORY-{NNN}`, adding `--worktree-id epic-{EPIC_SLUG}` under `worktree_mode: epic_shared`. **A `FAIL` or `BLOCKED` verdict → stop and ask.** Do NOT proceed to commit. The story stays `in_progress`.
 
@@ -81,14 +81,14 @@ sh "${CLAUDE_PLUGIN_ROOT}/scripts/kairos-diff.sh" {WORK} {service.path}
 ```
 
 Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-contract.md): `{service.review_command}` unset **or** still the `<TODO…>` placeholder → `/kairos:review {service.path} --from {WORK} --story STORY-{NNN}`; `skip` → opt-out; a slash command or script path → those modes.
-> **A story path under no impacted `{path}`** (`{pm}/` aside) → Mode 1 becomes **one** `/kairos:review .` pass, token: `kairos-diff.sh {WORK}`. Never two pathspecs ([why](references/gates-detail.md)).
+> A story path under no impacted `{path}` (`{pm}/` aside) → **one** `/kairos:review .` pass, token from `kairos-diff.sh {WORK}` — never two pathspecs ([why](references/gates-detail.md)).
 > **`--from {WORK}` is not optional** ([why](references/gates-detail.md)).
 > **Budget per service: one review, then one `--recheck` at most.** Only Critical/High may be fixed here. Still Critical/High after the recheck → **stop and ask**; no third pass. **Medium/Low go in the summary, never fixed here** ([why](references/gates-detail.md)).
-> **No output, no review.** Only the provenance line, contract headers or the empty-scope line count. A launch stub with nothing after it (`… (background)`) → re-run in the foreground, else **stop and ask**; no receipt.
+> **No output, no review.** Only the provenance line, contract headers or the empty-scope line count — and a clean pass must still be store-confirmed (header above).
 
 **(d)** `{service.suggest_test_plan}` and no `TEST_PLAN_*.md` → prompt **once** to make one.
 
-**(e) Leave a receipt.** (a)–(c) green for **every** service → `review` receipt, `--mechanism kairos-fork`, with (c)'s `SCOPE-TOKEN`. All services on `review_command: skip` → `--skipped "<reason>"`, no token. Commands: [`references/security-gate.md`](references/security-gate.md).
+**(e) Leave a receipt.** (a)–(c) green **and confirmed** for **every** service → `review` receipt, `--mechanism kairos-agent`, with (c)'s `SCOPE-TOKEN`. All services on `review_command: skip` → `--skipped "<reason>"`, no token. Commands: [`references/security-gate.md`](references/security-gate.md).
 
 > **Never work around a refused receipt.** `--write` refuses a `passed` receipt with no token, `enforce` denies the commit — else a gate that ran and one that never ran leave the same artefact ([why](../../docs/review-contract.md)). Re-run the gate, or record `--skipped`/`--override`. Script missing → `gate receipts: unavailable`, continue.
 
@@ -108,7 +108,7 @@ Hold its `SCOPE-TOKEN`. Review it per the [review contract](../../docs/review-co
 /kairos:gate-security {WORK} {opted-in path, or omit for the whole tree}
 ```
 
-It scopes itself via `kairos-diff.sh` (staged, unstaged **and untracked**) and ends with a `SCOPE-TOKEN`.
+Spawned as a dedicated agent (Phase 2 rule). It scopes itself via `kairos-diff.sh` (staged, unstaged **and untracked**) and ends with a `SCOPE-TOKEN`.
 
 **Attribute** findings by the file cited, **drop those outside `OPTED_IN` paths**, **read `* Severity:` fields, not headers** (no `## High` section, no Critical):
 
@@ -117,7 +117,7 @@ It scopes itself via `kairos-diff.sh` (staged, unstaged **and untracked**) and e
 - **`SCOPE-ERROR`, skill unavailable, or no token → the gate did not run.** Interactive → **stop and ask**. Non-interactive (subagent of an epic/wave run) → return `BLOCKED: security gate could not run — {reason}` **without committing**.
 - **Never substitute your own pass for the skill** — a false green, and futile: no token, no receipt ([review contract §7](../../docs/review-contract.md)).
 
-Clear, or medium/low acknowledged → receipt: `--mechanism kairos-fork --scope-token {from the report}`.
+Clear and store-confirmed, or medium/low acknowledged → receipt: `--mechanism kairos-agent --scope-token {from the report}`.
 
 ### Stage 2 — the whole branch, before the push
 
@@ -209,21 +209,7 @@ One block. **Intermediate** (epic_shared, not last): tests, review, receipts, co
 
 ## Failure modes
 
-Each **stops the flow before any commit** unless stated otherwise:
-
-- **`spec.md` missing** → stop, point at `/kairos:init`.
-- **Story ambiguous, missing, or already closed** → stop — never guess.
-- **Test fails**, **QA `STOPPED`**, **review/security Critical/High** → stop and ask; no commit; story stays `in_progress`.
-- **Security gate could not run** (scope error, unavailable, no token) → stop and ask, or `BLOCKED` as a subagent. Never skip it silently; **never hand-roll a pass**.
-- **`--write` refuses a receipt** → re-run the gate, or record `--skipped`/`--override`. Never work around it.
-- **Diff outside `Impacted Services`** → scope-creep gate; stop and ask.
-- **Changes outside `STORY_PATHS` at Phase 3/6** → never `-A`; hand to your caller.
-- **`spec-update` returns `ERROR`** → sha and services table disagree. Stop and ask.
-- **In the main clone or another epic's worktree** → stop, do not commit.
-- **Push deferred or failing** → note it, leave branch and worktree; re-run resumes at Phase 7. **Not a gate.**
-- **Asked to remove the worktree** → decline; print the `--teardown` line.
-- **`pm_derive_command` non-zero** → stop and ask; never commit over a broken derive.
-- **Issue mirror fails** → one-line warning pointing at `/kairos:sync-pm`. **Not a gate.**
+Every stop is stated inside its own phase above; the one-page recap — read it when a run goes sideways — is [`references/failure-modes.md`](references/failure-modes.md). Each entry **stops the flow before any commit** unless it says otherwise.
 
 ---
 
