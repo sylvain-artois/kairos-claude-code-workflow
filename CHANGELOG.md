@@ -5,6 +5,18 @@ All notable changes to Kairos are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-10-23
+
+### Fixed
+
+- **`/kairos:worktree` seeds `.claude/settings.local.json`.** The file is gitignored, so a
+  fresh worktree never had it, and it usually holds the operator's allow-list: the session
+  opened in the worktree, and every subagent it spawned, stopped on permission prompts the
+  main clone had answered long ago — enough to block an unattended epic run. Phase 4 now
+  copies it from the main checkout unconditionally, alongside the per-service
+  `worktree_seed_files`, and counts it in the `Seeded:` total. As with the other seeds, the
+  main checkout is the source of truth: a re-run overwrites the worktree's copy.
+
 ## [2.1.0] - 2026-10-16
 
 The goal flow gets its unit of delivery above one goal, and two fixes measured on real runs:
