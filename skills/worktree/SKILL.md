@@ -238,6 +238,18 @@ fi
 
 Every service, not only the ones some future story will touch — this command does not know the story list, seeding is an idempotent copy of files the repo already ignores, and the superset removes the "the one service I forgot" failure. Re-running overwrites with the main checkout's current version, which is the intended behaviour: the main checkout is the source of truth for runtime files.
 
+**Always, whatever the specs declare: `.claude/settings.local.json`.** It is gitignored and per machine (`docs/permissions.md`), so the worktree does not get it — and it is usually where the operator's allow-list lives. Without it, the session opened in the worktree, and every subagent it spawns, stops on permission prompts the main clone answered long ago: an unattended epic run blocks on the first one.
+
+```bash
+if [ -f "$REPO_ROOT/.claude/settings.local.json" ]; then
+  mkdir -p "$WORK/.claude" && cp "$REPO_ROOT/.claude/settings.local.json" "$WORK/.claude/settings.local.json" && echo "✓ seeded .claude/settings.local.json"
+else
+  echo "· no .claude/settings.local.json in the main checkout (nothing to seed)"
+fi
+```
+
+It counts in the `Seeded:` total of Phase 5. Same rule as the service seeds: the main checkout is the source of truth, and a re-run overwrites — a rule added in the worktree's copy is lost, so add it in the main clone.
+
 ---
 
 ## Phase 4.5 — Arm the security boundary
